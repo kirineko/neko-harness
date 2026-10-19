@@ -1,4 +1,7 @@
-import { afterEach, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, it } from "bun:test";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type Terminal, TuiAltScreen } from "@earendil-works/pi-tui";
 import type { FileCandidates } from "../../core/src/file-mentions.ts";
 import { WorkspaceFiles } from "../../core/src/workspace-files.ts";
@@ -9,6 +12,17 @@ let files = new WorkspaceFiles();
 afterEach(async () => {
 	await files.close();
 	files = new WorkspaceFiles();
+});
+
+// 用小型临时工作区代替整个仓库，避免枚举耗时受 CI 磁盘速度影响。
+let fixtureRoot = "";
+beforeAll(async () => {
+	fixtureRoot = await realpath(await mkdtemp(join(tmpdir(), "neko-file-completion-")));
+	await mkdir(join(fixtureRoot, "packages/core/src"), { recursive: true });
+	await writeFile(join(fixtureRoot, "packages/core/src/runtime.ts"), "export {};\n");
+});
+afterAll(async () => {
+	await rm(fixtureRoot, { recursive: true, force: true });
 });
 
 import { fileCompletion } from "../src/file-completion.ts";
@@ -144,9 +158,9 @@ it("cancels scheduled directory continuation before it starts", async () => {
 it("uses Pi for file and directory completion without submitting", async () => {
 	const provider = fileCompletion(
 		[],
-		process.cwd(),
+		fixtureRoot,
 		() => {},
-		(query, signal) => files.search(process.cwd(), query, signal),
+		(query, signal) => files.search(fixtureRoot, query, signal),
 	);
 	const query = "@packages/core/src/";
 	const result = await provider.getSuggestions([query], 0, query.length, { signal: new AbortController().signal });
@@ -170,9 +184,9 @@ it("closes Pi candidates before starting the double-Escape clear sequence", asyn
 		editor.setAutocompleteProvider(
 			fileCompletion(
 				[],
-				process.cwd(),
+				fixtureRoot,
 				() => {},
-				(query, signal) => files.search(process.cwd(), query, signal),
+				(query, signal) => files.search(fixtureRoot, query, signal),
 			),
 		);
 		editor.render(width);
