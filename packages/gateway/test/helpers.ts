@@ -51,6 +51,7 @@ export async function makeGateway(): Promise<TestGateway> {
 		socketPath,
 		port: 0,
 		serverId,
+		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});

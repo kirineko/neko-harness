@@ -275,6 +275,7 @@ async function startPair(): Promise<RunningPair> {
 		socketPath: IS_WINDOWS ? null : join(dir, `${serverId}.sock`),
 		port: 0,
 		serverId,
+		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});

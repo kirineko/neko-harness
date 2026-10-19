@@ -95,6 +95,7 @@ async function startIsolatedGateway(dir: string) {
 		socketPath: testSocketPath(dir),
 		port: 0,
 		serverId: randomUUID(),
+		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});

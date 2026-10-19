@@ -93,6 +93,7 @@ export async function startMobileHarness(
 			socketPath: testSocketPath(dir),
 			port: 0,
 			mobileServerName: "TestPC",
+			mobileNetwork: { wsl: null },
 			model: { provider: "faux", modelId: options.models?.models?.[0]?.id ?? "faux-1" },
 			providers: [faux.provider],
 		});

@@ -122,6 +122,7 @@ async function startGatewayOnly(dir: string): Promise<NekoGateway> {
 		socketPath: IS_WINDOWS ? null : join(dir, `${serverId}.sock`),
 		port: 0,
 		mobileServerName: "TestPC",
+		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});

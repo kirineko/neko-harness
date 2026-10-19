@@ -75,6 +75,7 @@ async function startEnabledGateway(dir: string): Promise<RunningGateway> {
 		socketPath: testSocketPath(dir),
 		port: 0,
 		mobileServerName: "TestPC",
+		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});

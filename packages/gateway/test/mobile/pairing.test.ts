@@ -144,6 +144,7 @@ async function startEnabledGateway(
 		socketPath: testSocketPath(dir),
 		port: 0,
 		mobileServerName: serverName,
+		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});

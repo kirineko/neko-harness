@@ -19,7 +19,7 @@ import type { UpdateCheckerOptions } from "@neko-harness/core/application-update
 import { GATEWAY_HOST } from "./contract.ts";
 import { isServerId } from "./identity.ts";
 import { createMobileAdminFactory, NekoMobileAdmin } from "./mobile/admin.ts";
-import { MobileGateway } from "./mobile/listener.ts";
+import { MobileGateway, type MobileNetworkHooks } from "./mobile/listener.ts";
 import { removeGatewayPortFile, writeGatewayPortFile } from "./port-file.ts";
 import { type GatewayPrincipal, gatewayPrincipalKey, HOST_PRINCIPAL } from "./principal.ts";
 import { createNekoServerServices } from "./server-services.ts";
@@ -57,6 +57,8 @@ export type NekoGatewayOptions = {
 	readonly serverId?: string;
 	/** 移动配对显示的电脑名；默认安全截断的 os.hostname()。 */
 	readonly mobileServerName?: string;
+	/** 移动入口网络钩子（WSL 探测/中继）；测试注入用，缺省自动探测。 */
+	readonly mobileNetwork?: MobileNetworkHooks;
 	readonly updates?: UpdateCheckerOptions;
 	readonly updateIntervalMs?: number;
 	readonly onError?: (error: Error) => void;
@@ -140,6 +142,7 @@ export async function startGateway(options: NekoGatewayOptions = {}): Promise<Ne
 			updates: options.updates,
 			updateIntervalMs: options.updateIntervalMs,
 			mobileServerName: options.mobileServerName,
+			mobileNetwork: options.mobileNetwork,
 			onError: options.onError,
 		});
 	} catch (error) {
@@ -160,6 +163,7 @@ type BindOptions = {
 	readonly marketUrl: string;
 	readonly promptHome: string | undefined;
 	readonly mobileServerName: string | undefined;
+	readonly mobileNetwork: MobileNetworkHooks | undefined;
 	readonly onError: ((error: Error) => void) | undefined;
 };
 
@@ -219,6 +223,7 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 		serverId,
 		serverName: options.mobileServerName,
 		onError: options.onError,
+		network: options.mobileNetwork,
 		chord: {
 			accept: (link, acceptOptions) => chord.accept(link, acceptOptions),
 			invalidatePrincipal: (match) => chord.invalidatePrincipal(match),
