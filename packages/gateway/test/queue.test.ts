@@ -3,8 +3,7 @@ import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import { Value } from "typebox/value";
 import { QUEUE_UNSUPPORTED, queueClient } from "../src/client-session.ts";
 import { ChatViewSchema, type NekoChat } from "../src/contract.ts";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
 
 /** The first model request blocks until the run is aborted or `release` is called. */
 function holdFirstRun(target: Awaited<ReturnType<typeof makeGateway>>) {
@@ -36,8 +35,8 @@ it("shows queued inputs to every client, withdraws one and keeps the rest", asyn
 	const target = await makeGateway();
 	const { release, active } = holdFirstRun(target);
 	const id = String(target.gateway.runtime.root.id);
-	const a = await connectNekoGateway(testAddress(target));
-	const b = await connectNekoGateway(testAddress(target));
+	const a = await connectTestClient(target);
+	const b = await connectTestClient(target);
 	try {
 		const chatA = await a.attach(id);
 		const chatB = await b.attach(id);
@@ -86,9 +85,9 @@ it("turns a queued input into a steer for every client and refuses foreign sessi
 	const target = await makeGateway();
 	const { release, active } = holdFirstRun(target);
 	const id = String(target.gateway.runtime.root.id);
-	const a = await connectNekoGateway(testAddress(target));
-	const b = await connectNekoGateway(testAddress(target));
-	const c = await connectNekoGateway(testAddress(target));
+	const a = await connectTestClient(target);
+	const b = await connectTestClient(target);
+	const c = await connectTestClient(target);
 	try {
 		const chatA = await a.attach(id);
 		const chatB = await b.attach(id);
@@ -126,7 +125,7 @@ it("turns a queued input into a steer for every client and refuses foreign sessi
 it("clears the queue on stop and bounds previews", async () => {
 	const target = await makeGateway();
 	const { active } = holdFirstRun(target);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		await chat.submit({ content: "first" });
@@ -145,7 +144,7 @@ it("clears the queue on stop and bounds previews", async () => {
 it("does not let one session withdraw another session's input", async () => {
 	const target = await makeGateway();
 	const { release, active } = holdFirstRun(target);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		await chat.submit({ content: "first" });
@@ -153,7 +152,7 @@ it("does not let one session withdraw another session's input", async () => {
 		await chat.submit({ content: "mine" });
 		await waitFor(() => chat.view.value?.queued?.length === 1, "queued");
 		const session = await target.gateway.runtime.createConversation();
-		const other = await connectNekoGateway(testAddress(target));
+		const other = await connectTestClient(target);
 		try {
 			const foreign = await other.attach(String(session.id));
 			expect((await foreign.withdraw({ id: chat.view.value!.queued![0]!.id })).result).toBe("unknown");

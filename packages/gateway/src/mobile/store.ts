@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { renameWithRetry } from "@neko-harness/core";
 
 export const MOBILE_STATE_FORMAT_VERSION = 1;
 export const MOBILE_DEFAULT_PORT = 8323;
@@ -178,23 +179,10 @@ async function writeFileAtomic(filePath: string, contents: string, mode: number)
 	try {
 		await writeFile(tempPath, contents, { mode });
 		if (POSIX) await chmod(tempPath, mode);
-		await renameReplacing(tempPath, filePath);
+		await renameWithRetry(tempPath, filePath);
 	} catch (error) {
 		await rm(tempPath, { force: true });
 		throw error;
-	}
-}
-
-/** Windows refuses to replace a file another reader still has open. */
-async function renameReplacing(from: string, to: string): Promise<void> {
-	for (let attempt = 1; ; attempt++) {
-		try {
-			return await rename(from, to);
-		} catch (error) {
-			const code = (error as { code?: string }).code;
-			if (attempt >= 20 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw error;
-			await new Promise((resolve) => setTimeout(resolve, 25));
-		}
 	}
 }
 

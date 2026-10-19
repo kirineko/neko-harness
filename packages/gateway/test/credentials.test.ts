@@ -3,8 +3,8 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath, waitFor as wait } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";
 
 const waitFor = (predicate: () => boolean) => wait(predicate, "credential synchronization");
 
@@ -23,8 +23,8 @@ it("shares private credential state and Pi configuration across Unix and WebSock
 		serverId: crypto.randomUUID(),
 	};
 	let gateway = await startGateway(options);
-	let unix = await connectNekoGateway(testAddress(gateway));
-	let web = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+	let unix = await connectTestClient(gateway);
+	let web = await connectTestWsClient(gateway);
 	try {
 		await waitFor(() => !!web.credentials.state.value);
 		expect(web.credentials.state.value!.statuses.deepseek?.source).toBe("none");
@@ -65,8 +65,8 @@ it("shares private credential state and Pi configuration across Unix and WebSock
 		await web.close();
 		await gateway.close();
 		gateway = await startGateway(options);
-		unix = await connectNekoGateway(testAddress(gateway));
-		web = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+		unix = await connectTestClient(gateway);
+		web = await connectTestWsClient(gateway);
 		await waitFor(() => web.credentials.state.value?.statuses.deepseek?.source === "saved");
 		process.env.DEEPSEEK_API_KEY = "test-env";
 		await web.credentials.remove({ provider: "deepseek" });

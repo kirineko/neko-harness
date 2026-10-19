@@ -3,8 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath, waitFor as wait } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";
 
 const waitFor = (predicate: () => boolean) => wait(predicate, "provider enablement synchronization");
 
@@ -20,8 +20,8 @@ it("synchronizes provider enablement across clients and rejects invalid changes"
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const unix = await connectNekoGateway(testAddress(gateway));
-	const web = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+	const unix = await connectTestClient(gateway);
+	const web = await connectTestWsClient(gateway);
 	try {
 		await waitFor(() => !!web.credentials.state.value && !!unix.credentials.state.value);
 		const statuses = web.credentials.state.value!.statuses;

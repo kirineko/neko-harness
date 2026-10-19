@@ -107,3 +107,20 @@ it("keeps the todo list body out of the system prompt", async () => {
 	const { out } = await renderAll(home, workspace, ["read", "todo"]);
 	expect(Object.values(out).join("\n")).not.toContain("revision");
 });
+
+it("adds the Git Bash rule on win32 only when bash or job is enabled, deterministically", async () => {
+	const render = async (platform: NodeJS.Platform, tools: string[]) => {
+		const extension = createNekoPrompt(async () => ({ contextFiles: [], skills: [] }), platform);
+		const rules = (extension.sections ?? []).find((s) => s.key === "rules")!;
+		return rules.render(input("/project", tools), BACKGROUND_CONTEXT);
+	};
+	const rule = "On Windows, commands run in Git Bash (not PowerShell, cmd or WSL)";
+	const win = await render("win32", ["read", "bash", "job"]);
+	expect(win).toContain(rule);
+	expect(win?.split(rule).length).toBe(2);
+	expect(await render("win32", ["read", "job"])).toContain(rule);
+	expect(await render("darwin", ["read", "bash", "job"])).not.toContain(rule);
+	expect(await render("linux", ["read", "bash", "job"])).not.toContain(rule);
+	expect(await render("win32", ["read", "edit"])).not.toContain(rule);
+	expect(await render("win32", ["read", "bash"])).toBe(await render("win32", ["read", "bash"]));
+});

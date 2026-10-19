@@ -38,6 +38,7 @@ import type {
 	NekoSearchSettingsState,
 	NekoSessionManagement,
 	NekoSessionSummary,
+	NekoShellStatus,
 	NekoSkillMarket,
 	NekoWorkspaceFiles,
 	NekoWorkspaceState,
@@ -52,6 +53,7 @@ export type ConnPhase = "connecting" | "ready" | "reconnecting" | "error";
 export type GatewayEvents = {
 	onPhase(phase: ConnPhase): void;
 	onUpdates?(state: UpdateState | null): void;
+	onShell?(shell: NekoShellStatus | null): void;
 	onCredentials?(state: NekoCredentialState | null): void;
 	onSearchSettings?(state: NekoSearchSettingsState | null): void;
 	onContextSettings?(state: NekoContextSettingsState | null): void;
@@ -450,10 +452,13 @@ export class GatewayConnection {
 		this.#assert(epoch);
 		this.#unsub.push(
 			client.application.info.subscribe((value) => {
-				if (epoch === this.#epoch) this.#options.events.onUpdates?.(value);
+				if (epoch !== this.#epoch) return;
+				this.#options.events.onUpdates?.(value);
+				this.#options.events.onShell?.(value.shell ?? null);
 			}),
 		);
 		this.#options.events.onUpdates?.(client.application.info.value);
+		this.#options.events.onShell?.(client.application.info.value.shell ?? null);
 		this.#management = client.management;
 		this.#workspaces = client.workspaces;
 		this.#workspaceFiles = client.workspaceFiles;
@@ -543,6 +548,7 @@ export class GatewayConnection {
 		this.#dropView();
 		this.#options.events.onPhase("reconnecting");
 		this.#options.events.onUpdates?.(null);
+		this.#options.events.onShell?.(null);
 		const delay = Math.min((this.#options.retryBaseMs ?? 800) * ++this.#attempt, this.#options.retryMaxMs ?? 8000);
 		this.#timer = setTimeout(() => {
 			this.#timer = undefined;

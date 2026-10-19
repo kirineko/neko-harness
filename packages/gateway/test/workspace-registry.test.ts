@@ -3,9 +3,8 @@ import { chmod, mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway } from "../src/client.ts";
 import { browseWorkspaces } from "../src/workspaces.ts";
-import { cleanup, IS_WINDOWS, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, connectTestWsClient, IS_WINDOWS, makeGateway, waitFor } from "./helpers.ts";
 
 it("normalizes leading-slash drive paths before browsing", async () => {
 	const dir = await realpath(await mkdtemp(join(tmpdir(), "neko-browse-norm-")));
@@ -86,8 +85,8 @@ it.skipIf(IS_WINDOWS)(
 );
 it("shares independent workspace additions over Unix and WS and keeps them after archive", async () => {
 	const target = await makeGateway();
-	const unix = await connectNekoGateway(testAddress(target));
-	const ws = await connectNekoGateway({ transport: "ws", url: target.wsUrl, serverId: target.serverId });
+	const unix = await connectTestClient(target);
+	const ws = await connectTestWsClient(target);
 	try {
 		const dir = await realpath(target.dir);
 		await unix.workspaces.add({ path: dir });

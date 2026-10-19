@@ -6,18 +6,17 @@ import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls";
-import { ChordError, type Link } from "@earendil-works/chord";
+import { ChordError, type Link, memoryLinkPair } from "@earendil-works/chord";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { renderPairingQr } from "../../../../scripts/mobile-dev-pair.ts";
 import { rm } from "../../../../test/temp-dir.ts";
-import { connectNekoGateway, type NekoGateway, startGateway } from "../../src/index.ts";
+import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { createClientHost } from "../../src/link.ts";
 import { createMobileAdminFactory, NekoMobileAdmin } from "../../src/mobile/admin.ts";
 import type { MobileGateway } from "../../src/mobile/listener.ts";
 import { MobileStore } from "../../src/mobile/store.ts";
 import { createUnixLink } from "../../src/unix-link.ts";
-import { createWsLink } from "../../src/ws-listener.ts";
-import { IS_WINDOWS, testAddress, waitFor } from "../helpers.ts";
+import { connectTestClient, IS_WINDOWS, waitFor } from "../helpers.ts";
 import { connectMobileWs, type MobileWsClient } from "./ws-client.ts";
 
 function parsePairingText(pairingText: string): { readonly sid: string; readonly code: string; readonly ep: string } {
@@ -141,7 +140,15 @@ function tlsFingerprint(port: number): Promise<string> {
 }
 
 async function connectAdmin(gateway: NekoGateway, token: string) {
-	const link: Link = IS_WINDOWS ? createWsLink(gateway.wsUrl ?? "") : await createUnixLink(gateway.socketPath ?? "");
+	// Bun on Windows drops frames when a WebSocket server and client share a process, so the admin link is in-memory there.
+	let link: Link;
+	if (IS_WINDOWS) {
+		const [clientEnd, serverEnd] = memoryLinkPair();
+		gateway.accept(serverEnd);
+		link = clientEnd;
+	} else {
+		link = await createUnixLink(gateway.socketPath ?? "");
+	}
 	const host = createClientHost(link);
 	const admin = await host.get(NekoMobileAdmin, { token });
 	return { host, link, admin };
@@ -245,7 +252,7 @@ describe("mobile admin minimal subset", () => {
 	it("does not bind the admin contract into createGatewayConnection", async () => {
 		const gateway = await startGatewayOnly(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			const exposed = Object.keys(desktop).filter((key) => key.toLowerCase().includes("admin"));
 			expect(exposed).toEqual([]);
 			const models = await desktop.models.list(null);
@@ -265,7 +272,7 @@ describe("mobile admin minimal subset", () => {
 			const survivor = await pairDevice(gateway, port);
 			const targetClient = await connectMobileHello(port, target);
 			const survivorClient = await connectMobileHello(port, survivor);
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const { host, link, admin } = await connectAdmin(gateway, token);
@@ -602,7 +609,7 @@ describe("mobile admin full surface (4.1)", () => {
 			await gateway.mobile.enable({ address: "127.0.0.1", port });
 			const device = await pairDevice(gateway, port);
 			const client = await connectMobileHello(port, device);
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			const created = await desktop.management.create({});
 			const chat = await desktop.attach(created.id);
 			await chat.submit({ content: "before revoke" });

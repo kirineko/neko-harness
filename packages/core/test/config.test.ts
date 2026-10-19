@@ -169,6 +169,16 @@ it("parses, validates, and merges webSearch.provider", () => {
 	expect(mergeNekoConfig({}, {}).webSearch).toBeUndefined();
 });
 
+it("parses, validates, and merges shell.path", () => {
+	const parsed = parseNekoConfig('{"shell": {"path": "D:\\\\tools\\\\Git\\\\bin\\\\bash.exe"}}', "test.json", {});
+	expect(parsed.shell?.path).toBe("D:\\tools\\Git\\bin\\bash.exe");
+	expect(() => parseNekoConfig('{"shell": {"path": 42}}', "test.json", {})).toThrow(/"shell\.path" must be a string/);
+	expect(() => parseNekoConfig('{"shell": "bash"}', "test.json", {})).toThrow(/"shell" must be an object/);
+	expect(mergeNekoConfig({ shell: { path: "a" } }, { shell: {} }).shell?.path).toBe("a");
+	expect(mergeNekoConfig({ shell: { path: "a" } }, { shell: { path: "b" } }).shell?.path).toBe("b");
+	expect(mergeNekoConfig({}, {}).shell).toBeUndefined();
+});
+
 it("parses, validates, and merges context settings", () => {
 	const parsed = parseNekoConfig(
 		'{"context": {"compaction": {"triggerPercent": 50, "keepRecentTokens": 40000, "enabled": false}, "pruning": {"enabled": true, "keepRecent": 0}}}',

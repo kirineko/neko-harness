@@ -45,10 +45,18 @@ const TOOL_GUIDELINES: Record<string, readonly string[]> = {
 
 const GENERIC_RULES = ["Be concise in your responses", "Show file paths clearly when working with files"];
 
-const buildRules = (toolNames: readonly string[]): string => {
+const WINDOWS_SHELL_RULE =
+	"On Windows, commands run in Git Bash (not PowerShell, cmd or WSL); write paths with forward slashes, e.g. D:/code or /d/code.";
+
+const toolRules = (name: string, platform: NodeJS.Platform): readonly string[] => {
+	const rules = TOOL_GUIDELINES[name] ?? [];
+	return platform === "win32" && (name === "bash" || name === "job") ? [...rules, WINDOWS_SHELL_RULE] : rules;
+};
+
+const buildRules = (toolNames: readonly string[], platform: NodeJS.Platform): string => {
 	const rules: string[] = [];
 	const seen = new Set<string>();
-	for (const rule of [...toolNames.flatMap((name) => TOOL_GUIDELINES[name] ?? []), ...GENERIC_RULES]) {
+	for (const rule of [...toolNames.flatMap((name) => toolRules(name, platform)), ...GENERIC_RULES]) {
 		if (seen.has(rule)) continue;
 		seen.add(rule);
 		rules.push(`- ${rule}`);
@@ -70,6 +78,7 @@ const renderProjectContext = (files: PromptResources["contextFiles"]): string | 
 /** Five ordered sections share one build per request and the conversation's placement-selected resource snapshot. */
 export const createNekoPrompt = (
 	loadResources: (id: ConversationId, workspace: string) => Promise<PromptResources>,
+	platform: NodeJS.Platform = process.platform,
 ) => {
 	const built = new WeakMap<PromptInput, Promise<Record<string, string | undefined>>>();
 	const build = async (
@@ -81,7 +90,10 @@ export const createNekoPrompt = (
 		const resources = cwd ? await loadResources(input.conversationId, cwd) : { contextFiles: [], skills: [] };
 		const sections: Record<string, string | undefined> = {
 			preamble: role ? ROLE_PROMPTS[role] + SUBAGENT_DELIVERY : PREAMBLE,
-			rules: buildRules(input.agent.tools.map((tool) => tool.name)),
+			rules: buildRules(
+				input.agent.tools.map((tool) => tool.name),
+				platform,
+			),
 			project_context: renderProjectContext(resources.contextFiles),
 			skills: formatSkillsForPrompt(resources.skills) || undefined,
 			cwd: cwd?.replace(/\\/g, "/"),

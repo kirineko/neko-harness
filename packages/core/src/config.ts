@@ -28,6 +28,12 @@ export type NekoGatewayConfig = {
 	readonly socketPath?: string | null;
 };
 
+/** Command shell settings; only read on Windows. */
+export type NekoShellConfig = {
+	/** Git for Windows `bash.exe` used by the bash tool, `job` and subagents; WSL's bash.exe is rejected. */
+	readonly path?: string;
+};
+
 /** Resolved neko-harness configuration: every field optional, merged from defaults < file < CLI. */
 export type NekoConfig = {
 	readonly defaultModel?: NekoModelRef;
@@ -39,6 +45,7 @@ export type NekoConfig = {
 	readonly webSearch?: NekoWebSearchConfig;
 	/** Context management: compaction trigger and tool result pruning. Unset keeps the native behaviour. */
 	readonly context?: ContextSettings;
+	readonly shell?: NekoShellConfig;
 };
 
 export const DEFAULT_SKILL_MARKET_URL = "https://skill.kirineko.tech";
@@ -135,6 +142,9 @@ export function mergeNekoConfig(base: NekoConfig, overrides: NekoConfig): NekoCo
 		...(base.context !== undefined || overrides.context !== undefined
 			? { context: mergeContextSettings(base.context, overrides.context) }
 			: {}),
+		...(base.shell !== undefined || overrides.shell !== undefined
+			? { shell: { ...base.shell, ...overrides.shell } }
+			: {}),
 	};
 }
 
@@ -223,6 +233,16 @@ function validate(config: Record<string, unknown>, source: string): void {
 		const { marketUrl } = skills as Record<string, unknown>;
 		if (marketUrl !== undefined && typeof marketUrl !== "string") {
 			throw new Error(`neko config: ${source}: "skills.marketUrl" must be a string.`);
+		}
+	}
+	const shell = config.shell;
+	if (shell !== undefined) {
+		if (typeof shell !== "object" || shell === null || Array.isArray(shell)) {
+			throw new Error(`neko config: ${source}: "shell" must be an object.`);
+		}
+		const { path } = shell as Record<string, unknown>;
+		if (path !== undefined && typeof path !== "string") {
+			throw new Error(`neko config: ${source}: "shell.path" must be a string.`);
 		}
 	}
 	const webSearch = config.webSearch;

@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { DEFAULT_MODEL } from "@neko-harness/core";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath, waitFor as wait } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";
 
 const waitFor = (predicate: () => boolean) => wait(predicate, "default model synchronization");
 
@@ -29,8 +29,8 @@ it("reports the built-in default initially and synchronizes set/clear across cli
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const unix = await connectNekoGateway(testAddress(gateway));
-	const web = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+	const unix = await connectTestClient(gateway);
+	const web = await connectTestWsClient(gateway);
 	try {
 		await waitFor(() => !!web.defaultModel.state.value && !!unix.defaultModel.state.value);
 		expect(unix.defaultModel.state.value).toEqual({ effective: DEFAULT_MODEL, source: "default" });
@@ -76,7 +76,7 @@ it("reports source cli for a gateway launched with --model and keeps it across s
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
 	});
-	const client = await connectNekoGateway(testAddress(gateway));
+	const client = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!client.defaultModel.state.value);
 		expect(client.defaultModel.state.value).toEqual({
@@ -113,7 +113,7 @@ it("reports source config when the config file sets defaultModel", async () => {
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const client = await connectNekoGateway(testAddress(gateway));
+	const client = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!client.defaultModel.state.value);
 		expect(client.defaultModel.state.value).toEqual({
@@ -139,7 +139,7 @@ it("rejects unknown models and disabled providers without publishing", async () 
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const client = await connectNekoGateway(testAddress(gateway));
+	const client = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!client.defaultModel.state.value);
 		const unchanged = JSON.stringify(client.defaultModel.state.value);
@@ -171,7 +171,7 @@ it("does not publish when persistence fails", async () => {
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const client = await connectNekoGateway(testAddress(gateway));
+	const client = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!client.defaultModel.state.value);
 		await client.credentials.setEnabled({ provider: "openrouter", enabled: true });

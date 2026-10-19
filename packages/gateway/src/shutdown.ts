@@ -24,6 +24,8 @@ export type ShutdownController = {
 	readonly signal: AbortSignal;
 	/** 设置清理函数；若信号已到达则立即执行。 */
 	setCleanup(cleanup: () => Promise<void>): void;
+	/** 以非信号来源（如 stdin 关闭）触发关停，流程与终止信号一致：首次清理，重复触发强退。 */
+	trigger(reason: string): void;
 	/** 取消监听（测试或正常结束时使用）。 */
 	dispose(): void;
 };
@@ -55,13 +57,13 @@ export function installShutdown(options: ShutdownOptions = {}): ShutdownControll
 		);
 	};
 
-	const onSignal = (): void => {
+	const begin = (reason: string | undefined): void => {
 		if (controller.signal.aborted) {
 			options.log?.("再次收到终止信号，强制退出。");
 			exit(130);
 			return;
 		}
-		options.log?.("\n正在关闭…");
+		options.log?.(reason === undefined ? "\n正在关闭…" : `\n正在关闭（${reason}）…`);
 		controller.abort();
 		timer = setTimeout(() => {
 			options.log?.("关闭超时，强制退出。");
@@ -70,6 +72,7 @@ export function installShutdown(options: ShutdownOptions = {}): ShutdownControll
 		timer.unref?.();
 		runCleanup();
 	};
+	const onSignal = (): void => begin(undefined);
 
 	const installed: NodeJS.Signals[] = [];
 	for (const signal of shutdownSignals(proc.platform)) {
@@ -86,6 +89,9 @@ export function installShutdown(options: ShutdownOptions = {}): ShutdownControll
 		setCleanup(next) {
 			cleanup = next;
 			if (controller.signal.aborted) runCleanup();
+		},
+		trigger(reason) {
+			begin(reason);
 		},
 		dispose() {
 			clearTimeout(timer);

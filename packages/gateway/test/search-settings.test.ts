@@ -3,8 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath, waitFor as wait } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";
 
 const waitFor = (predicate: () => boolean) => wait(predicate, "search settings synchronization");
 
@@ -20,8 +20,8 @@ it("synchronizes the search provider across clients without touching credentials
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const unix = await connectNekoGateway(testAddress(gateway));
-	const web = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+	const unix = await connectTestClient(gateway);
+	const web = await connectTestWsClient(gateway);
 	try {
 		await waitFor(() => !!web.searchSettings.state.value && !!unix.searchSettings.state.value);
 		expect(web.searchSettings.state.value!.selected).toBe("tavily");
@@ -60,7 +60,7 @@ it("rejects unknown providers and does not publish when persistence fails", asyn
 		port: 0,
 		serverId: crypto.randomUUID(),
 	});
-	const client = await connectNekoGateway(testAddress(gateway));
+	const client = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!client.searchSettings.state.value);
 		await client.searchSettings.set({ provider: "deepseek" });

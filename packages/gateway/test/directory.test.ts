@@ -4,8 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { ChordError } from "@earendil-works/chord";
 import type { ChatView } from "@neko-harness/core";
-import { connectNekoGateway, type NekoGatewayClient } from "../src/index.ts";
-import { cleanup, makeGateway, type TestGateway, testAddress, waitFor } from "./helpers.ts";
+import type { NekoGatewayClient } from "../src/index.ts";
+import { cleanup, connectTestClient, connectTestWsClient, makeGateway, type TestGateway, waitFor } from "./helpers.ts";
 
 let target: TestGateway;
 
@@ -18,11 +18,11 @@ afterEach(async () => {
 });
 
 async function connectUnix(): Promise<NekoGatewayClient> {
-	return connectNekoGateway(testAddress(target));
+	return connectTestClient(target);
 }
 
 async function connectWs(): Promise<NekoGatewayClient> {
-	return connectNekoGateway({ transport: "ws", url: target.wsUrl, serverId: target.serverId });
+	return connectTestWsClient(target);
 }
 
 describe("session directory", () => {

@@ -9,8 +9,8 @@ import type { FauxProviderHandle } from "@earendil-works/pi-ai";
 import { fauxProvider } from "../../../../test/faux.ts";
 import { rm } from "../../../../test/temp-dir.ts";
 import type { NekoGatewayConnection } from "../../src/client-session.ts";
-import { connectNekoGateway, type NekoGateway, startGateway } from "../../src/index.ts";
-import { testAddress, testSocketPath } from "../helpers.ts";
+import { type NekoGateway, startGateway } from "../../src/index.ts";
+import { connectTestClient, testSocketPath } from "../helpers.ts";
 import { connectMobileWs, type MobileWsClient } from "./ws-client.ts";
 
 /** 端到端移动 API 测试夹具：真实 gateway + faux provider + 已开启的移动入口。 */
@@ -120,7 +120,7 @@ export async function startMobileHarness(
 		port,
 		dir,
 		async desktop() {
-			const connection = await connectNekoGateway(testAddress(gateway));
+			const connection = await connectTestClient(gateway);
 			desktops.push(connection);
 			return connection;
 		},

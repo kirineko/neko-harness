@@ -3,7 +3,7 @@
 
 import { afterEach, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zipSync } from "fflate";
@@ -238,4 +238,43 @@ it("computes active level from per-level presence", () => {
 	expect(activeLevelOf({ project: false, user: true, builtin: true })).toBe("user");
 	expect(activeLevelOf({ project: false, user: false, builtin: true })).toBe("builtin");
 	expect(activeLevelOf({ project: false, user: false, builtin: false })).toBeNull();
+});
+
+it("keeps the old version intact when placing the new version fails", async () => {
+	const { client, home } = market({
+		renameImpl: async () => {
+			throw Object.assign(new Error("denied"), { code: "ENOSPC" });
+		},
+	});
+	const target = join(home, ".agents", "skills", "think");
+	mkdirSync(target, { recursive: true });
+	writeFileSync(join(target, "SKILL.md"), "old version");
+	await expect(client.install({ name: "think", scope: "user", overwrite: true })).rejects.toThrow("denied");
+	expect(readFileSync(join(target, "SKILL.md"), "utf8")).toBe("old version");
+	expect(readdirSync(join(home, ".agents")).filter((n) => n.startsWith(".tmp-") || n.startsWith(".bak-"))).toEqual([]);
+});
+
+it("leaves no backup after a successful overwrite", async () => {
+	const { client, home } = market();
+	await client.install({ name: "think", scope: "user" });
+	await client.install({ name: "think", scope: "user", overwrite: true });
+	expect(readdirSync(join(home, ".agents")).filter((n) => n.startsWith(".bak-"))).toEqual([]);
+});
+
+it("restores a leftover backup when the target is missing and drops it when the target exists", async () => {
+	const { client, home } = market();
+	const uuid = "00000000-0000-4000-8000-000000000000";
+	const lost = join(home, ".agents", `.bak-${uuid}-lost`);
+	mkdirSync(lost, { recursive: true });
+	writeFileSync(join(lost, "SKILL.md"), "lost version");
+	const kept = join(home, ".agents", `.bak-${uuid}-think`);
+	mkdirSync(kept, { recursive: true });
+	writeFileSync(join(kept, "SKILL.md"), "stale backup");
+	mkdirSync(join(home, ".agents", "skills", "think"), { recursive: true });
+	writeFileSync(join(home, ".agents", "skills", "think", "SKILL.md"), "current");
+
+	await client.install({ name: "think", scope: "user", overwrite: true });
+	expect(readFileSync(join(home, ".agents", "skills", "lost", "SKILL.md"), "utf8")).toBe("lost version");
+	expect(readFileSync(join(home, ".agents", "skills", "think", "SKILL.md"), "utf8")).toContain("Body text.");
+	expect(readdirSync(join(home, ".agents")).filter((n) => n.startsWith(".bak-"))).toEqual([]);
 });

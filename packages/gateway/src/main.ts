@@ -26,3 +26,17 @@ if (gateway.wsUrl !== undefined) console.log(`  WebSocket:   ${gateway.wsUrl}`);
 console.log("按 Ctrl+C 停止。");
 
 shutdown.setCleanup(() => gateway.close());
+
+if (options.stopOnStdin === true) {
+	// 拉起方持有 stdin 管道；其关闭（正常停止或拉起方崩溃）即关停信号。需 resume 才能观察到 EOF。
+	let triggered = false;
+	const onStdinEnd = (): void => {
+		// end 与 close 会先后触发；只算一次，否则 trigger 会把第二次当作重复信号强退。
+		if (triggered) return;
+		triggered = true;
+		shutdown.trigger("stdin 已关闭");
+	};
+	process.stdin.once("end", onStdinEnd);
+	process.stdin.once("close", onStdinEnd);
+	process.stdin.resume();
+}

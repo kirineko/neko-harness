@@ -275,7 +275,11 @@ export class JobManager {
 								outcome = { status: "failed", exitCode: null, reason: "timeout" };
 							else if (result.error.code === "aborted")
 								outcome = { status: "stopped", exitCode: null, reason: "aborted" };
-							else outcome = { status: "failed", exitCode: null, reason: "spawn-error" };
+							else {
+								// Surface why nothing ran (e.g. no Git Bash on Windows) in the job output the model reads.
+								entry.buffer.append(`${result.error.message}\n`);
+								outcome = { status: "failed", exitCode: null, reason: "spawn-error" };
+							}
 						}
 						if (this.#closing) {
 							// Shutdown killed the process; stay unsettled so the next open reports the job as lost.

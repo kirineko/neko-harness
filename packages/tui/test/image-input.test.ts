@@ -127,3 +127,13 @@ it("renders PNG/JPEG/WebP through Pi Kitty protocol only when visible and falls 
 		setCapabilities(original);
 	}
 });
+
+it("expands ~/ everywhere and ~\\ only on win32", async () => {
+	const { expandHome } = await import("../src/image-input.ts");
+	const { homedir } = await import("node:os");
+	expect(expandHome("~/pics/a.png", "linux")).toBe(join(homedir(), "pics/a.png"));
+	expect(expandHome("~/pics/a.png", "win32")).toBe(join(homedir(), "pics/a.png"));
+	expect(expandHome(String.raw`~\pics\a.png`, "win32")).toBe(join(homedir(), String.raw`pics\a.png`));
+	expect(expandHome(String.raw`~\pics\a.png`, "linux")).toBe(String.raw`~\pics\a.png`);
+	expect(expandHome("~user/a.png", "win32")).toBe("~user/a.png");
+});

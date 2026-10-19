@@ -28,7 +28,7 @@ afterAll(async () => {
 import { fileCompletion } from "../src/file-completion.ts";
 
 async function waitForAutocomplete(editor: BoundedEditor) {
-	for (let attempt = 0; attempt < 100 && !editor.isShowingAutocomplete(); attempt++) await Bun.sleep(10);
+	for (let attempt = 0; attempt < 400 && !editor.isShowingAutocomplete(); attempt++) await Bun.sleep(10);
 	expect(editor.isShowingAutocomplete()).toBe(true);
 }
 
@@ -191,7 +191,7 @@ it("closes Pi candidates before starting the double-Escape clear sequence", asyn
 		);
 		editor.render(width);
 		editor.handleInput("@");
-		for (let attempt = 0; attempt < 100 && !editor.isShowingAutocomplete(); attempt++) await Bun.sleep(25);
+		for (let attempt = 0; attempt < 400 && !editor.isShowingAutocomplete(); attempt++) await Bun.sleep(25);
 		expect(editor.isShowingAutocomplete()).toBe(true);
 		expect(editor.render(width).every((line) => visibleWidth(line) <= width)).toBe(true);
 		editor.handleInput("\x1b");

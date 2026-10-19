@@ -62,17 +62,21 @@ export class BoundedEditor extends Editor {
 	 * and position do not shift.
 	 */
 	setHistory(entries: readonly string[]): void {
+		// biome-ignore lint/complexity/useLiteralKeys: pi-tui 将 history/historyIndex 声明为 private，只能用括号访问
 		if (this["historyIndex"] > -1) {
 			this.#pendingHistory = entries;
 			return;
 		}
 		this.#pendingHistory = undefined;
+		// biome-ignore lint/complexity/useLiteralKeys: pi-tui 将 history/historyIndex 声明为 private，只能用括号访问
 		const current: string[] = this["history"];
 		if (current.length === entries.length && current.every((entry, i) => entry === entries[i])) return;
+		// biome-ignore lint/complexity/useLiteralKeys: pi-tui 将 history/historyIndex 声明为 private，只能用括号访问
 		this["history"] = [...entries];
 	}
 	#pendingHistory?: readonly string[];
 	#flushHistory(): void {
+		// biome-ignore lint/complexity/useLiteralKeys: pi-tui 将 history/historyIndex 声明为 private，只能用括号访问
 		if (this.#pendingHistory !== undefined && this["historyIndex"] === -1) this.setHistory(this.#pendingHistory);
 	}
 

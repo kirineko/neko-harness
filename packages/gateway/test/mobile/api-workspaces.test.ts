@@ -7,8 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { rm } from "../../../../test/temp-dir.ts";
-import { connectNekoGateway, type NekoGateway, startGateway } from "../../src/index.ts";
-import { testAddress, testSocketPath, waitFor } from "../helpers.ts";
+import { type NekoGateway, startGateway } from "../../src/index.ts";
+import { connectTestClient, testSocketPath, waitFor } from "../helpers.ts";
 import { connectMobileWs, type MobileWsClient } from "./ws-client.ts";
 
 function credential(): string {
@@ -170,7 +170,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 	it("lists registered workspaces with root and display name", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
 			await desktop.workspaces.add({ path: workspaceB });
 			const device = await pairDevice(gateway, port);
@@ -192,7 +192,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 	it("rejects unknown workspaces for list and create without falling back", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
 			const before = desktop.directory.state.value?.sessions.length ?? 0;
 			const device = await pairDevice(gateway, port);
@@ -211,7 +211,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 	it("creates sessions in workspace B that are visible in the desktop directory", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
 			await desktop.workspaces.add({ path: workspaceB });
 			const device = await pairDevice(gateway, port);
@@ -242,7 +242,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 	it("filters, searches, and paginates sessions per workspace", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
 			await desktop.workspaces.add({ path: workspaceB });
 			const device = await pairDevice(gateway, port);
@@ -304,7 +304,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 	it("orders sessions by last message time, not by opening them", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
 			const device = await pairDevice(gateway, port);
 			const client = await connectMobileHello(port, device);
@@ -342,7 +342,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 	it("broadcasts sessions.changed and workspaces.changed to every connected phone", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const desktop = await connectNekoGateway(testAddress(gateway));
+			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
 			const first = await pairDevice(gateway, port);
 			const second = await pairDevice(gateway, port);

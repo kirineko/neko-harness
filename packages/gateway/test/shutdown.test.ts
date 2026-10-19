@@ -100,6 +100,42 @@ describe("installShutdown", () => {
 		shutdown.dispose();
 	});
 
+	it("trigger runs the signal flow: cleanup once, repeated trigger force-exits", async () => {
+		const fake = fakeProcess();
+		const exits: number[] = [];
+		const logs: string[] = [];
+		const shutdown = installShutdown({
+			process: fake.proc,
+			exit: (code) => void exits.push(code),
+			log: (message) => void logs.push(message),
+			timeoutMs: 10_000,
+		});
+		let cleanups = 0;
+		shutdown.setCleanup(() => {
+			cleanups++;
+			return new Promise<void>(() => {});
+		});
+		shutdown.trigger("stdin closed");
+		expect(shutdown.signal.aborted).toBe(true);
+		expect(cleanups).toBe(1);
+		expect(logs.some((line) => line.includes("stdin closed"))).toBe(true);
+		shutdown.trigger("stdin closed");
+		expect(exits).toEqual([130]);
+		expect(cleanups).toBe(1);
+		shutdown.dispose();
+	});
+
+	it("trigger force-exits with 1 when cleanup exceeds the time limit", async () => {
+		const fake = fakeProcess();
+		const exits: number[] = [];
+		const shutdown = installShutdown({ process: fake.proc, exit: (code) => void exits.push(code), timeoutMs: 30 });
+		shutdown.setCleanup(() => new Promise<void>(() => {}));
+		shutdown.trigger("stdin closed");
+		await tick(80);
+		expect(exits).toEqual([1]);
+		shutdown.dispose();
+	});
+
 	it("listens to SIGBREAK only on Windows and removes listeners on dispose", () => {
 		const linux = fakeProcess("linux");
 		const win = fakeProcess("win32");

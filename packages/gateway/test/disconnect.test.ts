@@ -7,7 +7,16 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
 import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { cleanup, IS_WINDOWS, makeGateway, type TestGateway, testAddress, waitFor } from "./helpers.ts";
+import {
+	cleanup,
+	connectTestClient,
+	connectTestWsClient,
+	IS_WINDOWS,
+	makeGateway,
+	type TestGateway,
+	testAddress,
+	waitFor,
+} from "./helpers.ts";
 
 let target: TestGateway;
 
@@ -36,8 +45,8 @@ function sawFollowUp(values: readonly ChatView[], followUp: string, answer: stri
 
 describe("disconnect semantics", () => {
 	it("keeps the session and the other attachment alive when one frontend disconnects", async () => {
-		const stable = await connectNekoGateway(testAddress(target));
-		const dying = await connectNekoGateway({ transport: "ws", url: target.wsUrl, serverId: target.serverId });
+		const stable = await connectTestClient(target);
+		const dying = await connectTestWsClient(target);
 		try {
 			const created = await stable.management.create({});
 			const stableChat = await stable.attach(created.id);
@@ -59,7 +68,7 @@ describe("disconnect semantics", () => {
 			await waitFor(() => sawFollowUp(seenByStable, "again", "pong"), "剩余前端可继续提交");
 
 			// 网关整体无恙：新客户端可连接并看到目录。
-			const newcomer = await connectNekoGateway(testAddress(target));
+			const newcomer = await connectTestClient(target);
 			try {
 				expect(newcomer.directory.state.value?.sessions.map((s) => s.id)).toContain(created.id);
 			} finally {
@@ -71,7 +80,7 @@ describe("disconnect semantics", () => {
 	}, 30_000);
 
 	it("reconnect starts from the latest snapshot without replaying history", async () => {
-		const first = await connectNekoGateway(testAddress(target));
+		const first = await connectTestClient(target);
 		let sessionId: string;
 		try {
 			const created = await first.management.create({});
@@ -87,7 +96,7 @@ describe("disconnect semantics", () => {
 		}
 
 		// 重连 = 重新 attach + 取最新快照：快照直接包含已有回答，不做历史重放。
-		const second = await connectNekoGateway(testAddress(target));
+		const second = await connectTestClient(target);
 		try {
 			const chat = await second.attach(sessionId);
 			const snapshot = chat.view.value;

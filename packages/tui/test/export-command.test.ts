@@ -194,3 +194,18 @@ it("keeps exporting HTML when an image cannot be read and reports how many were 
 		expect(result.skippedImages).toBe(1);
 		expect(await readFile(result.path, "utf8")).toContain("image unavailable");
 	}));
+
+it("expands ~\\ on win32 and ~/ on POSIX in the export path", () =>
+	inTempDir(async (dir) => {
+		const { homedir } = await import("node:os");
+		const missing = (path: string, platform: string) =>
+			exportToFile({ path, includeThinking: false, cwd: dir, source: source(items), loadImage: undefined, platform });
+		const target = join(homedir(), "neko-missing-dir", "sub", "a.md");
+		await expect(missing("~\\neko-missing-dir/sub/a.md", "win32")).rejects.toThrow(
+			`Directory does not exist: ${target}`,
+		);
+		await expect(missing("~/neko-missing-dir/sub/a.md", "linux")).rejects.toThrow(
+			`Directory does not exist: ${target}`,
+		);
+		await expect(missing("~\\neko-missing-dir/sub/a.md", "linux")).rejects.toThrow("Directory does not exist");
+	}));

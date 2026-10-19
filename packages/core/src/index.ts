@@ -108,6 +108,7 @@ export {
 } from "./projection.ts";
 export { stripFrontmatter } from "./prompt/frontmatter.ts";
 export { QUEUED_PREVIEW_CHARS, type QueuedInput } from "./queued.ts";
+export { type RenameWithRetryDeps, renameWithRetry } from "./rename-with-retry.ts";
 export {
 	createNekoRuntime,
 	DEFAULT_MODEL,
@@ -156,6 +157,17 @@ export { TodosDoc } from "./todos.ts";
 export { ApprovalsDoc, type ToolApproval, ToolApprovals } from "./tool-approvals.ts";
 export { mergeTranscriptItems } from "./transcript-items.ts";
 export { QuestionDoc, QuestionsDoc, UserQuestions } from "./user-questions.ts";
+export {
+	createWindowsShellResolver,
+	isWslBashPath,
+	resolveWindowsShell,
+	summarizeWindowsShell,
+	type WindowsShellDeps,
+	type WindowsShellResolver,
+	type WindowsShellStatus,
+	type WindowsShellSummary,
+	windowsShellMessage,
+} from "./windows-shell.ts";
 export { accessibleWorkspace, type NekoWorkspace, normalizeWorkspace } from "./workspace.ts";
 export {
 	BROWSE_LIMITS,

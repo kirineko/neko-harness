@@ -1,8 +1,7 @@
 // Chord 1.3 gives every new or re-holding subscriber the current value; server listeners must reconcile, not republish.
 
 import { afterEach, beforeEach, expect, it } from "bun:test";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, type TestGateway, testAddress } from "./helpers.ts";
+import { cleanup, connectTestClient, makeGateway, type TestGateway } from "./helpers.ts";
 
 let target: TestGateway;
 
@@ -15,7 +14,7 @@ afterEach(async () => {
 });
 
 it("delivers the current server state to reconnecting clients without bumping revisions", async () => {
-	const first = await connectNekoGateway(testAddress(target));
+	const first = await connectTestClient(target);
 	try {
 		const initial = {
 			directory: first.directory.state.value.revision,
@@ -29,7 +28,7 @@ it("delivers the current server state to reconnecting clients without bumping re
 			first.credentials.state.subscribe((value) => seen.credentials.push(value.revision)),
 		];
 		for (let round = 0; round < 3; round++) {
-			const other = await connectNekoGateway(testAddress(target));
+			const other = await connectTestClient(target);
 			expect(other.directory.state.value.revision).toBe(initial.directory);
 			expect(other.workspaces.state.value.revision).toBe(initial.workspaces);
 			expect(other.credentials.state.value.revision).toBe(initial.credentials);

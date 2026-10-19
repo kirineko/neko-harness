@@ -13,6 +13,7 @@ export const GATEWAY_USAGE = `用法: neko serve [选项]
   --storage <path>     SQLite 存储文件（默认 ~/.neko/neko.sqlite）
   --credentials <path> 用户凭据文件（默认 ~/.neko/credentials.json）
   --config <dir>       neko.config.json 查找起始目录（默认当前目录）
+  --stop-on-stdin      标准输入结束时关停网关（供 Windows 上拉起网关的前端使用）
   -h, --help           显示此帮助
 
 可通过前端设置或环境变量（DEEPSEEK_API_KEY / OPENROUTER_API_KEY / OPENCODE_API_KEY / TAVILY_API_KEY 等）配置凭据；
@@ -30,6 +31,7 @@ export type GatewayCliOptions = {
 	storagePath?: string;
 	credentialsPath?: string;
 	configDir?: string;
+	stopOnStdin?: boolean;
 };
 
 /** 解析 gateway CLI 参数；`--help` 由调用方处理（main.ts 打印 GATEWAY_USAGE）。 */
@@ -100,6 +102,9 @@ export function parseGatewayArgs(argv: readonly string[]): GatewayCliOptions {
 				if (next === undefined) throw new Error("--config 需要参数");
 				options.configDir = next;
 				i++;
+				break;
+			case "--stop-on-stdin":
+				options.stopOnStdin = true;
 				break;
 			default:
 				throw new Error(`未知选项: ${arg}`);

@@ -7,10 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { rm } from "../../../../test/temp-dir.ts";
-import { connectNekoGateway, type NekoGateway, startGateway } from "../../src/index.ts";
+import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { MobileGateway } from "../../src/mobile/listener.ts";
 import { MobileStore } from "../../src/mobile/store.ts";
-import { testAddress, testSocketPath } from "../helpers.ts";
+import { connectTestClient, testSocketPath } from "../helpers.ts";
 import { connectMobileWs, type MobileWsClient } from "./ws-client.ts";
 
 function credential(): string {
@@ -161,9 +161,7 @@ describe("mobile adapter connections", () => {
 			const survivor = await pairDevice(gateway, port);
 			const revokedClient = await connectPaired(port, revoked);
 			const survivorClient = await connectPaired(port, survivor);
-			const desktop = await connectNekoGateway(
-				testAddress({ socketPath: gateway.socketPath, wsUrl: gateway.wsUrl ?? "", serverId: gateway.serverId }),
-			);
+			const desktop = await connectTestClient(gateway);
 			const desktopModels = await desktop.models.list(null);
 
 			expect(await gateway.mobile.revoke(revoked.deviceId)).toBe(true);
@@ -272,9 +270,7 @@ describe("mobile adapter connections", () => {
 			const reply = (await staying.nextMessage()) as { error: { data: { code: string } } };
 			expect(reply.error.data.code).toBe("not_found");
 
-			const desktop = await connectNekoGateway(
-				testAddress({ socketPath: gateway.socketPath, wsUrl: gateway.wsUrl ?? "", serverId: gateway.serverId }),
-			);
+			const desktop = await connectTestClient(gateway);
 			await desktop.close();
 			const third = await pairDevice(gateway, port);
 			const thirdClient = await connectPaired(port, third);
@@ -296,9 +292,7 @@ describe("mobile adapter connections", () => {
 			await gateway.mobile.disable();
 			const close = await client.waitForClose();
 			expect(close.code).toBe(1001);
-			const desktop = await connectNekoGateway(
-				testAddress({ socketPath: gateway.socketPath, wsUrl: gateway.wsUrl ?? "", serverId: gateway.serverId }),
-			);
+			const desktop = await connectTestClient(gateway);
 			await desktop.close();
 		} finally {
 			await gateway.close();

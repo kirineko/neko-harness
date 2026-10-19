@@ -7,6 +7,7 @@ import { MessageList } from "../components/message-list";
 import { DismissButton, folderName, useMobile } from "../components/primitives";
 import { QuestionDock } from "../components/question-card";
 import { SessionList } from "../components/session-list";
+import { ShellNotice } from "../components/shell-notice";
 import { SubagentPanel } from "../components/subagent-panel";
 import { TodoPanel } from "../components/todo-panel";
 import { TopBar } from "../components/top-bar";
@@ -140,6 +141,7 @@ export function ChatPage() {
 							: undefined
 					}
 				/>
+				<ShellNotice />
 				{notice !== null && (
 					<div
 						className={`discrete-in flex items-center gap-2 border-b py-1 pr-2 pl-9 text-xs ${

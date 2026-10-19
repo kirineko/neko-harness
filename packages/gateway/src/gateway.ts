@@ -14,6 +14,7 @@ import {
 	type NekoModelRef,
 	type NekoRuntime,
 	type SearchProviderId,
+	type WindowsShellResolver,
 } from "@neko-harness/core";
 import type { UpdateCheckerOptions } from "@neko-harness/core/application-updates";
 import { GATEWAY_HOST } from "./contract.ts";
@@ -45,6 +46,8 @@ export type NekoGatewayOptions = {
 	readonly extensions?: readonly Extension[];
 	/** 用户级提示词资源根（`<home>/.agents`）；测试覆盖用。 */
 	readonly promptHome?: string;
+	/** 替换 Windows Git Bash 探测（测试在任意平台演练 Windows 路径）；缺省仅 Windows 按配置 shell.path 探测。 */
+	readonly shellResolver?: WindowsShellResolver;
 	/** 技能市场 API 地址；缺省读取配置 skills.marketUrl，再回落官方市场。 */
 	readonly marketUrl?: string;
 	// —— 网关监听地址 ——
@@ -72,6 +75,8 @@ export type NekoGateway = {
 	readonly runtime: NekoRuntime;
 	/** 移动入口（design D2）；状态机与启停见 mobile/listener.ts，关闭时最先释放。 */
 	readonly mobile: MobileGateway;
+	/** 以本机主体接入一条已建立的链路（进程内客户端），与监听器接入的连接同一握手规则。 */
+	accept(link: Link): void;
 	close(): Promise<void>;
 };
 
@@ -128,6 +133,8 @@ export async function startGateway(options: NekoGatewayOptions = {}): Promise<Ne
 		...(options.providers !== undefined ? { providers: options.providers } : {}),
 		...(options.extensions !== undefined ? { extensions: options.extensions } : {}),
 		...(options.promptHome !== undefined ? { promptHome: options.promptHome } : {}),
+		...(fileConfig.shell?.path !== undefined ? { shellPath: fileConfig.shell.path } : {}),
+		...(options.shellResolver !== undefined ? { shellResolver: options.shellResolver } : {}),
 	});
 	try {
 		return await bindGateway(runtime, {
@@ -193,17 +200,14 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 		wsListener = createWsListener({ host, port, onError: options.onError });
 		listeners.push(wsListener);
 	}
+	const acceptLocal = (link: Link) =>
+		chord.accept(link, {
+			principal: { kind: "local", connectionId: randomUUID() },
+			onProtocolMismatch: ({ peer }) =>
+				options.onError?.(new Error(`Rejected a client on Chord protocol ${peer ?? "unknown"}; restart or update it.`)),
+		});
 	try {
-		for (const listener of listeners)
-			await listener.start((link) =>
-				chord.accept(link, {
-					principal: { kind: "local", connectionId: randomUUID() },
-					onProtocolMismatch: ({ peer }) =>
-						options.onError?.(
-							new Error(`Rejected a client on Chord protocol ${peer ?? "unknown"}; restart or update it.`),
-						),
-				}),
-			);
+		for (const listener of listeners) await listener.start(acceptLocal);
 	} catch (error) {
 		await Promise.allSettled(listeners.map((listener) => listener.close()));
 		await chord.close();
@@ -252,6 +256,9 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 		port: wsListener?.port,
 		runtime,
 		mobile,
+		accept(link) {
+			acceptLocal(link);
+		},
 		async close() {
 			if (closing) return closing;
 			closing = (async () => {

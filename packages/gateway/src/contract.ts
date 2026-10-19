@@ -871,6 +871,17 @@ export type NekoMarketInstallResult = Static<typeof installResult>;
 export type NekoCreateSessionOptions = Parameters<NekoSessionManagement["create"]>[0];
 export type NekoSubmitInput = Parameters<NekoChat["submit"]>[0];
 
+/** Windows command shell status; absent on other platforms and on older gateways. */
+export const ShellStatusSchema = Type.Union([
+	Type.Object({ status: Type.Literal("ready"), path: str, source: Type.Enum(["config", "auto"]) }),
+	Type.Object({
+		status: Type.Literal("missing"),
+		reason: Type.Enum(["not_found", "invalid_config"]),
+		detail: Type.Optional(str),
+	}),
+]);
+export type NekoShellStatus = Static<typeof ShellStatusSchema>;
+
 /** Stable bootstrap contract: keep this available even when business protocol changes. */
 export const ApplicationInfoSchema = Type.Object({
 	runningVersion: str,
@@ -880,6 +891,7 @@ export const ApplicationInfoSchema = Type.Object({
 	checkedAt: Type.Union([integer, nil]),
 	checkState: Type.Enum(["unknown", "checking", "ok", "failed", "development"]),
 	serverId: str,
+	shell: Type.Optional(ShellStatusSchema),
 });
 export const NekoApplicationInfo = contract("neko.application-info", {
 	version: 1,

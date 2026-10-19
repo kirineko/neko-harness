@@ -10,8 +10,8 @@ import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, testSocketPath } from "./helpers.ts";
 
 let dir: string;
 let home: string;
@@ -53,7 +53,7 @@ describe("skills over the gateway", () => {
 			promptHome: home,
 		});
 		try {
-			const client = await connectNekoGateway(testAddress(gateway));
+			const client = await connectTestClient(gateway);
 			try {
 				const created = await client.management.create({});
 				const chat = await client.attach(created.id);

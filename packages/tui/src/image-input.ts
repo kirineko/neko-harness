@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { isKeyRelease, isKeyRepeat, matchesKey } from "@earendil-works/pi-tui";
 import type { ImageFile } from "@neko-harness/core/image-transfer";
@@ -35,8 +35,18 @@ export function imagePaths(text: string, platform: string = process.platform): s
 	if (word) paths.push(word);
 	return paths.length && paths.every((p) => /\.(png|jpe?g|webp)$/i.test(p)) ? paths : null;
 }
-export async function readImageFile(path: string, cwd: string): Promise<ImageFile> {
-	const full = resolve(cwd, path.startsWith("~/") ? homedir() + path.slice(1) : path);
+/** Expands a leading `~/` (and `~\` on Windows) to the home directory. */
+export function expandHome(path: string, platform: string = process.platform): string {
+	if (path.startsWith("~/") || (platform === "win32" && path.startsWith("~\\"))) return join(homedir(), path.slice(2));
+	return path;
+}
+
+export async function readImageFile(
+	path: string,
+	cwd: string,
+	platform: string = process.platform,
+): Promise<ImageFile> {
+	const full = resolve(cwd, expandHome(path, platform));
 	const info = await stat(full);
 	if (!info.isFile() || info.size > 20 * 1024 * 1024) throw new Error("Image must be a file no larger than 20 MiB");
 	const bytes = await readFile(full);

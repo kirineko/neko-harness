@@ -1,4 +1,9 @@
-export { connectNekoGateway, type NekoGatewayAddress, type NekoGatewayClient } from "./client.ts";
+export {
+	connectNekoGateway,
+	connectNekoGatewayLink,
+	type NekoGatewayAddress,
+	type NekoGatewayClient,
+} from "./client.ts";
 export { assertGatewayIdentity } from "./client-session.ts";
 export {
 	NekoApplicationInfo,

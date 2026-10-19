@@ -37,7 +37,7 @@ it("pads every line to a uniform background rectangle, including blank lines", (
 	const lines = highlightCodeToAnsiLines("x\n", undefined);
 	// 两行都铺底色且同宽(宽行 1 格,空行也补齐到 1 格)。
 	expect(lines[0]).toBe(theme.codeBg(theme.codeFg("x")));
-	expect(lines[1]).toBe(theme.codeBg(theme.codeFg("") + " "));
+	expect(lines[1]).toBe(theme.codeBg(`${theme.codeFg("")} `));
 	const ragged = highlightCodeToAnsiLines("x\nlonger line", undefined);
 	// biome-ignore lint/suspicious/noControlCharactersInRegex: 匹配 SGR 转义序列
 	const widths = ragged.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").length);

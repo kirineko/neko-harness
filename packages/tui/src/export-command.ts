@@ -1,5 +1,4 @@
 import { type FileHandle, open, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
 import { resolve } from "node:path";
 import {
 	type ExportFormat,
@@ -9,6 +8,7 @@ import {
 	exportFileName,
 	exportFormatFromPath,
 } from "@neko-harness/core/conversation-export";
+import { expandHome } from "./image-input.ts";
 
 export const EXPORT_USAGE = "Usage: /export [path.md|path.html|path.json] [--thinking]";
 
@@ -58,6 +58,7 @@ export type ExportToFileInput = ExportArgs & {
 	cwd: string;
 	source: ExportSource;
 	loadImage: ExportOptions["loadImage"];
+	platform?: string;
 };
 
 /**
@@ -71,9 +72,7 @@ export async function exportToFile(input: ExportToFileInput): Promise<{ path: st
 		input.cwd,
 		input.path === undefined
 			? exportFileName(input.source.title, format, input.source.exportedAt)
-			: input.path.startsWith("~/")
-				? homedir() + input.path.slice(1)
-				: input.path,
+			: expandHome(input.path, input.platform),
 	);
 	let handle: FileHandle;
 	try {

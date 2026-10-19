@@ -63,12 +63,16 @@ export async function createNekoServerServices(options: {
 	const updates = new UpdateChecker(options.updates);
 	await updates.local();
 	const updateListeners = new Set<(value: UpdateState) => void>();
-	const info = (value: UpdateState) => ({ ...value, serverId: options.serverId });
-	let published = JSON.stringify(updates.state),
+	// The Windows shell status rides along with the update state; only Windows runtimes report one.
+	const info = (value: UpdateState) => {
+		const shell = runtime.shellStatus();
+		return { ...value, serverId: options.serverId, ...(shell === undefined ? {} : { shell }) };
+	};
+	let published = JSON.stringify(info(updates.state)),
 		closed = false;
 	const publishUpdates = () => {
 		if (closed) return;
-		const next = JSON.stringify(updates.state);
+		const next = JSON.stringify(info(updates.state));
 		if (next === published) return;
 		published = next;
 		for (const listener of updateListeners) listener(updates.state);
@@ -89,6 +93,7 @@ export async function createNekoServerServices(options: {
 			variant: "ready",
 			info: current,
 			check: async () => {
+				runtime.shellStatus({ refresh: true });
 				await updates.check(true);
 				publishUpdates();
 				return info(updates.state);

@@ -9,8 +9,7 @@ import {
 	QuestionRecordSchema,
 	QuestionResponseSchema,
 } from "../src/contract.ts";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
 
 const options = [
 	{ id: "pg", label: "PostgreSQL", recommended: true },
@@ -24,7 +23,7 @@ const pendingId = (chat: NekoChat) => chat.view.value?.questions?.pending[0];
 
 it("publishes todos and questions as optional supported fields and keeps the view schema valid", async () => {
 	const target = await makeGateway();
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		expect(chat.view.value?.todos).toEqual({ revision: 0, items: [] });
@@ -55,8 +54,8 @@ it("shares todos and a pending question with every client and settles it once", 
 		fauxAssistantMessage([fauxText("storage decided")]),
 	]);
 	const id = String(target.gateway.runtime.root.id);
-	const a = await connectNekoGateway(testAddress(target));
-	const b = await connectNekoGateway(testAddress(target));
+	const a = await connectTestClient(target);
+	const b = await connectTestClient(target);
 	try {
 		const chatA = await a.attach(id);
 		const chatB = await b.attach(id);
@@ -122,7 +121,7 @@ it("rejects wrong identity, versions and answers and never leaks another session
 	const target = await makeGateway();
 	target.faux.setResponses([askRound(), fauxAssistantMessage([fauxText("ok")])]);
 	const id = String(target.gateway.runtime.root.id);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(id);
 		await chat.submit({ content: "go" });
@@ -171,14 +170,14 @@ it("keeps the question when a client detaches and shows it again to a new one", 
 	const target = await makeGateway();
 	target.faux.setResponses([askRound({ question: "Name it?" }), fauxAssistantMessage([fauxText("named")])]);
 	const id = String(target.gateway.runtime.root.id);
-	const first = await connectNekoGateway(testAddress(target));
+	const first = await connectTestClient(target);
 	const chat = await first.attach(id);
 	await chat.submit({ content: "go" });
 	await waitFor(() => !!pendingId(chat), "pending question");
 	const summary = pendingId(chat)!;
 	await first.detach();
 	await first.close();
-	const second = await connectNekoGateway(testAddress(target));
+	const second = await connectTestClient(target);
 	try {
 		const reattached = await second.attach(id);
 		await waitFor(() => pendingId(reattached)?.id === summary.id, "same question after reconnect");
@@ -201,7 +200,7 @@ it("cancels a question when the run is stopped and reports it to every client", 
 	const target = await makeGateway();
 	target.faux.setResponses([askRound()]);
 	const id = String(target.gateway.runtime.root.id);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(id);
 		await chat.submit({ content: "go" });

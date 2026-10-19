@@ -11,10 +11,10 @@ import { connect as tlsConnect } from "node:tls";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import { fauxProvider } from "../../../../test/faux.ts";
 import { rm } from "../../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../../src/index.ts";
+import { startGateway } from "../../src/index.ts";
 import { mobileListenCandidates, prioritizeListenCandidate } from "../../src/mobile/listener.ts";
 import { MobileStore } from "../../src/mobile/store.ts";
-import { cleanup, makeGateway, testAddress, testSocketPath } from "../helpers.ts";
+import { cleanup, connectTestClient, makeGateway, testSocketPath } from "../helpers.ts";
 
 function fingerprintOf(certPem: string): string {
 	return createHash("sha256").update(new X509Certificate(certPem).raw).digest("hex");
@@ -102,12 +102,8 @@ async function startIsolatedGateway(dir: string) {
 	return gateway;
 }
 
-async function expectLocalHandshake(target: {
-	socketPath: string | undefined;
-	wsUrl: string;
-	serverId: string;
-}): Promise<void> {
-	const client = await connectNekoGateway(testAddress(target));
+async function expectLocalHandshake(target: Parameters<typeof connectTestClient>[0]): Promise<void> {
+	const client = await connectTestClient(target);
 	await client.close();
 }
 
@@ -238,11 +234,7 @@ describe("mobile gateway listener", () => {
 				if (state.status === "error") expect(state.error).toMatch(/EADDRINUSE/);
 				expect((await MobileStore.open(dir)).getState().enabled).toBe(true);
 				expect(existsSync(join(dir, "mobile", "tls", "cert.pem"))).toBe(true);
-				await expectLocalHandshake({
-					socketPath: gateway.socketPath,
-					wsUrl: gateway.wsUrl ?? "",
-					serverId: gateway.serverId,
-				});
+				await expectLocalHandshake(gateway);
 
 				await closeServer(blocker);
 				const retried = await gateway.mobile.enable({ address: "127.0.0.1", port });
@@ -263,11 +255,7 @@ describe("mobile gateway listener", () => {
 			const state = gateway.mobile.state;
 			expect(state.status).toBe("error");
 			if (state.status === "error") expect(state.error.length).toBeGreaterThan(0);
-			await expectLocalHandshake({
-				socketPath: gateway.socketPath,
-				wsUrl: gateway.wsUrl ?? "",
-				serverId: gateway.serverId,
-			});
+			await expectLocalHandshake(gateway);
 		} finally {
 			await gateway.close();
 		}

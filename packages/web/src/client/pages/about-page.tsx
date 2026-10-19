@@ -4,11 +4,13 @@ import { reloadForUpgrade } from "../components/composer";
 import { SettingsShell } from "../components/settings-shell";
 import { copyUpdateCommand, useUpdateAction } from "../components/update-notice";
 import { appActions } from "../lib/bootstrap";
+import { shellRow } from "../lib/shell-status";
 import { useNekoState } from "../lib/store";
 import { readUpgradeDraft } from "../lib/upgrade-draft";
 
 export function AboutPage() {
-	const { updates, webInfo, phase } = useNekoState();
+	const { updates, webInfo, phase, shell } = useNekoState();
+	const shellInfo = shellRow(shell);
 	const action = useUpdateAction();
 	const [checking, setChecking] = useState(false);
 	const [message, setMessage] = useState("");
@@ -163,6 +165,22 @@ export function AboutPage() {
 					</div>
 					{message && <output className="mt-3 block text-xs text-tianyi-800">{message}</output>}
 				</section>
+
+				{shellInfo && (
+					<section className="rounded-2xl border border-sakura-200 bg-surface p-5 shadow-soft" data-shell-status>
+						<h2 className="mb-3 text-base font-bold text-ink-900">命令 shell</h2>
+						<div className="flex flex-wrap items-center gap-3">
+							<span
+								className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+									shellInfo.tone === "ok" ? "bg-tianyi-50 text-tianyi-800" : "bg-sakura-100 text-sakura-800"
+								}`}
+							>
+								{shellInfo.label}
+							</span>
+							<span className="min-w-0 break-all text-sm text-ink-600">{shellInfo.detail}</span>
+						</div>
+					</section>
+				)}
 
 				<section className="rounded-2xl border border-sakura-200 bg-surface p-5 shadow-soft">
 					<h2 className="mb-2 text-base font-bold text-ink-900">升级说明</h2>

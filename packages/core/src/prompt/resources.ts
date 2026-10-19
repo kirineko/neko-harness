@@ -47,7 +47,7 @@ const readResources = async (
 	const contextFiles: { path: string; content: string }[] = [];
 	for (const path of [userAgentsFile(home), workspaceAgentsFile(workspace)]) {
 		try {
-			const content = await readFile(path, "utf8");
+			const content = (await readFile(path, "utf8")).replace(/^\uFEFF/, "");
 			if (Buffer.byteLength(content, "utf8") > 64 * 1024)
 				report({
 					path,

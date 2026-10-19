@@ -7,9 +7,8 @@ import { rm } from "../../../test/temp-dir.ts";
 import { APPLICATION_PROTOCOL, ApplicationProtocolError } from "../../core/src/application-version.ts";
 import { connectToGateway } from "../../tui/src/gateway.ts";
 import { ensureNekoGateway } from "../../web/src/gateway-spawn.ts";
-import { connectNekoGateway } from "../src/client.ts";
 import { startGateway } from "../src/gateway.ts";
-import { waitFor } from "./helpers.ts";
+import { connectTestClient, connectTestWsClient, waitFor } from "./helpers.ts";
 
 it("publishes install changes consistently without attaching or waiting for registry", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "neko-version-gateway-"));
@@ -31,12 +30,8 @@ it("publishes install changes consistently without attaching or waiting for regi
 			fetch: async () => new Response("offline", { status: 503 }),
 		},
 	});
-	const ws = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
-	const unix = await connectNekoGateway(
-		gateway.socketPath
-			? { transport: "unix", socketPath: gateway.socketPath, serverId: gateway.serverId }
-			: { transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId },
-	);
+	const ws = await connectTestWsClient(gateway);
+	const unix = await connectTestClient(gateway);
 	try {
 		expect(ws.attachment).toBeUndefined();
 		expect(ws.application.info.value?.runningVersion).toBe("1.0.0");
@@ -75,9 +70,7 @@ it("rejects incompatible live gateway without spawning a competing instance", as
 		updates: { protocolVersion: APPLICATION_PROTOCOL + 1 },
 	});
 	try {
-		await expect(
-			connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId }),
-		).rejects.toBeInstanceOf(ApplicationProtocolError);
+		await expect(connectTestWsClient(gateway)).rejects.toBeInstanceOf(ApplicationProtocolError);
 		await expect(
 			ensureNekoGateway({
 				storagePath,

@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "bun:test";
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -202,4 +202,44 @@ it("locks read-modify-write across processes and preserves callback rejections",
 		}),
 	).rejects.toBe(failure);
 	expect(await store.read("counter")).toEqual({ type: "api_key", key: "6" });
+});
+
+it("reclaims a stale lock but never a fresh one", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "neko-credentials-lock-"));
+	paths.push(dir);
+	const path = join(dir, "credentials.json");
+	const lockPath = `${path}.lock`;
+	const store = new FileCredentialStore(path);
+	await writeFile(lockPath, "");
+	const old = new Date(Date.now() - 60_000);
+	await utimes(lockPath, old, old);
+	await store.modify("a", async () => ({ type: "api_key", key: "test-a" }));
+	expect(await store.read("a")).toEqual({ type: "api_key", key: "test-a" });
+	await expect(stat(lockPath)).rejects.toThrow();
+
+	await writeFile(lockPath, "");
+	await expect(store.modify("b", async () => ({ type: "api_key", key: "test-b" }))).rejects.toThrow(
+		"Credential storage is busy",
+	);
+	await stat(lockPath);
+	expect(await store.read("b")).toBeUndefined();
+});
+
+it("keeps the original file and leaves no temp file when the replacement rename keeps failing", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "neko-credentials-rename-"));
+	paths.push(dir);
+	const path = join(dir, "credentials.json");
+	await new FileCredentialStore(path).modify("a", async () => ({ type: "api_key", key: "test-a" }));
+	const before = await readFile(path, "utf8");
+	const store = new FileCredentialStore(path, {
+		rename: async () => {
+			throw Object.assign(new Error("busy"), { code: "EBUSY" });
+		},
+		sleep: async () => {},
+	});
+	await expect(store.modify("b", async () => ({ type: "api_key", key: "test-b" }))).rejects.toThrow(
+		"Cannot update credential storage",
+	);
+	expect(await readFile(path, "utf8")).toBe(before);
+	expect((await readdir(dir)).sort()).toEqual(["credentials.json"]);
 });

@@ -1,9 +1,8 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
-import { connectNekoGateway } from "@neko-harness/gateway";
 import { questionsClient } from "@neko-harness/gateway/client-session";
-import { cleanup, makeGateway, testAddress, waitFor } from "../../gateway/test/helpers.ts";
+import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { QuestionDock } from "../src/question-dock.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
 import { TodosDetail, todoProgressText } from "../src/todos-ui.ts";
@@ -21,7 +20,7 @@ const ask = (question: string) =>
 
 /** A dock wired like the TUI: it follows the attached chat view and answers through the real gateway. */
 async function attach(target: Awaited<ReturnType<typeof makeGateway>>) {
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	const chat = await client.attach(String(target.gateway.runtime.root.id));
 	const notices: string[] = [];
 	const dock = new QuestionDock({ changed: () => {}, notify: (message) => notices.push(message) });
@@ -89,7 +88,7 @@ it("shows the winner when another client answers first, and a cancelled question
 	const target = await makeGateway();
 	target.faux.setResponses([ask("First?"), fauxAssistantMessage([fauxText("done")]), ask("Second?")]);
 	const first = await attach(target);
-	const other = await connectNekoGateway(testAddress(target));
+	const other = await connectTestClient(target);
 	try {
 		const otherChat = await other.attach(String(target.gateway.runtime.root.id));
 		await first.chat.submit({ content: "go" });

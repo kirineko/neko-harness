@@ -1,9 +1,17 @@
 import { open, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
-import { type FileListing, type FileWatcher, getOrThrow } from "@earendil-works/pi-durable/env";
+import {
+	ExecutionError,
+	err,
+	type FileListing,
+	type FileWatcher,
+	getOrThrow,
+	type ShellExecResult,
+} from "@earendil-works/pi-durable/env";
 import { Connection, LocalExecutionEnv, localDaemon } from "@earendil-works/pi-env";
 import type { FileCandidates } from "./file-mentions.ts";
+import { type WindowsShellResolver, type WindowsShellStatus, windowsShellMessage } from "./windows-shell.ts";
 
 /** Bounds of the read-only workspace browser. */
 export const BROWSE_LIMITS = { children: 1000, readBytes: 512 * 1024 };
@@ -74,6 +82,24 @@ type Cached = {
 	waiters: number;
 };
 
+/** Without a usable Git Bash on Windows, shell strings fail with a guiding error; argv commands and files still work. */
+class ShellUnavailableEnv extends LocalExecutionEnv {
+	readonly #message: string;
+	constructor(options: ConstructorParameters<typeof LocalExecutionEnv>[0], message: string) {
+		super(options);
+		this.#message = message;
+	}
+	override async exec(
+		command: string | readonly string[],
+		options: Parameters<LocalExecutionEnv["exec"]>[1],
+		context: Parameters<LocalExecutionEnv["exec"]>[2],
+	) {
+		if (typeof command === "string")
+			return err<ShellExecResult, ExecutionError>(new ExecutionError("shell_unavailable", this.#message));
+		return super.exec(command, options, context);
+	}
+}
+
 type WorkspaceWatch = { users: Set<Cached>; controller: AbortController; work: Promise<void>; watcher?: FileWatcher };
 
 /** One local helper and bounded directory snapshots, shared across all frontend queries. */
@@ -91,8 +117,10 @@ export class WorkspaceFiles {
 	#waiting = new Set<() => void>();
 	#timer: ReturnType<typeof setInterval>;
 	private limits: typeof FILE_CACHE_LIMITS;
-	constructor(limits = FILE_CACHE_LIMITS) {
+	readonly #shell: WindowsShellResolver | undefined;
+	constructor(limits = FILE_CACHE_LIMITS, shell?: WindowsShellResolver) {
 		this.limits = limits;
+		this.#shell = shell;
 		this.#timer = setInterval(
 			() => {
 				for (const [key, item] of this.#cache)
@@ -114,19 +142,31 @@ export class WorkspaceFiles {
 		};
 	}
 
-	env(cwd: string) {
+	/** Windows only: the bash that commands run in, probed lazily and cached; undefined elsewhere. */
+	shellStatus(options?: { readonly refresh?: boolean }): WindowsShellStatus | undefined {
+		return this.#shell?.status(options);
+	}
+
+	#open(): Connection {
 		if (this.#closed) throw new Error("File environment closed");
 		this.#connection ??= new Connection({ command: [localDaemon()] });
-		return new LocalExecutionEnv({
-			connection: this.#connection,
+		return this.#connection;
+	}
+	env(cwd: string) {
+		const options = {
+			connection: this.#open(),
 			cwd,
 			...(process.platform === "win32" ? { shellEnv: { PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" } } : {}),
-		});
+		};
+		const shell = this.#shell?.status();
+		if (shell === undefined) return new LocalExecutionEnv(options);
+		// An explicit shellPath also stops the upstream env from falling back to `where bash.exe` (which finds WSL).
+		if (shell.kind === "found") return new LocalExecutionEnv({ ...options, shellPath: shell.path });
+		return new ShellUnavailableEnv(options, windowsShellMessage(shell));
 	}
 	async #ready() {
 		if (!this.#starting) {
-			this.env(process.cwd());
-			const connection = this.#connection!;
+			const connection = this.#open();
 			let timer: ReturnType<typeof setTimeout>;
 			const work = Promise.race([
 				connection.info().then(() => connection.session()),

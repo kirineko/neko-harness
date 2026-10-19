@@ -143,7 +143,10 @@ export const SearchText = defineTool({
 						complete = false;
 						continue;
 					}
-					const lines = new TextDecoder("utf-8", { fatal: true }).decode(data).split(/\r?\n/);
+					const lines = new TextDecoder("utf-8", { fatal: true })
+						.decode(data)
+						.replace(/^\uFEFF/, "")
+						.split(/\r?\n/);
 					for (let i = 0; i < lines.length; i++) {
 						ctx.abortSignal?.throwIfAborted();
 						const value = lines[i]!;

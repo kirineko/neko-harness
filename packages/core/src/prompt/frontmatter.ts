@@ -8,7 +8,7 @@ export type ParsedFrontmatter<T extends Record<string, unknown>> = {
 const normalizeNewlines = (value: string): string => value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
 const extractFrontmatter = (content: string): { yamlString: string | null; body: string } => {
-	const normalized = normalizeNewlines(content.replace(/^﻿/, ""));
+	const normalized = normalizeNewlines(content.replace(/^\uFEFF/, ""));
 	const opening = /^---[ \t]*\n/.exec(normalized);
 	if (!opening) return { yamlString: null, body: normalized };
 	const rest = normalized.slice(opening[0].length);

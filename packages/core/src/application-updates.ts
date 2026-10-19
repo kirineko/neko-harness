@@ -1,8 +1,9 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { APPLICATION_PROTOCOL, RUNNING_VERSION, stableVersion, type UpdateState } from "./application-version.ts";
+import { renameWithRetry } from "./rename-with-retry.ts";
 
 async function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 	signal.throwIfAborted();
@@ -146,7 +147,7 @@ export class UpdateChecker {
 			try {
 				await mkdir(dirname(this.#cachePath), { recursive: true });
 				await writeFile(temporary, JSON.stringify({ latestVersion: value.version, checkedAt: now }), { mode: 0o600 });
-				await rename(temporary, this.#cachePath);
+				await renameWithRetry(temporary, this.#cachePath);
 			} catch {
 			} finally {
 				await rm(temporary, { force: true }).catch(() => {});

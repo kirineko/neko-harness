@@ -1,13 +1,12 @@
 import { expect, it, spyOn } from "bun:test";
 import { MemoryStorage } from "@earendil-works/pi-durable";
 import { GatewayConnection } from "../../web/src/client/lib/gateway.ts";
-import { connectNekoGateway } from "../src/client.ts";
 import { NekoChat } from "../src/contract.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, connectTestWsClient, makeGateway, waitFor } from "./helpers.ts";
 
 it("closes malformed native Chord frames without affecting another client", async () => {
 	const target = await makeGateway();
-	const peer = await connectNekoGateway(testAddress(target));
+	const peer = await connectTestClient(target);
 	const socket = new WebSocket(target.wsUrl);
 	try {
 		await new Promise<void>((resolve, reject) => {
@@ -26,8 +25,8 @@ it("closes malformed native Chord frames without affecting another client", asyn
 
 it("rejects forged attachments and malformed calls before side effects, preserving a usable connection", async () => {
 	const target = await makeGateway();
-	const a = await connectNekoGateway(testAddress(target));
-	const b = await connectNekoGateway({ transport: "ws", url: target.wsUrl, serverId: target.serverId });
+	const a = await connectTestClient(target);
+	const b = await connectTestWsClient(target);
 	try {
 		const chat = await a.attach("1");
 		await b.attach("1");
@@ -63,7 +62,7 @@ it("rejects forged attachments and malformed calls before side effects, preservi
 }, 15000);
 it("closes both transports and clears Web busy state after fatal storage failure", async () => {
 	const target = await makeGateway();
-	const peer = await connectNekoGateway(testAddress(target));
+	const peer = await connectTestClient(target);
 	let view: import("@neko-harness/core").ChatView | null = null;
 	const web = new GatewayConnection({
 		url: target.wsUrl,

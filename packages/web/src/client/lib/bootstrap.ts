@@ -80,6 +80,7 @@ export function startNekoApp(): void {
 			events: {
 				onPhase: storeActions.setPhase,
 				onUpdates: storeActions.setUpdates,
+				onShell: storeActions.setShell,
 				onCredentials: storeActions.setCredentials,
 				onSearchSettings: storeActions.setSearchSettings,
 				onContextSettings: storeActions.setContextSettings,

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { rm } from "../../../../test/temp-dir.ts";
-import { connectNekoGateway, type NekoGateway, startGateway } from "../../src/index.ts";
+import { type NekoGateway, startGateway } from "../../src/index.ts";
 import type { MobileCertificate } from "../../src/mobile/certificate.ts";
 import {
 	MobilePairing,
@@ -16,7 +16,7 @@ import {
 	PAIRING_BODY_LIMIT_BYTES,
 } from "../../src/mobile/pairing.ts";
 import { type MobileDeviceRecord, MobileStore } from "../../src/mobile/store.ts";
-import { cleanup, makeGateway, testAddress, testSocketPath } from "../helpers.ts";
+import { cleanup, connectTestClient, makeGateway, testSocketPath } from "../helpers.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 const FAKE_FINGERPRINT = createHash("sha256").update("fake-der").digest("hex");
@@ -495,9 +495,7 @@ describe("mobile pairing over https", () => {
 	it("completes a pairing end to end and persists device plus receipt", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {
-			const client = await connectNekoGateway(
-				testAddress({ socketPath: gateway.socketPath, wsUrl: gateway.wsUrl ?? "", serverId: gateway.serverId }),
-			);
+			const client = await connectTestClient(gateway);
 			await client.close();
 
 			const { pairingText, expiresAt } = gateway.mobile.createPairing();

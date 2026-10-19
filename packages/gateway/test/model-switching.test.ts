@@ -16,8 +16,8 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, type NekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath, waitFor } from "./helpers.ts";
+import { type NekoGateway, startGateway } from "../src/index.ts";
+import { connectTestClient, testSocketPath, waitFor } from "./helpers.ts";
 
 let dir: string;
 let gateway: NekoGateway;
@@ -63,7 +63,7 @@ function sawAgent(values: readonly ChatView[], modelId: string, thinkingLevel?: 
 
 describe("per-conversation model switching over the gateway", () => {
 	it("serves the global model list from the server-level models service", async () => {
-		const client = await connectNekoGateway(testAddress({ socketPath, wsUrl: gateway.wsUrl, serverId }));
+		const client = await connectTestClient(gateway);
 		try {
 			const models = await client.models.list(null);
 			// Models registry 是全集（内置 deepseek + 注入的 faux），faux 双模型必须在列。
@@ -80,7 +80,7 @@ describe("per-conversation model switching over the gateway", () => {
 	}, 30_000);
 
 	it("configure switches the attached session's model for its next request and updates the projection", async () => {
-		const client = await connectNekoGateway(testAddress({ socketPath, wsUrl: gateway.wsUrl, serverId }));
+		const client = await connectTestClient(gateway);
 		try {
 			const chat = await client.attach("1");
 			const seen: ChatView[] = [];
@@ -111,7 +111,7 @@ describe("per-conversation model switching over the gateway", () => {
 	}, 30_000);
 
 	it("leaves other sessions of the same gateway on their model (isolation)", async () => {
-		const client = await connectNekoGateway(testAddress({ socketPath, wsUrl: gateway.wsUrl, serverId }));
+		const client = await connectTestClient(gateway);
 		try {
 			const first = await client.attach("1");
 			await first.configure({ model: { provider: "faux", modelId: "faux-2" } });
@@ -137,7 +137,7 @@ describe("per-conversation model switching over the gateway", () => {
 	}, 30_000);
 
 	it("rejects configuring an unknown session with a clear remote error", async () => {
-		const client = await connectNekoGateway(testAddress({ socketPath, wsUrl: gateway.wsUrl, serverId }));
+		const client = await connectTestClient(gateway);
 		try {
 			// 未知会话：attach 即被路由层拒绝，客户端收到带 code 的 ChordError。
 			const failure = await client.attach("999").then(
@@ -152,7 +152,7 @@ describe("per-conversation model switching over the gateway", () => {
 	}, 30_000);
 
 	it("configure on a released session fails with a clear error", async () => {
-		const client = await connectNekoGateway(testAddress({ socketPath, wsUrl: gateway.wsUrl, serverId }));
+		const client = await connectTestClient(gateway);
 		try {
 			const created = await client.management.create({});
 			const chat = await client.attach(created.id);

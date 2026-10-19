@@ -1,8 +1,7 @@
 import { expect, it, spyOn } from "bun:test";
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
-import { connectNekoGateway } from "../../gateway/src/client.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "../../gateway/test/helpers.ts";
+import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { GatewayConnection, type GatewayEvents, workspaceSessions } from "../src/client/lib/gateway.ts";
 import { startWebServer } from "../src/server.ts";
 
@@ -127,7 +126,7 @@ it("navigates, creates and archives only within the selected workspace", async (
 		events,
 		retryBaseMs: 20,
 	});
-	const peer = await connectNekoGateway(testAddress(target));
+	const peer = await connectTestClient(target);
 	try {
 		await web.start();
 		expect(web.managementReady).toBe(true);
@@ -235,7 +234,7 @@ it("reconnects within the selected workspace and a fresh page uses the launch wo
 	};
 	const options = { url: target.wsUrl, serverId: target.serverId, workspaceRoot: b, events, retryBaseMs: 100 };
 	const web = new GatewayConnection(options);
-	const peer = await connectNekoGateway(testAddress(target));
+	const peer = await connectTestClient(target);
 	try {
 		await web.start();
 		await web.createSession();

@@ -6,8 +6,8 @@ import { downloadImage } from "@neko-harness/core/image-transfer";
 import sharp from "sharp";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { IS_WINDOWS, testAddress, testSocketPath } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, connectTestWsClient, IS_WINDOWS, testSocketPath } from "./helpers.ts";
 
 it("queries a registered workspace and imports images with attachment ownership", async () => {
 	const temp = await mkdtemp(join(tmpdir(), "neko-file-gateway-"));
@@ -21,8 +21,8 @@ it("queries a registered workspace and imports images with attachment ownership"
 		socketPath: testSocketPath(root),
 		port: 0,
 	});
-	const a = await connectNekoGateway(testAddress(gateway));
-	const b = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+	const a = await connectTestClient(gateway);
+	const b = await connectTestWsClient(gateway);
 	try {
 		await writeFile(join(root, "my file.ts"), "body not in candidates");
 		await a.workspaces.add({ path: root });

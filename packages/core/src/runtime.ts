@@ -102,6 +102,12 @@ import { createDeepseekProvider } from "./web-search/deepseek.ts";
 import { createWebSearchTools } from "./web-search/index.ts";
 import { createTavilyProvider } from "./web-search/tavily.ts";
 import {
+	createWindowsShellResolver,
+	summarizeWindowsShell,
+	type WindowsShellResolver,
+	type WindowsShellSummary,
+} from "./windows-shell.ts";
+import {
 	accessibleWorkspace,
 	executionWorkspace,
 	type NekoWorkspace,
@@ -160,6 +166,10 @@ export type NekoRuntimeOptions = {
 	readonly extensions?: readonly Extension[];
 	/** User-level resources root for the prompt extension (`<home>/.agents`); defaults to the OS home. Tests override for isolation. */
 	readonly promptHome?: string;
+	/** Windows: bash.exe for commands (config `shell.path`); ignored on other platforms. */
+	readonly shellPath?: string;
+	/** Replaces the Windows Git Bash probe; tests inject it to exercise the Windows path on any platform. */
+	readonly shellResolver?: WindowsShellResolver;
 };
 
 export type NekoSubmitOptions = {
@@ -374,6 +384,8 @@ const ActivityDoc = defineDoc<{ lastUsedAt: number }>({
 /** A running neko-harness runtime: one open storage and its conversations, root plus created ones. */
 export type NekoRuntime = {
 	readonly workspaceFiles: WorkspaceFiles;
+	/** Windows command shell state (undefined on other platforms); `refresh` re-probes instead of using the cache. */
+	shellStatus(options?: { readonly refresh?: boolean }): WindowsShellSummary | undefined;
 	readonly closed: Harness["closed"];
 	/** Chord context bound to every runtime call. */
 	readonly context: Context;
@@ -538,7 +550,11 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		return modelInfoCache;
 	};
 
-	const workspaceFiles = new WorkspaceFiles();
+	// Only Windows probes for Git Bash; elsewhere the resolver stays absent and execution is untouched.
+	const shellResolver =
+		options.shellResolver ??
+		(process.platform === "win32" ? createWindowsShellResolver({ configPath: options.shellPath }) : undefined);
+	const workspaceFiles = new WorkspaceFiles(undefined, shellResolver);
 	const storage =
 		options.storage === "memory"
 			? new MemoryStorage()
@@ -1134,6 +1150,10 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		questions,
 		closed: harness.closed,
 		workspaceFiles,
+		shellStatus(call) {
+			const status = workspaceFiles.shellStatus(call);
+			return status === undefined ? undefined : summarizeWindowsShell(status);
+		},
 		conversation,
 		root: rootSession,
 		submit: rootSession.submit,

@@ -1,13 +1,12 @@
 import { expect, it } from "bun:test";
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, connectTestWsClient, makeGateway, waitFor } from "./helpers.ts";
 
 it("shares workspace metadata over Unix/WS and touches only distinct activations and inputs", async () => {
 	const target = await makeGateway();
-	const unix = await connectNekoGateway(testAddress(target));
-	const ws = await connectNekoGateway({ transport: "ws", url: target.wsUrl, serverId: target.serverId });
+	const unix = await connectTestClient(target);
+	const ws = await connectTestWsClient(target);
 	try {
 		const b = join(await realpath(target.dir), "project-b");
 		await mkdir(b);
@@ -22,7 +21,9 @@ it("shares workspace metadata over Unix/WS and touches only distinct activations
 		expect(first.view.value?.cwd).toBe(b);
 		expect(second.view.value?.cwd).toBe(b);
 		const lastUsed = () => unix.directory.state.value!.sessions.find((s) => s.id === created.id)!.lastUsedAt;
+		// Each client's attach touches the session and the directory pushes arrive asynchronously; take the baseline once the value is quiet.
 		await waitFor(() => lastUsed() > created.lastUsedAt, "activation");
+		await new Promise((resolve) => setTimeout(resolve, 150));
 		const active = lastUsed();
 		const refreshed = await unix.attach(created.id);
 		expect(lastUsed()).toBe(active);

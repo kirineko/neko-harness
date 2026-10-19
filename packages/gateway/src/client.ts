@@ -1,3 +1,4 @@
+import type { Link } from "@earendil-works/chord";
 import { createGatewayConnection, type NekoGatewayConnection } from "./client-session.ts";
 import { createUnixLink } from "./unix-link.ts";
 import { createWsLink } from "./ws-listener.ts";
@@ -12,7 +13,17 @@ export async function connectNekoGateway(
 	signal?.throwIfAborted();
 	const link =
 		address.transport === "unix" ? await createUnixLink(address.socketPath, signal) : createWsLink(address.url, signal);
-	const connection = createGatewayConnection(link, address.serverId);
+	return connectNekoGatewayLink(link, address.serverId, signal);
+}
+
+/** 在已建立的链路（Unix、WebSocket 或进程内链路）上完成网关握手与身份校验。 */
+export async function connectNekoGatewayLink(
+	link: Link,
+	serverId: string,
+	signal?: AbortSignal,
+): Promise<NekoGatewayClient> {
+	signal?.throwIfAborted();
+	const connection = createGatewayConnection(link, serverId);
 	const controller = new AbortController();
 	const abort = () => controller.abort(signal?.reason);
 	signal?.addEventListener("abort", abort, { once: true });

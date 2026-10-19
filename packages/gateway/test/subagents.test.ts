@@ -1,8 +1,7 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { totalUsage } from "@neko-harness/core";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
 
 it("publishes child history through a read-only service and rejects stale attachment", async () => {
 	const target = await makeGateway();
@@ -13,7 +12,7 @@ it("publishes child history through a read-only service and rejects stale attach
 		fauxAssistantMessage([fauxText("Child report")]),
 		fauxAssistantMessage([fauxText("Main report")]),
 	]);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	let stop = () => {};
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
@@ -32,7 +31,7 @@ it("publishes child history through a read-only service and rejects stale attach
 		const global = totalUsage(await target.gateway.runtime.globalUsage());
 		expect(chat.view.value!.taskUsage?.input).toBe(global.input);
 		expect(chat.view.value!.taskUsage?.output).toBe(global.output);
-		const other = await connectNekoGateway(testAddress(target));
+		const other = await connectTestClient(target);
 		try {
 			await expect(other.attach(String(entry.childId))).rejects.toThrow();
 			const session = await target.gateway.runtime.createConversation();
@@ -66,7 +65,7 @@ it("pages a long multi-tool transcript, transfers large text in chunks, and pres
 		fauxAssistantMessage(report),
 		fauxAssistantMessage("Main summary"),
 	]);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	let stop = () => {};
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
@@ -124,7 +123,7 @@ it("shares one native child observer across clients and releases it after both c
 		fauxAssistantMessage("Main report"),
 	]);
 	await target.gateway.runtime.waitAnswer(await target.gateway.runtime.submit("Inspect"));
-	const clients = await Promise.all([connectNekoGateway(testAddress(target)), connectNekoGateway(testAddress(target))]);
+	const clients = await Promise.all([connectTestClient(target), connectTestClient(target)]);
 	const stops: (() => void)[] = [];
 	let opened = 0,
 		closed = 0;
@@ -206,7 +205,7 @@ it("reads child tool images in chunks and rejects parent/child cross reads", asy
 		fauxAssistantMessage("Image report"),
 		fauxAssistantMessage("Main report"),
 	]);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	let stop = () => {};
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
@@ -267,7 +266,7 @@ it("stops one live child through the read-only service while its siblings contin
 		),
 		fauxAssistantMessage("integrated"),
 	]);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		await chat.submit({ content: "Investigate" });
@@ -305,8 +304,8 @@ it("synchronizes approvals without an open child and scopes decisions across att
 		fauxAssistantMessage("Child report"),
 		fauxAssistantMessage("Main report"),
 	]);
-	const one = await connectNekoGateway(testAddress(target)),
-		two = await connectNekoGateway(testAddress(target));
+	const one = await connectTestClient(target),
+		two = await connectTestClient(target);
 	let stop = () => {};
 	try {
 		const parent = String(target.gateway.runtime.root.id);
@@ -375,8 +374,8 @@ it("groups continued rounds into one agent, accounts once and binds stop to the 
 		},
 		fauxAssistantMessage("Main stopped"),
 	]);
-	const client = await connectNekoGateway(testAddress(target));
-	const other = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
+	const other = await connectTestClient(target);
 	let stop = () => {};
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
@@ -435,7 +434,7 @@ it("adds main and unique child costs as 0.19 rather than summing each round's cu
 		fauxAssistantMessage("Other"),
 		fauxAssistantMessage("Main"),
 	]);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		await chat.submit({ content: "First" });

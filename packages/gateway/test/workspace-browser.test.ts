@@ -13,8 +13,7 @@ import {
 	WorkspaceDirSchema,
 	WorkspaceFileSchema,
 } from "../src/contract.ts";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
 
 const tool = (name: string, args: Record<string, string>) =>
 	fauxAssistantMessage([fauxToolCall(name, args)], { stopReason: "toolUse" });
@@ -23,7 +22,7 @@ it("browses a session's workspace read-only and refuses escapes and credentials"
 	const work = realpathSync(mkdtempSync(join(tmpdir(), "neko-ws-browse-")));
 	const outside = realpathSync(mkdtempSync(join(tmpdir(), "neko-ws-outside-")));
 	const target = await makeGateway();
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		mkdirSync(join(work, "src"));
 		writeFileSync(join(work, "src/a.ts"), "export const a = 1;\n");
@@ -66,7 +65,7 @@ it("browses a session's workspace read-only and refuses escapes and credentials"
 it("publishes agent changes live with a revision, a list and per-file diffs, subagents included", async () => {
 	const work = realpathSync(mkdtempSync(join(tmpdir(), "neko-ws-changes-")));
 	const target = await makeGateway();
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		writeFileSync(join(work, "seed.txt"), "alpha\nbeta\n");
 		const session = await target.gateway.runtime.createConversation({ cwd: work });
@@ -111,7 +110,7 @@ it("publishes agent changes live with a revision, a list and per-file diffs, sub
 
 it("treats a view without the changes summary as an old gateway", async () => {
 	const target = await makeGateway();
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		const old = { ...chat.view, value: { ...chat.view.value!, changes: undefined } } as unknown as typeof chat;

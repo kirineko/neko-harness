@@ -101,7 +101,7 @@ export async function ensureNekoGateway(options: GatewayEnsureOptions): Promise<
 				`等待 neko gateway 就绪超时（${options.spawnTimeoutMs ?? 30_000}ms）：${lastError instanceof Error ? lastError.message : String(lastError)}`,
 			);
 		} catch (error) {
-			await stopGatewayProcess(child);
+			await stopSpawnedGateway(child);
 			throw error;
 		}
 	}
@@ -152,9 +152,13 @@ export async function ensureNekoGateway(options: GatewayEnsureOptions): Promise<
 			`等待 neko gateway 就绪超时（${options.spawnTimeoutMs ?? 30_000}ms）：${lastError instanceof Error ? lastError.message : String(lastError)}`,
 		);
 	} catch (error) {
-		await stopGatewayProcess(child);
+		await stopSpawnedGateway(child);
 		throw error;
 	}
+}
+
+function stopSpawnedGateway(child: ChildProcess): Promise<void> {
+	return stopGatewayProcess(child, { viaStdin: process.platform === "win32" });
 }
 
 function spawnGatewayProcess(options: GatewayEnsureOptions, socketPath: string | null, serverId: string): ChildProcess {
@@ -163,7 +167,7 @@ function spawnGatewayProcess(options: GatewayEnsureOptions, socketPath: string |
 		options.host ?? "127.0.0.1",
 		...(process.platform === "win32"
 			? // Windows：仅 WS，不传 --port 走 win32 默认随机端口，地址经端口文件发现。
-				["--no-socket"]
+				["--no-socket", "--stop-on-stdin"]
 			: ["--port", String(options.port ?? 8321), "--socket-path", socketPath ?? ""]),
 		"--server-id",
 		serverId,
@@ -174,7 +178,10 @@ function spawnGatewayProcess(options: GatewayEnsureOptions, socketPath: string |
 		...(options.model !== undefined ? ["--model", `${options.model.provider}/${options.model.modelId}`] : []),
 	];
 	const command = gatewayCommand(args);
-	return spawn(command.binary, command.args, { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+	return spawn(command.binary, command.args, {
+		env: process.env,
+		stdio: [process.platform === "win32" ? "pipe" : "ignore", "pipe", "pipe"],
+	});
 }
 
 function pipeChildLogs(child: ChildProcess, onLog: ((line: string) => void) | undefined): void {
@@ -240,7 +247,7 @@ function makeHandle(
 		spawned,
 		async close() {
 			if (spawned !== null) {
-				await stopGatewayProcess(spawned);
+				await stopSpawnedGateway(spawned);
 				// Windows 的 kill 是 TerminateProcess，网关 close（含端口文件删除）不会执行，这里补删。
 				if (process.platform === "win32") await removeGatewayPortFile(nekoDir, serverId).catch(() => {});
 			}

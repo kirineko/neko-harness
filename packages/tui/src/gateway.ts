@@ -118,7 +118,9 @@ type SpawnPlan = {
 
 async function spawnAndConnect(plan: SpawnPlan): Promise<NekoTuiGateway> {
 	const command = gatewayCommand(gatewayArgs(plan));
-	const child = spawn(command.binary, command.args, { stdio: ["ignore", "pipe", "pipe"] });
+	const child = spawn(command.binary, command.args, {
+		stdio: [plan.platform === "win32" ? "pipe" : "ignore", "pipe", "pipe"],
+	});
 	const outputTail = captureOutput(child);
 	// spawn 本身的失败（Bun/入口缺失等）以 error 事件报告，不进入 exit 流程。
 	let spawnError: Error | undefined;
@@ -128,7 +130,7 @@ async function spawnAndConnect(plan: SpawnPlan): Promise<NekoTuiGateway> {
 	try {
 		return await connectSpawned(plan, child, outputTail, () => spawnError);
 	} catch (error) {
-		await stopGatewayProcess(child);
+		await stopGatewayProcess(child, { viaStdin: plan.platform === "win32" });
 		throw error;
 	}
 }
@@ -175,7 +177,7 @@ async function connectSpawned(
 					spawned: true,
 					async close() {
 						await client.close().catch(() => {});
-						await stopGatewayProcess(child);
+						await stopGatewayProcess(child, { viaStdin: plan.platform === "win32" });
 						// Windows 的 kill 是 TerminateProcess，网关 close（含端口文件删除）不会执行，这里补删。
 						await removeGatewayPortFile(plan.nekoDir, serverId).catch(() => {});
 					},
@@ -234,7 +236,7 @@ async function connectSpawned(
 				spawned: true,
 				async close() {
 					await client.close().catch(() => {});
-					await stopGatewayProcess(child);
+					await stopGatewayProcess(child, { viaStdin: plan.platform === "win32" });
 				},
 			};
 		} catch (error) {
@@ -254,6 +256,7 @@ function gatewayArgs(plan: SpawnPlan): string[] {
 		// Windows：仅 WS（--no-socket），不传 --port 走 win32 默认的随机端口，地址经端口文件发现。
 		return [
 			"--no-socket",
+			"--stop-on-stdin",
 			"--storage",
 			plan.storagePath,
 			...(plan.credentialsPath ? ["--credentials", plan.credentialsPath] : []),

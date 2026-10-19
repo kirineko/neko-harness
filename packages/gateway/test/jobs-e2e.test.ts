@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { fauxProvider } from "../../../test/faux.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { IS_WINDOWS, testAddress, testSocketPath, waitFor } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, IS_WINDOWS, testSocketPath, waitFor } from "./helpers.ts";
 
 const start = (...jobs: { command: string; title: string }[]) =>
 	fauxAssistantMessage(
@@ -41,9 +41,7 @@ it.skipIf(IS_WINDOWS)(
 				model: { provider: "faux", modelId: "faux-1" },
 				providers: [faux.provider],
 			});
-			const client = await connectNekoGateway(
-				testAddress({ socketPath: gateway.socketPath ?? undefined, wsUrl: gateway.wsUrl ?? "", serverId }),
-			);
+			const client = await connectTestClient(gateway);
 			return { gateway, client };
 		};
 		const items = (chat: { view: { value?: { items: readonly { type: string; text?: string }[] } } }) =>

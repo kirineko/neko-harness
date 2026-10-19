@@ -4,8 +4,7 @@ import { Value } from "typebox/value";
 import { JOBS_UNSUPPORTED, jobsClient } from "../src/client-session.ts";
 import type { NekoChat } from "../src/contract.ts";
 import { ChatViewSchema } from "../src/contract.ts";
-import { connectNekoGateway } from "../src/index.ts";
-import { cleanup, makeGateway, type TestGateway, testAddress, waitFor } from "./helpers.ts";
+import { cleanup, connectTestClient, makeGateway, type TestGateway, waitFor } from "./helpers.ts";
 
 const start = (command: string, title?: string) =>
 	fauxAssistantMessage([fauxToolCall("job", { action: "start", command, ...(title ? { title } : {}) })], {
@@ -15,7 +14,7 @@ const text = (value: string) => fauxAssistantMessage([fauxText(value)]);
 
 async function startJob(target: TestGateway, command: string, title = "job") {
 	target.faux.setResponses([start(command, title), text("started"), text("noted")]);
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	const chat = await client.attach(String(target.gateway.runtime.root.id));
 	await chat.submit({ content: "go" });
 	await waitFor(
@@ -28,7 +27,7 @@ async function startJob(target: TestGateway, command: string, title = "job") {
 
 it("always sends a bounded job summary list without output", async () => {
 	const target = await makeGateway();
-	const client = await connectNekoGateway(testAddress(target));
+	const client = await connectTestClient(target);
 	try {
 		const idle = await client.attach(String(target.gateway.runtime.root.id));
 		expect(idle.view.value?.jobs).toEqual([]);
@@ -69,7 +68,7 @@ it("reads output in bounded pages and resumes from the offset after reconnecting
 		expect(first.dropped).toBeGreaterThan(0);
 
 		await client.close();
-		const again = await connectNekoGateway(testAddress(target));
+		const again = await connectTestClient(target);
 		try {
 			const reattached = await again.attach(String(target.gateway.runtime.root.id));
 			expect(reattached.view.value?.jobs?.[0]).toMatchObject({ jobId: "job-1", status: "running" });
@@ -89,7 +88,7 @@ it("reads output in bounded pages and resumes from the offset after reconnecting
 it("stops a job once for concurrent clients, rejects unknown ids and returns the terminal state when it already ended", async () => {
 	const target = await makeGateway();
 	const { client, chat } = await startJob(target, "sleep 300");
-	const other = await connectNekoGateway(testAddress(target));
+	const other = await connectTestClient(target);
 	try {
 		const second = await other.attach(String(target.gateway.runtime.root.id));
 		await waitFor(() => second.view.value?.jobs?.[0]?.status === "running", "second client sees job");

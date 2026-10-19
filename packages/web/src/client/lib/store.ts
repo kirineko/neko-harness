@@ -7,6 +7,7 @@ import type {
 	NekoCredentialState,
 	NekoDefaultModelState,
 	NekoSearchSettingsState,
+	NekoShellStatus,
 	NekoWorkspaceSummary,
 } from "./contract.ts";
 import type { NekoSessionSummary } from "./gateway.ts";
@@ -30,6 +31,8 @@ export type NekoState = {
 	/** 网关连接阶段；error = /api/info 获取失败（不会自动恢复，需刷新页面）。 */
 	phase: ConnPhase;
 	updates: UpdateState | null;
+	/** Windows 命令 shell（Git Bash）状态；null = 未连接，或网关不报告（非 Windows / 旧网关）。 */
+	shell: NekoShellStatus | null;
 	webInfo: { webVersion: string; installedVersion: string | null; serverId: string; gatewaySpawned: boolean } | null;
 	credentials: NekoCredentialState | null;
 	searchSettings: NekoSearchSettingsState | null;
@@ -53,6 +56,7 @@ export type NekoState = {
 let state: NekoState = {
 	phase: "connecting",
 	updates: null,
+	shell: null,
 	webInfo: null,
 	credentials: null,
 	searchSettings: null,
@@ -95,6 +99,9 @@ export function getState(): NekoState {
 export const storeActions = {
 	setUpdates(updates: UpdateState | null) {
 		emit({ ...state, updates });
+	},
+	setShell(shell: NekoShellStatus | null) {
+		emit({ ...state, shell });
 	},
 	setWebInfo(webInfo: NekoState["webInfo"]) {
 		emit({ ...state, webInfo });

@@ -1,7 +1,10 @@
-import { chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Credential, CredentialStore } from "@earendil-works/pi-ai";
+import { type RenameWithRetryDeps, renameWithRetry } from "./rename-with-retry.ts";
+
+const STALE_LOCK_MS = 30_000;
 
 export {
 	CREDENTIAL_PROVIDERS,
@@ -28,8 +31,10 @@ export const DEFAULT_CREDENTIALS_PATH = join(homedir(), ".neko", "credentials.js
 /** Atomic file replacement plus an exclusive lock shared by all processes. */
 export class FileCredentialStore implements CredentialStore {
 	readonly path: string;
-	constructor(path = DEFAULT_CREDENTIALS_PATH) {
+	readonly #renameDeps: RenameWithRetryDeps;
+	constructor(path = DEFAULT_CREDENTIALS_PATH, renameDeps: RenameWithRetryDeps = {}) {
 		this.path = path;
+		this.#renameDeps = renameDeps;
 	}
 	async #read(): Promise<Record<string, Credential>> {
 		try {
@@ -56,6 +61,7 @@ export class FileCredentialStore implements CredentialStore {
 		await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
 		const lockPath = `${this.path}.lock`;
 		let lock: Awaited<ReturnType<typeof open>>;
+		let reclaimed = false;
 		for (let attempt = 0; ; attempt++) {
 			try {
 				lock = await open(lockPath, "wx", 0o600);
@@ -63,6 +69,15 @@ export class FileCredentialStore implements CredentialStore {
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempt >= 100)
 					throw new Error("Credential storage is busy or unavailable.");
+				// A holder that died mid-write leaves the lock behind; a live write finishes in milliseconds.
+				if (!reclaimed) {
+					const info = await stat(lockPath).catch(() => undefined);
+					if (info && Date.now() - info.mtimeMs > STALE_LOCK_MS) {
+						reclaimed = true;
+						await unlink(lockPath).catch(() => {});
+						continue;
+					}
+				}
 				await new Promise((resolve) => setTimeout(resolve, 25));
 			}
 		}
@@ -84,7 +99,7 @@ export class FileCredentialStore implements CredentialStore {
 			} finally {
 				await file.close();
 			}
-			await rename(temporary, this.path);
+			await renameWithRetry(temporary, this.path, this.#renameDeps);
 			return result;
 		} catch (error) {
 			if (callbackFailed) throw error;

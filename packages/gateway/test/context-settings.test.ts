@@ -3,8 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rm } from "../../../test/temp-dir.ts";
-import { connectNekoGateway, startGateway } from "../src/index.ts";
-import { testAddress, testSocketPath, waitFor as wait } from "./helpers.ts";
+import { startGateway } from "../src/index.ts";
+import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";
 
 const waitFor = (predicate: () => boolean) => wait(predicate, "context settings synchronization");
 
@@ -22,8 +22,8 @@ async function start(dir: string) {
 it("synchronizes context settings across clients and restores defaults", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "neko-context-gateway-"));
 	const gateway = await start(dir);
-	const unix = await connectNekoGateway(testAddress(gateway));
-	const web = await connectNekoGateway({ transport: "ws", url: gateway.wsUrl!, serverId: gateway.serverId });
+	const unix = await connectTestClient(gateway);
+	const web = await connectTestWsClient(gateway);
 	try {
 		await waitFor(() => !!web.contextSettings.state.value && !!unix.contextSettings.state.value);
 		const initial = web.contextSettings.state.value!;
@@ -56,7 +56,7 @@ it("synchronizes context settings across clients and restores defaults", async (
 it("rejects invalid patches and does not publish when persistence fails", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "neko-context-gateway-"));
 	const gateway = await start(dir);
-	const client = await connectNekoGateway(testAddress(gateway));
+	const client = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!client.contextSettings.state.value);
 		const revision = client.contextSettings.state.value!.revision;
@@ -85,12 +85,12 @@ it("rejects invalid patches and does not publish when persistence fails", async 
 it("restores the saved state after a reconnect", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "neko-context-gateway-"));
 	const gateway = await start(dir);
-	const first = await connectNekoGateway(testAddress(gateway));
+	const first = await connectTestClient(gateway);
 	try {
 		await waitFor(() => !!first.contextSettings.state.value);
 		await first.contextSettings.set({ pruning: { keepRecent: 3 } });
 		await first.close();
-		const second = await connectNekoGateway(testAddress(gateway));
+		const second = await connectTestClient(gateway);
 		try {
 			await waitFor(() => second.contextSettings.state.value?.effective.pruning.keepRecent === 3);
 		} finally {

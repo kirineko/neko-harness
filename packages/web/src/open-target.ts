@@ -160,7 +160,7 @@ export function spawnDetached(spec: LaunchSpec): Promise<void> {
 			cwd: spec.cwd,
 			detached: true,
 			stdio: "ignore",
-			windowsHide: true,
+			// 不能设 windowsHide：它让子进程以 SW_HIDE 启动，explorer.exe 的窗口会被创建但不可见（Code.exe 不受影响）。
 		});
 		const timer = setTimeout(() => reject(new OpenError("launch_failed", "启动超时")), LAUNCH_TIMEOUT_MS);
 		child.once("error", (error) => {

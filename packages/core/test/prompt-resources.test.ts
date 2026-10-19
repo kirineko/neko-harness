@@ -225,3 +225,25 @@ it("scanSkillsByLevel returns unmerged duplicates tagged per level", async () =>
 	]);
 	expect(skills.find((s) => s.name === "solo")?.level).toBe("project");
 });
+
+it("strips a leading UTF-8 BOM from AGENTS.md and SKILL.md", async () => {
+	const home = directory();
+	const bomWorkspace = directory();
+	const plainWorkspace = directory();
+	writeFileSync(join(bomWorkspace, "AGENTS.md"), "\uFEFFproject rules");
+	for (const [dir, bom] of [
+		[bomWorkspace, "\uFEFF"],
+		[plainWorkspace, ""],
+	] as const) {
+		const skillDir = join(dir, ".agents", "skills", "pdf");
+		mkdirSync(skillDir, { recursive: true });
+		writeFileSync(join(skillDir, "SKILL.md"), `${bom}---\ndescription: Read PDFs\n---\nbody`);
+	}
+	const load = createResourceLoader(home, undefined, { builtinDir: null });
+	const withBom = await load(bomWorkspace);
+	const plain = await load(plainWorkspace);
+	expect(withBom.contextFiles.map((f) => f.content)).toEqual(["project rules"]);
+	expect(withBom.contextFiles[0]!.content.includes("\uFEFF")).toBe(false);
+	expect(withBom.skills.map((s) => [s.name, s.description])).toEqual(plain.skills.map((s) => [s.name, s.description]));
+	expect(withBom.skills[0]!.description).toBe("Read PDFs");
+});

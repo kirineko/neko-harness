@@ -60,6 +60,7 @@ import { isProviderRejection, modelKey, openModelPanel, providerSendBlock } from
 import { canAutoOpen, QuestionDock } from "./question-dock.ts";
 import { QueueRow, queueKeyAction, restoreText, steerNotice, withdrawNotice } from "./queue-ui.ts";
 import { openSearchPanel } from "./search-ui.ts";
+import { createShellNotifier } from "./shell-notice.ts";
 import { openSkillMarket } from "./skill-market-ui.ts";
 import { SubagentDetail, subagentItems } from "./subagents-ui.ts";
 import {
@@ -114,6 +115,7 @@ class NekoTuiApp {
 	readonly #notices = new Container();
 	readonly #versionNotice = new Container();
 	#versionStop?: () => void;
+	#shellStop?: () => void;
 	#versionTimer?: ReturnType<typeof setInterval>;
 	readonly #terminal = new ProcessTerminal();
 	readonly #panel: PickerPanel;
@@ -412,16 +414,21 @@ class NekoTuiApp {
 			this.#ui.requestRender();
 		};
 		this.#versionStop = this.#gateway.client.application.info.subscribe(() => void refreshVersion());
+		const notifyShell = createShellNotifier((text) => this.addNotice(text, "warning", { wrap: true, ttlMs: 20_000 }));
+		const checkShell = () => notifyShell(this.#gateway.client.application.info.value?.shell);
+		this.#shellStop = this.#gateway.client.application.info.subscribe(checkShell);
 		this.#versionTimer = setInterval(() => void refreshVersion(), 30000);
 		void refreshVersion();
 		await this.switchSession(initialSessionId);
 		this.#ui.start();
 		this.#ui.requestRender(true);
+		checkShell();
 		// 首帧后注册剩余高亮语言(不阻塞启动;失败容忍)。
 		void loadAllHighlightLanguages();
 		this.#startThemeDetection();
 		await this.#exited;
 		this.#versionStop?.();
+		this.#shellStop?.();
 		clearInterval(this.#versionTimer);
 		this.#viewUnsubscribe?.();
 		this.#directoryUnsubscribe?.();

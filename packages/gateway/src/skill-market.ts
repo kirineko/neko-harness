@@ -3,10 +3,10 @@
  * 安装走 校验 sha256 → 内存解 zip → 临时目录 → rename 落盘，覆盖保护由 skill_exists 强制。
  */
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { stripFrontmatter } from "@neko-harness/core";
+import { renameWithRetry, stripFrontmatter } from "@neko-harness/core";
 import { unzipSync } from "fflate";
 
 /** 市场条目的规范形态（服务端 metadata 可能缺字段或为历史空字符串，统一收敛）。 */
@@ -113,6 +113,8 @@ export type SkillMarketOptions = {
 	/** 用户级技能根（`<home>/.agents`）；默认系统 home。 */
 	readonly home?: string;
 	readonly fetchImpl?: FetchLike;
+	/** 可注入 rename（放置新版本失败的测试）。 */
+	readonly renameImpl?: (from: string, to: string) => Promise<void>;
 	/** 可注入时间源（缓存 TTL 测试）。 */
 	readonly now?: () => number;
 };
@@ -121,6 +123,7 @@ export function createSkillMarketClient(options: SkillMarketOptions): SkillMarke
 	const home = options.home ?? homedir();
 	const fetchImpl: FetchLike = options.fetchImpl ?? fetch;
 	const now = options.now ?? Date.now;
+	const placeRename = options.renameImpl;
 	let base: URL;
 	try {
 		base = new URL(options.marketUrl);
@@ -249,7 +252,11 @@ export function createSkillMarketClient(options: SkillMarketOptions): SkillMarke
 		return projectSkillsDir(workspaceRoot);
 	};
 
-	/** 惰性清扫技能目录兄弟位置遗留的 .tmp-*（崩溃窗口兜底）。 */
+	// 备份目录名 `.bak-<uuid>-<技能名>`：与 .tmp-* 同在技能目录的父目录（同一文件系统），技能名用于崩溃后还原。
+	const BACKUP_PREFIX = ".bak-";
+	const UUID_LENGTH = 36;
+
+	/** 惰性清扫技能目录兄弟位置遗留的 .tmp-*（崩溃窗口兜底），并处理遗留 .bak-*：目标缺失则还原，否则删除。 */
 	const sweepTempDirs = async (skillsDir: string): Promise<void> => {
 		const parent = dirname(skillsDir);
 		let names: string[] = [];
@@ -263,6 +270,18 @@ export function createSkillMarketClient(options: SkillMarketOptions): SkillMarke
 				.filter((n) => n.startsWith(".tmp-"))
 				.map((n) => rm(join(parent, n), { recursive: true, force: true }).catch(() => {})),
 		);
+		for (const n of names.filter((n) => n.startsWith(BACKUP_PREFIX))) {
+			const backup = join(parent, n);
+			const skill = n.slice(BACKUP_PREFIX.length + UUID_LENGTH + 1);
+			if (skill === "" || skill.includes("/") || skill.includes("\\") || skill === "." || skill === "..") continue;
+			const target = join(skillsDir, skill);
+			if ((await stat(target).catch(() => undefined)) === undefined) {
+				await mkdir(skillsDir, { recursive: true }).catch(() => {});
+				await renameWithRetry(backup, target).catch(() => {});
+			} else {
+				await rm(backup, { recursive: true, force: true }).catch(() => {});
+			}
+		}
 	};
 
 	const install: SkillMarketClient["install"] = async ({ name, scope, workspaceRoot, overwrite }) => {
@@ -282,9 +301,20 @@ export function createSkillMarketClient(options: SkillMarketOptions): SkillMarke
 				await mkdir(dirname(dest), { recursive: true });
 				await writeFile(dest, bytes);
 			}
-			if (exists) await rm(target, { recursive: true, force: true });
 			await mkdir(skillsDir, { recursive: true });
-			await rename(temp, target);
+			if (exists) {
+				const backup = join(dirname(skillsDir), `${BACKUP_PREFIX}${randomUUID()}-${name}`);
+				await renameWithRetry(target, backup);
+				try {
+					await renameWithRetry(temp, target, placeRename ? { rename: placeRename } : {});
+				} catch (error) {
+					await renameWithRetry(backup, target).catch(() => {});
+					throw error;
+				}
+				await rm(backup, { recursive: true, force: true }).catch(() => {});
+			} else {
+				await renameWithRetry(temp, target, placeRename ? { rename: placeRename } : {});
+			}
 		} finally {
 			await rm(temp, { recursive: true, force: true }).catch(() => {});
 		}
