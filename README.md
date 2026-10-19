@@ -12,13 +12,7 @@ bun add --global neko-harness
 
 找不到 `neko` 命令时，请将 Bun 的 bin 目录加入 `PATH`（`~/.bun/bin`，Windows 为 `%USERPROFILE%\.bun\bin`）。
 
-Windows 还需要安装 [Git for Windows](https://git-scm.com/download/win)，助手执行命令（bash 工具与后台任务）依赖它提供的 Git Bash。neko 会自动查找，也可以在 `neko.config.json`（向上查找，兜底 `~/.neko/config.json`）里指定：
-
-```json
-{ "shell": { "path": "C:\\Program Files\\Git\\bin\\bash.exe" } }
-```
-
-不支持 WSL 的 `bash.exe`（`C:\Windows\System32\bash.exe`）：配置指向它会被拒绝。没有 Git Bash 时 neko 仍可启动，TUI 与 Web 会提示，bash 与后台任务返回明确错误，其余功能不受影响。
+Windows 还需要安装 [Git for Windows](https://git-scm.com/download/win)，助手执行命令（bash 工具与后台任务）依赖它提供的 Git Bash。neko 会自动查找。
 
 ## 开始使用
 
