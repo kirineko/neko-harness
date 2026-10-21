@@ -32,7 +32,7 @@ export function queuedUserInput(raw: unknown): (Omit<QueuedInput, "preview"> & {
 	if (item.mode !== "steer" && item.mode !== "followUp") return undefined;
 	if (item.entry?.kind !== NekoInput.kind) return undefined;
 	const data = item.entry.data as InputData | undefined;
-	if (!data || data.jobReport || data.subagentRoundId) return undefined;
+	if (!data || data.jobReport || data.planDecision || data.subagentRoundId) return undefined;
 	const defaultPrompt = Array.isArray(item.content)
 		? savedDefaultImagePrompt(item.content as never, data.defaultImagePrompt)
 		: undefined;

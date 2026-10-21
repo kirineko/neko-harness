@@ -1,5 +1,12 @@
 import type { ChatView } from "@neko-harness/core";
-import type { QuestionList, QuestionRecord, QuestionSummary, TodoList } from "@neko-harness/core/interactions";
+import type {
+	PlanMode,
+	PlanRecord,
+	QuestionList,
+	QuestionRecord,
+	QuestionSummary,
+	TodoList,
+} from "@neko-harness/core/interactions";
 
 /** DOM-free builders shared by the todo / question tests. */
 export const question = (over: Partial<QuestionRecord> = {}): QuestionRecord => ({
@@ -28,12 +35,26 @@ export const summaryOf = (record: QuestionRecord): QuestionSummary => ({
 	createdAt: record.createdAt,
 });
 
+export const plan = (over: Partial<PlanRecord> = {}): PlanRecord => ({
+	version: "p1",
+	title: "Add a cache layer",
+	steps: ["Read the loader", "Add the cache", "Cover it with tests"],
+	note: "Keeps the public API unchanged.",
+	status: "awaiting_approval",
+	feedback: null,
+	createdAt: 1000,
+	settledAt: null,
+	...over,
+});
+
 export type ViewOptions = {
 	busy?: boolean;
 	/** Records are summarized; `null` leaves the field out, like a gateway built before ask_user. */
 	questions?: readonly QuestionRecord[] | QuestionList | null;
 	/** `null` leaves the field out, like a gateway built before todos. */
 	todos?: TodoList | null;
+	/** Leaving it out behaves like a gateway built before plan mode (no `plan` field). */
+	plan?: { mode?: PlanMode; revision?: number; current?: PlanRecord | null };
 	items?: ChatView["items"];
 	subagents?: ChatView["subagents"];
 	queued?: ChatView["queued"];
@@ -67,6 +88,15 @@ export function chatView(options: ViewOptions = {}): ChatView {
 		...(options.changes ? { changes: options.changes } : {}),
 		...(options.agents ? { agents: options.agents } : {}),
 		...(options.jobs ? { jobs: options.jobs } : {}),
+		...(options.plan
+			? {
+					plan: {
+						mode: options.plan.mode ?? "normal",
+						revision: options.plan.revision ?? 1,
+						current: options.plan.current ?? null,
+					},
+				}
+			: {}),
 		...(questions ? { questions } : {}),
 		...(todos ? { todos } : {}),
 	} as unknown as ChatView;

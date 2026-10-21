@@ -1,0 +1,11 @@
+{
+	"description": "plan.changed 通知：计划出现、结算或取消的失效提示；App 按 status.plan.version 重新调用 plan.get（或重新 attach），只接受 revision 不低于已持有的结果。",
+	"message": {
+		"jsonrpc": "2.0",
+		"method": "plan.changed",
+		"params": {
+			"subscriptionId": "chat-1a2b3c4d-1",
+			"revision": 4
+		}
+	}
+}

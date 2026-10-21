@@ -10,6 +10,8 @@ export type InputHost = {
 	editor: { resetEscapeSequence(): void; getText(): string; isShowingAutocomplete(): boolean };
 	approval: { handleInput(data: string): boolean };
 	question: { readonly open: boolean; handleInput(data: string): boolean; swallowEscRepeat(data: string): boolean };
+	/** The plan panel; absent in hosts without plan mode. */
+	plan?: { readonly open: boolean; handleInput(data: string): boolean; swallowEscRepeat(data: string): boolean };
 	/** A picker or login panel is open. */
 	overlayOpen(): boolean;
 	/** The run is busy, so Esc and Ctrl+C stop it. */
@@ -22,6 +24,8 @@ export type InputHost = {
 	hasSubagents(): boolean;
 	showAgents(): void;
 	toggleQuestion(): void;
+	/** Shift+Tab: enter or leave plan mode. */
+	togglePlan?(): void;
 	/** Clipboard paste shortcut; returns whether the key was one. */
 	clipboardKey(data: string): boolean;
 	/** Pasted or dropped image paths; returns whether they were taken. */
@@ -33,7 +37,8 @@ export type InputHost = {
 
 /**
  * The single place that decides which control owns a key. Exactly one owner handles it:
- * the question panel (while open) > approval dock > picker/login > queue selection > editor shortcuts.
+ * the question panel (while open) > plan panel (while open) > approval dock > picker/login > queue selection >
+ * editor shortcuts.
  * A key the owner consumed never reaches the next one, so Esc that closes the question panel cannot also stop
  * the run, and an answer's Enter cannot approve a command or steer a queued message.
  */
@@ -50,6 +55,7 @@ export function createInputRouter(host: InputHost): (data: string) => KeyResult 
 			!matchesKey(data, "escape") ||
 			host.overlayOpen() ||
 			host.question.open ||
+			host.plan?.open ||
 			host.busy() ||
 			host.compactionActive()
 		)
@@ -62,6 +68,8 @@ export function createInputRouter(host: InputHost): (data: string) => KeyResult 
 		}
 		if (host.question.swallowEscRepeat(data)) return consume;
 		if (host.question.open) return host.question.handleInput(data) ? consume : stop();
+		if (host.plan?.swallowEscRepeat(data)) return consume;
+		if (host.plan?.open) return host.plan.handleInput(data) ? consume : stop();
 		if (matchesKey(data, QUESTION_KEY) && !host.overlayOpen() && !host.sessionOperation()) {
 			host.toggleQuestion();
 			return consume;
@@ -74,6 +82,10 @@ export function createInputRouter(host: InputHost): (data: string) => KeyResult 
 		if (host.sessionOperation()) return consume;
 		const queueKey = host.queueKey(data);
 		if (queueKey) return queueKey;
+		if (host.togglePlan && matchesKey(data, "shift+tab") && !host.editor.isShowingAutocomplete()) {
+			host.togglePlan();
+			return consume;
+		}
 		if (
 			matchesKey(data, "right") &&
 			host.hasSubagents() &&

@@ -144,6 +144,7 @@ type ChatState = {
 	/** Last revisions told to the app; a view change with a higher one sends the matching `*.changed`. */
 	todosRevision: number;
 	questionsRevision: number;
+	planRevision: number;
 };
 
 type SubagentState = {
@@ -347,6 +348,12 @@ export class MobileAdapter {
 				return this.questionsGet(params);
 			case "questions.respond":
 				return this.questionsRespond(params);
+			case "plan.get":
+				return this.planGet(params);
+			case "plan.respond":
+				return this.planRespond(params);
+			case "plan.exit":
+				return this.planExit(params);
 			case "media.read":
 				return this.mediaRead(params);
 			default:
@@ -412,6 +419,7 @@ export class MobileAdapter {
 				lastMessageAt: Math.round(messageTime(session)),
 				archived: false,
 				...(session.awaitingAnswer === undefined ? {} : { awaitingAnswer: session.awaitingAnswer }),
+				...(session.awaitingPlan === undefined ? {} : { awaitingPlan: session.awaitingPlan }),
 			})),
 			...(offset + page.length < sessions.length ? { nextCursor: String(offset + page.length) } : {}),
 		};
@@ -432,6 +440,7 @@ export class MobileAdapter {
 			lastMessageAt: Math.round(messageTime(created)),
 			archived: false,
 			...(created.awaitingAnswer === undefined ? {} : { awaitingAnswer: created.awaitingAnswer }),
+			...(created.awaitingPlan === undefined ? {} : { awaitingPlan: created.awaitingPlan }),
 		};
 	}
 
@@ -514,6 +523,7 @@ export class MobileAdapter {
 			approvalsDirty: false,
 			todosRevision: chat.view.value?.todos?.revision ?? 0,
 			questionsRevision: chat.view.value?.questions?.revision ?? 0,
+			planRevision: chat.view.value?.plan?.revision ?? 0,
 		};
 		this.chatState = state;
 		const snapshot = projection.snapshot();
@@ -719,7 +729,7 @@ export class MobileAdapter {
 		}
 	}
 
-	// ——— todos / questions ———
+	// ——— todos / questions / plan ———
 
 	/** The snapshot's revision is taken with the status in one step, so a later change always sends a notice. */
 	private refreshInteractions(state: ChatState): void {
@@ -734,6 +744,11 @@ export class MobileAdapter {
 		if (questions !== undefined && questions > state.questionsRevision) {
 			state.questionsRevision = questions;
 			this.sendNotification("questions.changed", { subscriptionId: state.subscriptionId, revision: questions });
+		}
+		const plan = view?.plan?.revision;
+		if (plan !== undefined && plan > state.planRevision) {
+			state.planRevision = plan;
+			this.sendNotification("plan.changed", { subscriptionId: state.subscriptionId, revision: plan });
 		}
 	}
 
@@ -780,6 +795,38 @@ export class MobileAdapter {
 					version: params.version,
 					response: params.response as never,
 				}),
+			"rejected",
+		);
+	}
+
+	private async planGet(params: { subscriptionId: string; version: string }): Promise<unknown> {
+		const state = this.requireChat(params);
+		this.assertAuthorized();
+		if (state.chat.view.value?.plan === undefined)
+			throw new MobileMethodError("not_found", "plan mode is not available");
+		const record = await remote(() => state.chat.planGet({ version: params.version }));
+		if (record === null) throw new MobileMethodError("not_found", "plan not found in this session");
+		return record;
+	}
+
+	/** The phone can only leave plan mode (cancelling a waiting plan); entering it stays on the desktop. */
+	private async planExit(params: { subscriptionId: string }): Promise<unknown> {
+		const state = this.requireChat(params);
+		this.assertAuthorized();
+		if (state.chat.view.value?.plan === undefined)
+			throw new MobileMethodError("not_found", "plan mode is not available");
+		const view = await remote(() => state.chat.planMode({ mode: "normal" }), "rejected");
+		return { mode: "normal", revision: view.revision };
+	}
+
+	/** Approve or ask for changes on a waiting plan. */
+	private async planRespond(params: { subscriptionId: string; version: string; decision: unknown }): Promise<unknown> {
+		const state = this.requireChat(params);
+		this.assertAuthorized();
+		if (state.chat.view.value?.plan === undefined)
+			throw new MobileMethodError("not_found", "plan mode is not available");
+		return remote(
+			() => state.chat.planRespond({ version: params.version, decision: params.decision as never }),
 			"rejected",
 		);
 	}

@@ -1,0 +1,12 @@
+{
+	"description": "plan.get 请求：按版本读取当前订阅会话的计划记录（version 取自 status.plan.version 或历史中 submit_plan 条目；不属于该会话的版本返回 not_found）。能力 plan。",
+	"message": {
+		"jsonrpc": "2.0",
+		"id": 51,
+		"method": "plan.get",
+		"params": {
+			"subscriptionId": "chat-1a2b3c4d-1",
+			"version": "b7e2a9c4-51d8-4c3a-8f60-2d9e7a1c0b34"
+		}
+	}
+}

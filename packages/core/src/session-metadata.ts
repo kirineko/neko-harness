@@ -16,6 +16,7 @@ import {
 	type UsageState,
 } from "@earendil-works/pi-durable";
 import { type InputData, NekoInput } from "./input.ts";
+import { PlanDoc } from "./plan-doc.ts";
 import { QuestionsDoc } from "./user-questions.ts";
 
 export type SessionMetadata = {
@@ -26,6 +27,8 @@ export type SessionMetadata = {
 	status: "idle" | "running" | "error";
 	/** An `ask_user` question of this running session waits for the user; absent on sessions from before it existed. */
 	awaiting?: boolean;
+	/** A submitted plan waits for approval; unlike `awaiting` the session is idle. Absent on older sessions. */
+	awaitingPlan?: boolean;
 	firstRequest: string;
 	naming: "waiting" | "pending" | "running" | "ready" | "fallback";
 	prompt: string;
@@ -269,7 +272,12 @@ export class SessionMetadataManager {
 					submissions.set(c.value.conversationId, records);
 				}
 				if (c.type === "document" && c.conversationId) {
-					if (c.record.kind === "pi.agent" || c.record.kind === QuestionsDoc.definition.kind) ids.add(c.conversationId);
+					if (
+						c.record.kind === "pi.agent" ||
+						c.record.kind === QuestionsDoc.definition.kind ||
+						c.record.kind === PlanDoc.definition.kind
+					)
+						ids.add(c.conversationId);
 					if (c.record.kind === "pi.live") {
 						const running = c.value?.run !== undefined;
 						if (this.#live.get(c.conversationId) !== running) {
@@ -355,9 +363,13 @@ export class SessionMetadataManager {
 		const awaiting =
 			live?.run !== undefined &&
 			((await this.harness.snapshot(QuestionsDoc, id, this.context))?.pending.length ?? 0) > 0;
+		const awaitingPlan = (await this.harness.snapshot(PlanDoc, id, this.context))?.items.some(
+			(item) => item.status === "awaiting_approval",
+		);
 		await this.harness.commit(async (tx) => {
 			const d = await tx.doc(SessionMetadataDoc, id);
 			if ((d.awaiting ?? false) !== awaiting) d.awaiting = awaiting;
+			if ((d.awaitingPlan ?? false) !== (awaitingPlan ?? false)) d.awaitingPlan = awaitingPlan ?? false;
 			for (const { record, data, answer } of updates) {
 				if (!data) continue;
 				if (!d.firstRequest && d.naming === "waiting") {

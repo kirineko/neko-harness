@@ -1,5 +1,5 @@
 import { RUNNING_VERSION } from "@neko-harness/core/application-version";
-import { QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
+import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
 import { type Static, Type } from "typebox";
 import { Check } from "typebox/value";
 
@@ -23,6 +23,7 @@ export const MOBILE_CAPABILITIES: readonly string[] = [
 	"media",
 	"todos",
 	"questions",
+	"plan",
 ];
 export const MOBILE_CLOSE_REVOKED = 4401;
 export const MOBILE_CLOSE_INCOMPATIBLE = 4402;
@@ -125,6 +126,14 @@ export const MobileImageRefSchema = Type.Object({
 	contentIndex: int,
 });
 
+const planStatus = Type.Union([
+	Type.Literal("awaiting_approval"),
+	Type.Literal("approved"),
+	Type.Literal("revision_requested"),
+	Type.Literal("superseded"),
+	Type.Literal("cancelled"),
+]);
+
 const questionStatus = Type.Union([
 	Type.Literal("pending"),
 	Type.Literal("answered"),
@@ -151,6 +160,13 @@ export const MobileToolInteractionSchema = Type.Union([
 		revision: int,
 		completed: int,
 		total: int,
+	}),
+	Type.Object({
+		kind: Type.Literal("submit_plan"),
+		version: str,
+		title: str,
+		steps: Type.Array(str),
+		note: str,
 	}),
 ]);
 
@@ -266,6 +282,11 @@ export const MobileChatStatusSchema = Type.Object({
 	todos: opt(Type.Object({ revision: int, count: int, completed: int })),
 	/** Absent on a computer without questions; `pendingCount: 0` means supported with none. */
 	questions: opt(Type.Object({ revision: int, pendingCount: int })),
+	/**
+	 * Absent on a computer without plan mode; `pending: false` means supported with no plan awaiting approval.
+	 * `version` names the newest plan (the pending one when `pending`), absent before the first plan.
+	 */
+	plan: opt(Type.Object({ revision: int, pending: Type.Boolean(), version: opt(Type.String({ minLength: 1 })) })),
 	status: nullable(str),
 	usage: MobileUsageSchema,
 	taskUsage: opt(MobileUsageSchema),
@@ -299,6 +320,8 @@ export const MobileSessionSummarySchema = Type.Object({
 	archived: Type.Boolean(),
 	/** A question of this session waits for an answer; absent when the computer cannot tell. */
 	awaitingAnswer: opt(Type.Boolean()),
+	/** A submitted plan of this idle session waits for approval; absent when the computer cannot tell. */
+	awaitingPlan: opt(Type.Boolean()),
 });
 
 export const MobileApprovalSchema = Type.Object({
@@ -368,6 +391,23 @@ export const MobileQuestionResponseSchema = Type.Union([
 		{ additionalProperties: false },
 	),
 	Type.Object({ kind: Type.Literal("skip") }, { additionalProperties: false }),
+]);
+export const MobilePlanSchema = Type.Object({
+	version: Type.String({ minLength: 1 }),
+	title: Type.String({ maxLength: PLAN_LIMITS.titleChars }),
+	steps: Type.Array(Type.String({ maxLength: PLAN_LIMITS.stepChars }), { maxItems: PLAN_LIMITS.maxSteps }),
+	note: Type.String({ maxLength: PLAN_LIMITS.noteChars }),
+	status: planStatus,
+	feedback: nullable(Type.String({ maxLength: PLAN_LIMITS.feedbackChars })),
+	createdAt: Type.Number(),
+	settledAt: nullable(Type.Number()),
+});
+export const MobilePlanDecisionSchema = Type.Union([
+	Type.Object({ kind: Type.Literal("approve") }, { additionalProperties: false }),
+	Type.Object(
+		{ kind: Type.Literal("revise"), feedback: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.feedbackChars }) },
+		{ additionalProperties: false },
+	),
 ]);
 
 const sessionListParams = Type.Object({
@@ -503,6 +543,22 @@ export const MOBILE_API_V1_METHODS: Readonly<Record<string, { readonly params: u
 		}),
 		result: MobileQuestionSchema,
 	},
+	"plan.get": {
+		params: Type.Object({ ...subscription, version: Type.String({ minLength: 1 }) }),
+		result: MobilePlanSchema,
+	},
+	"plan.respond": {
+		params: Type.Object({
+			...subscription,
+			version: Type.String({ minLength: 1 }),
+			decision: MobilePlanDecisionSchema,
+		}),
+		result: MobilePlanSchema,
+	},
+	"plan.exit": {
+		params: Type.Object(subscription),
+		result: Type.Object({ mode: Type.Literal("normal"), revision: int }),
+	},
 	"media.read": {
 		params: Type.Object({
 			...subscription,
@@ -554,4 +610,6 @@ export const MOBILE_API_V1_NOTIFICATIONS: Readonly<Record<string, unknown>> = {
 	/** Invalidation hint: read `todos.get`; revisions only grow, so accept a result no older than the one held. */
 	"todos.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
 	"questions.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
+	/** Invalidation hint: read `plan.get` for the version the status names, or re-attach for the latest plan. */
+	"plan.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
 };

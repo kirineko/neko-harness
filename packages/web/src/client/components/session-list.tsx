@@ -91,7 +91,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 								<span className="session-copy">
 									<span className="truncate min-w-0">{sessionName(session, "新会话")}</span>
 									<span
-										className={`session-meta${session.awaitingAnswer === true ? " font-semibold text-tianyi-800" : ""}`}
+										className={`session-meta${session.awaitingAnswer === true || session.awaitingPlan === true ? " font-semibold text-tianyi-800" : ""}`}
 									>
 										<time dateTime={new Date(messageTime(session)).toISOString()}>
 											{relativeTime(messageTime(session), now, "zh")}

@@ -160,7 +160,7 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
   }
 
   /// 连接就绪：绑定 API 并恢复会话（若有）。[capabilities] 取自 `server.hello`，
-  /// 缺 `todos` / `questions` 的旧电脑不会收到对应请求。
+  /// 缺 `todos` / `questions` / `plan` 的旧电脑不会收到对应请求。
   Future<void> bind(
     MobileApi api,
     String serverId, {
@@ -240,6 +240,7 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
           subscriptionId: subscriptionId,
           serverId: serverId,
           sessionId: sessionId,
+          plan: transcript.status.plan,
         );
       }
       notifyListeners();
@@ -269,7 +270,7 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
         _reattach();
       case 'approvals.changed':
         unawaited(_refreshApprovals(_generation));
-      case 'todos.changed' || 'questions.changed':
+      case 'todos.changed' || 'questions.changed' || 'plan.changed':
         interactions.onNotification(
           event.method,
           event.params['revision'] as int?,

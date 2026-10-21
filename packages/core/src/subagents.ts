@@ -18,6 +18,7 @@ import {
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { NekoInput } from "./input.ts";
+import { PLAN_CODER_BLOCKED, PlanDoc } from "./plan-doc.ts";
 import type { UsageTotals } from "./projection.ts";
 import { emptySubagentUsage, subagentUsageTotals, subtractSubagentUsage } from "./subagent-usage.ts";
 
@@ -114,8 +115,8 @@ export const ROLE_PROMPTS: Record<SubagentRole, string> = {
 export const SUBAGENT_DELIVERY =
 	" Work from the assigned task, your own prior conversation context and project resources; you cannot see the main conversation. Do not delegate or ask the user directly. Your final message must be a self-contained delivery to the main agent, including evidence, results and limitations. Skills never expand your allowed tools.";
 /** Tools only the main agent may use: a subagent reports to its parent instead of planning for or asking the user. */
-export const MAIN_ONLY_TOOLS: ReadonlySet<string> = new Set(["todo", "ask_user"]);
-export const MAIN_ONLY_EXTENSIONS: ReadonlySet<string> = new Set(["neko-todos", "neko-questions"]);
+export const MAIN_ONLY_TOOLS: ReadonlySet<string> = new Set(["todo", "ask_user", "submit_plan"]);
+export const MAIN_ONLY_EXTENSIONS: ReadonlySet<string> = new Set(["neko-todos", "neko-questions", "neko-plan"]);
 const READ_TOOLS = new Set(["read", "find_files", "search_text", "web_search", "web_extract"]);
 
 export async function refreshDelegations(tx: Tx, id: ConversationId): Promise<Delegation[]> {
@@ -486,12 +487,16 @@ export function createSubagentExtension(
 						if (receipt?.runnerId !== undefined) return receipt;
 						const identities = await tx.doc(SubagentsDoc, api.conversationId);
 						let identity: SubagentIdentity | undefined;
+						// A coder writes files, so plan mode must not start or resume one; a started round is not re-checked.
+						const planning = !receipt && (await tx.doc(PlanDoc, api.conversationId)).mode === "plan";
+						if (planning && args.action !== "continue" && args.type === "coder") throw new Error(PLAN_CODER_BLOCKED);
 						if (args.action === "continue") {
 							identity = identities.items.find((a) => a.agentId === args.agentId);
 							if (!identity) throw new Error("Unknown subagent or it belongs to another conversation.");
 							const info = await tx.doc(SubagentDoc, identity.childId as ConversationId);
 							if (info.parentId !== api.conversationId || info.role !== identity.role)
 								throw new Error("Subagent ownership mismatch.");
+							if (planning && identity.role === "coder") throw new Error(PLAN_CODER_BLOCKED);
 							if (identity.activeRoundId !== null) throw new Error("Subagent is busy; continue only when idle.");
 						} else if (receipt) {
 							identity = identities.items.find((a) => a.childId === receipt.childId);

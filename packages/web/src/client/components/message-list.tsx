@@ -1,6 +1,6 @@
 import type { ChatItem, ChatView, DefaultImagePrompt, StreamingView } from "@neko-harness/core";
 import { copyText } from "@neko-harness/core/conversation-export";
-import type { QuestionSummary } from "@neko-harness/core/interactions";
+import type { PlanRecord, QuestionSummary } from "@neko-harness/core/interactions";
 import type { SkillInvocation } from "@neko-harness/core/skill-invocation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { questionUi } from "../lib/question-ui";
@@ -10,6 +10,7 @@ import { CopyButton } from "./copy-button";
 import { ImageGallery } from "./image-gallery";
 import { JobReportCard } from "./job-report-card";
 import { Markdown } from "./markdown";
+import { PlanRow } from "./plan-row";
 import { SkillInvocationCard } from "./skill-card";
 import { ThinkingBlock } from "./thinking";
 import { ToolCard } from "./tool-card";
@@ -115,9 +116,9 @@ function AssistantRow({ item }: { item: Extract<ChatItem, { type: "assistant" }>
 	);
 }
 
-function SystemRow({ text }: { text: string }) {
+function SystemRow({ text, decision }: { text: string; decision?: boolean }) {
 	return (
-		<div className="chat-row anim-other flex justify-center">
+		<div className="chat-row anim-other flex justify-center" data-plan-decision={decision ? "" : undefined}>
 			<span className="rounded-full bg-ink-100 px-3 py-1 text-xs text-ink-600">{text}</span>
 		</div>
 	);
@@ -126,9 +127,11 @@ function SystemRow({ text }: { text: string }) {
 function ToolRow({
 	item,
 	pending,
+	plan,
 }: {
 	item: Extract<ChatItem, { type: "tool" }>;
 	pending?: readonly QuestionSummary[];
+	plan?: PlanRecord | null;
 }) {
 	const interaction = item.interaction;
 	if (interaction?.kind === "ask_user") {
@@ -146,6 +149,13 @@ function ToolRow({
 							: undefined
 					}
 				/>
+			</div>
+		);
+	}
+	if (interaction?.kind === "submit_plan") {
+		return (
+			<div className="chat-row anim-other">
+				<PlanRow interaction={interaction} status={plan?.version === interaction.version ? plan.status : undefined} />
 			</div>
 		);
 	}
@@ -362,7 +372,7 @@ export function MessageList({
 									</button>
 								) : (
 									<div key={item.key}>
-										<ToolRow item={item} pending={view?.questions?.pending} />
+										<ToolRow item={item} pending={view?.questions?.pending} plan={view?.plan?.current} />
 										{view?.approvals
 											?.filter((a) => a.callId === item.callId && a.status !== "pending")
 											.map((a) => (
@@ -387,7 +397,7 @@ export function MessageList({
 										job={view?.jobs?.find((job) => job.jobId === item.jobId)}
 									/>
 								) : (
-									<SystemRow key={item.key} text={item.text} />
+									<SystemRow key={item.key} text={item.text} decision={item.planDecision !== undefined} />
 								);
 							default:
 								return null;

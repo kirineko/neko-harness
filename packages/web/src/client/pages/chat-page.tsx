@@ -4,6 +4,7 @@ import { ApprovalInbox } from "../components/approval-inbox";
 import { Composer } from "../components/composer";
 import { JobPanel } from "../components/job-panel";
 import { MessageList } from "../components/message-list";
+import { PlanDock } from "../components/plan-card";
 import { DismissButton, folderName, useMobile } from "../components/primitives";
 import { QuestionDock } from "../components/question-card";
 import { SessionList } from "../components/session-list";
@@ -16,6 +17,7 @@ import { useAwaitingTitle } from "../lib/awaiting-title";
 import { appActions, reportError } from "../lib/bootstrap";
 import { questionState, todoState } from "../lib/interactions";
 import { MOBILE_QUERY, WORKSPACE_WIDTH } from "../lib/layout";
+import { planState } from "../lib/plan-ui";
 import { storeActions, useNekoState } from "../lib/store";
 
 const INFO_NOTICE_MS = 8000;
@@ -90,7 +92,10 @@ export function ChatPage() {
 	const [todosOpenFor, setTodosOpenFor] = useState<string | null>(null);
 	const todos = todoState({ view, phase, operating, currentSessionId, retained });
 	const todosOpen = todosOpenFor !== null && todosOpenFor === currentSessionId && (todos?.total ?? 0) > 0;
-	useAwaitingTitle(questionState({ view, phase, operating, currentSessionId, retained })?.pending.length ?? 0);
+	useAwaitingTitle(
+		questionState({ view, phase, operating, currentSessionId, retained })?.pending.length ?? 0,
+		(planState({ view, phase, operating })?.awaiting ?? null) !== null,
+	);
 	const selectIdentity = (id: string, taskId?: number) => {
 		if (!currentSessionId) return;
 		setRightFor(null);
@@ -204,6 +209,7 @@ export function ChatPage() {
 					>
 						{!approvalInPanel && <ApprovalInbox />}
 						<QuestionDock />
+						<PlanDock />
 					</div>
 					<Composer disabled={phase !== "ready" || operating} busy={busy} status={status} />
 				</main>

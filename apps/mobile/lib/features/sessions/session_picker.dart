@@ -227,7 +227,10 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: s.preview.isEmpty && !s.waitingForAnswer
+                      subtitle:
+                          s.preview.isEmpty &&
+                              !s.waitingForAnswer &&
+                              !s.waitingForPlan
                           ? null
                           : Row(
                               children: <Widget>[
@@ -242,6 +245,20 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                                     ),
                                     child: Text(
                                       '等待回答',
+                                      style: context.small(tokens.warning),
+                                    ),
+                                  ),
+                                // 计划待批准时会话是空闲的，与“等待回答”互不重叠。
+                                if (s.waitingForPlan)
+                                  Padding(
+                                    key: Key('session-plan-${s.id}'),
+                                    padding: EdgeInsets.only(
+                                      right: s.preview.isEmpty
+                                          ? 0
+                                          : NekoSpace.sm,
+                                    ),
+                                    child: Text(
+                                      '等待批准',
                                       style: context.small(tokens.warning),
                                     ),
                                   ),

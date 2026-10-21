@@ -83,6 +83,17 @@ export function helpLines(platform: string = process.platform, wsl: boolean = ru
 		["Messages", "Typed messages stay queued until the question is settled; they are never the answer"],
 		["Approvals", "A waiting approval keeps the keys until you press Ctrl+O; Esc then returns to it"],
 	]);
+	section("Plan mode", [
+		["/plan", "Enter or leave plan mode; with a plan waiting, open it for review"],
+		["Shift+Tab", "Enter or leave plan mode (idle sessions only)"],
+		["↑ / ↓", "Move between Approve and Request changes in the plan panel"],
+		["Enter", "Choose the highlighted row; Request changes then takes a typed note"],
+		["A / R", "Approve the plan / write the requested changes"],
+		["X", "Cancel the waiting plan and exit plan mode (idle sessions only)"],
+		["PgUp / PgDn", "Scroll a long plan"],
+		["Esc", "Close the panel only: the plan keeps waiting and the draft is kept"],
+		["Messages", "A normal message sent while a plan waits replaces that plan"],
+	]);
 	section("Web search", [
 		["/search", "Choose the web search provider"],
 		["Enter", "Apply the highlighted provider"],

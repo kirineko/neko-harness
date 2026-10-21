@@ -1,10 +1,13 @@
 import { expect, it } from "bun:test";
 import {
 	InteractionInputError,
+	PLAN_LIMITS,
 	QUESTION_LIMITS,
 	questionPreview,
 	sameQuestion,
 	TODO_LIMITS,
+	validatePlanArgs,
+	validatePlanDecision,
 	validateQuestionArgs,
 	validateQuestionResponse,
 	validateTodoItems,
@@ -189,4 +192,40 @@ it("clips previews without splitting a surrogate pair", () => {
 	expect(preview.length).toBe(255);
 	expect(preview.endsWith("a")).toBe(true);
 	expect(questionPreview("b".repeat(300))).toHaveLength(256);
+});
+
+it("accepts the exact plan boundaries and rejects one past them", () => {
+	const steps = Array.from({ length: PLAN_LIMITS.maxSteps }, (_, i) => `step ${i}`);
+	expect(validatePlanArgs({ title: "t".repeat(120), steps })).toEqual({ title: "t".repeat(120), steps, note: "" });
+	bad(() => validatePlanArgs({ title: "t".repeat(121), steps: ["a"] }), /too long/);
+	bad(() => validatePlanArgs({ title: "t", steps: [...steps, "extra"] }), /Too many/);
+	bad(() => validatePlanArgs({ title: "t", steps: [] }), /at least one/);
+	expect(validatePlanArgs({ title: "t", steps: ["s".repeat(500)] }).steps[0]).toHaveLength(500);
+	bad(() => validatePlanArgs({ title: "t", steps: ["s".repeat(501)] }), /too long/);
+	expect(validatePlanArgs({ title: "t", steps: ["a"], note: "n".repeat(4000) }).note).toHaveLength(4000);
+	bad(() => validatePlanArgs({ title: "t", steps: ["a"], note: "n".repeat(4001) }), /too long/);
+});
+
+it("normalizes plan notes and rejects malformed plan arguments", () => {
+	expect(validatePlanArgs({ title: "t", steps: ["a"], note: "  " }).note).toBe("");
+	bad(() => validatePlanArgs({ title: " ", steps: ["a"] }), /blank/);
+	bad(() => validatePlanArgs({ title: "t", steps: ["a", " "] }), /blank/);
+	bad(() => validatePlanArgs({ title: "t", steps: "a" }), /array/);
+	bad(() => validatePlanArgs({ title: "t", steps: ["a"], extra: 1 }), /unknown field/);
+	bad(() => validatePlanArgs({ title: "t", steps: ["a"], note: 1 }), /string/);
+	bad(() => validatePlanArgs("plan"), /object/);
+});
+
+it("validates plan decisions", () => {
+	expect(validatePlanDecision({ kind: "approve" })).toEqual({ kind: "approve" });
+	expect(validatePlanDecision({ kind: "revise", feedback: "split step 2" })).toEqual({
+		kind: "revise",
+		feedback: "split step 2",
+	});
+	expect(validatePlanDecision({ kind: "revise", feedback: "f".repeat(2000) }).kind).toBe("revise");
+	bad(() => validatePlanDecision({ kind: "revise", feedback: "f".repeat(2001) }), /too long/);
+	bad(() => validatePlanDecision({ kind: "revise", feedback: "  " }), /blank/);
+	bad(() => validatePlanDecision({ kind: "revise" }), /string/);
+	bad(() => validatePlanDecision({ kind: "approve", feedback: "x" }), /unknown field/);
+	bad(() => validatePlanDecision({ kind: "reject" }), /approve/);
 });

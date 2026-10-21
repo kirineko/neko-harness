@@ -6,6 +6,7 @@ import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart'
     show describeError;
+import 'package:neko_mobile/features/plan/plan_decision.dart';
 import 'package:neko_mobile/features/questions/question_draft.dart';
 
 /// 失效提示驱动的读取：同一时刻只有一个在途读取；读取期间收到更高 revision
@@ -56,9 +57,9 @@ class _RevisionReader {
   }
 }
 
-/// 当前主会话的待办与用户提问（design D7/D8/D9）：读取、草稿、回答与自动展开规则。
+/// 当前主会话的待办、用户提问与计划批准（design D7/D8/D9）：读取、草稿、回答与自动展开规则。
 ///
-/// 能力由 `server.hello.capabilities` 决定：缺 `todos` / `questions` 时绝不调用对应方法。
+/// 能力由 `server.hello.capabilities` 决定：缺 `todos` / `questions` / `plan` 时绝不调用对应方法。
 /// 所有异步结果都带订阅代次（[_epoch]）：切换会话、断线重连后，旧订阅的结果不会写入当前状态。
 class InteractionsController extends ChangeNotifier {
   InteractionsController() {
@@ -75,6 +76,8 @@ class InteractionsController extends ChangeNotifier {
   static const int _maxDrafts = 64;
   static const String noReceiptMessage =
       '未收到电脑的回执：回答可能已送达，也可能没有。恢复连接后请先查看问题状态，再决定是否重新提交。';
+  static const String planNoReceiptMessage =
+      '未收到电脑的回执：决定可能已送达，也可能没有。恢复连接后请先查看计划状态，再决定是否重新提交。';
 
   late final _RevisionReader _todoReader;
   late final _RevisionReader _questionReader;
@@ -86,6 +89,24 @@ class InteractionsController extends ChangeNotifier {
   int _epoch = 0;
   bool _todosSupported = false;
   bool _questionsSupported = false;
+  bool _planSupported = false;
+
+  PlanSummary? _planSummary;
+  PlanRecord? _plan;
+  bool _planFresh = false;
+  bool _planReading = false;
+  bool _planDirty = false;
+  String? _planLoadError;
+  bool _planSubmitting = false;
+  String? _planError;
+  String? _planNote;
+
+  /// 本端提交决定后收到的记录；他端先决定时它就是实际结果。卡片保留到用户关闭。
+  PlanRecord? _planOutcome;
+  String? _planDismissed;
+
+  /// 修改意见草稿，按 server/session/version 隔离，只在内存。
+  final Map<String, String> _planFeedback = <String, String>{};
 
   TodoList? _todos;
   bool _todosFresh = false;
@@ -114,6 +135,8 @@ class InteractionsController extends ChangeNotifier {
   bool get todosSupported => _todosSupported;
 
   bool get questionsSupported => _questionsSupported;
+
+  bool get planSupported => _planSupported;
 
   /// 订阅有效、可以读取与提交；离线时为 false（内容保留但标记为非最新）。
   bool get connected => _api != null && _subscriptionId != null;
@@ -148,17 +171,61 @@ class InteractionsController extends ChangeNotifier {
   /// 实际结果与本端提交不同时的说明（如他端先回答）。
   String? settlementNote(QuestionRecord question) => _notes[_keyOf(question)];
 
+  /// 卡片要显示的计划：本端刚做出的决定（含他端先决定的实际结果），否则是仍待批准的计划。
+  /// 没有待批准计划且没有本端结果时为 null（隐藏）。
+  PlanRecord? get planShown {
+    if (!_planSupported) return null;
+    final outcome = _planOutcome;
+    if (outcome != null && outcome.version != _planDismissed) return outcome;
+    final plan = _plan;
+    return plan != null && plan.awaiting ? plan : null;
+  }
+
+  /// 提交期间禁止重复提交。
+  bool get planSubmitting => _planSubmitting;
+
+  String? get planError => _planError;
+
+  String? get planLoadError => _planLoadError;
+
+  /// 实际结果与本端提交不同时的说明（如他端先决定）。
+  String? get planNote => _planNote;
+
+  /// 状态摘要里的版本是否已读到记录；用于“读取中/重试”提示。
+  bool get planLoaded => _planFresh;
+
+  String planFeedbackDraft(PlanRecord plan) =>
+      _planFeedback[_planKey(plan.version)] ?? '';
+
+  void savePlanFeedback(PlanRecord plan, String feedback) {
+    final key = _planKey(plan.version);
+    if (feedback.isEmpty) {
+      _planFeedback.remove(key);
+    } else {
+      _planFeedback[key] = feedback;
+    }
+  }
+
+  String _planKey(String version) => '$_serverId/$_sessionId/$version';
+
   // ——— 会话与连接生命周期 ———
 
   /// 能力来自 hello；旧电脑两者皆无，此时不会发出任何 todos.* / questions.* 请求。
   void setCapabilities(Iterable<String> capabilities) {
     final todos = capabilities.contains('todos');
     final questions = capabilities.contains('questions');
-    if (todos == _todosSupported && questions == _questionsSupported) return;
+    final plan = capabilities.contains('plan');
+    if (todos == _todosSupported &&
+        questions == _questionsSupported &&
+        plan == _planSupported) {
+      return;
+    }
     _todosSupported = todos;
     _questionsSupported = questions;
+    _planSupported = plan;
     if (!todos) _clearTodos();
     if (!questions) _clearQuestions();
+    if (!plan) _clearPlan();
     notifyListeners();
   }
 
@@ -168,6 +235,7 @@ class InteractionsController extends ChangeNotifier {
     required String subscriptionId,
     required String serverId,
     required String sessionId,
+    PlanSummary? plan,
   }) {
     if (_serverId != serverId || _sessionId != sessionId) {
       _clearContent();
@@ -177,6 +245,10 @@ class InteractionsController extends ChangeNotifier {
     _questionReader.reset();
     _todosFresh = false;
     _questionsFresh = false;
+    _planFresh = false;
+    _planReading = false;
+    _planDirty = false;
+    _planSummary = plan;
     _loading.clear();
     _api = api;
     _subscriptionId = subscriptionId;
@@ -185,6 +257,7 @@ class InteractionsController extends ChangeNotifier {
     notifyListeners();
     if (_todosSupported) unawaited(_todoReader.request());
     if (_questionsSupported) unawaited(_questionReader.request());
+    if (_planSupported) unawaited(refreshPlan());
   }
 
   /// 订阅失效（断线、重新 attach 开始）：保留已加载内容但视为非最新，旧结果被隔离。
@@ -200,6 +273,13 @@ class InteractionsController extends ChangeNotifier {
       _errors[key] = noReceiptMessage;
     }
     _submitting.clear();
+    _planFresh = false;
+    _planReading = false;
+    _planDirty = false;
+    if (_planSubmitting) {
+      _planSubmitting = false;
+      _planError = planNoReceiptMessage;
+    }
     notifyListeners();
   }
 
@@ -219,6 +299,21 @@ class InteractionsController extends ChangeNotifier {
   void _clearContent() {
     _clearTodos();
     _clearQuestions();
+    _clearPlan();
+  }
+
+  void _clearPlan() {
+    _planSummary = null;
+    _plan = null;
+    _planFresh = false;
+    _planReading = false;
+    _planDirty = false;
+    _planLoadError = null;
+    _planSubmitting = false;
+    _planError = null;
+    _planNote = null;
+    _planOutcome = null;
+    _planDismissed = null;
   }
 
   void _clearTodos() {
@@ -244,7 +339,7 @@ class InteractionsController extends ChangeNotifier {
 
   // ——— 通知 ———
 
-  /// `todos.changed` / `questions.changed`：失效提示，不含数据；按 revision 重新读取。
+  /// `todos.changed` / `questions.changed` / `plan.changed`：失效提示，不含数据；按 revision 重新读取。
   void onNotification(String method, int? revision) {
     if (revision == null) return;
     switch (method) {
@@ -252,6 +347,8 @@ class InteractionsController extends ChangeNotifier {
         unawaited(_todoReader.request(hint: revision));
       case 'questions.changed' when _questionsSupported && connected:
         unawaited(_questionReader.request(hint: revision));
+      case 'plan.changed' when _planSupported && connected:
+        unawaited(refreshPlan());
     }
   }
 
@@ -265,6 +362,17 @@ class InteractionsController extends ChangeNotifier {
     final questions = status.questions;
     if (questions != null && _questionsSupported) {
       unawaited(_questionReader.request(hint: questions.revision));
+    }
+    final plan = status.plan;
+    if (plan != null && _planSupported) {
+      final old = _planSummary;
+      _planSummary = plan;
+      if (!_planFresh ||
+          old == null ||
+          old.revision != plan.revision ||
+          old.version != plan.version) {
+        unawaited(refreshPlan());
+      }
     }
   }
 
@@ -418,6 +526,201 @@ class InteractionsController extends ChangeNotifier {
       _drafts.remove(_keyOf(record));
     }
     notifyListeners();
+  }
+
+  // ——— 计划 ———
+
+  /// 按状态摘要里的版本读取计划记录；读取期间摘要变化会在本次结束后再读（有界）。
+  Future<void> refreshPlan() async {
+    if (!_planSupported || !connected) return;
+    if (_planReading) {
+      _planDirty = true;
+      return;
+    }
+    _planReading = true;
+    final epoch = _epoch;
+    try {
+      for (var attempt = 0; attempt < 4; attempt++) {
+        _planDirty = false;
+        await _readPlan();
+        if (epoch != _epoch || !_planDirty) break;
+      }
+    } finally {
+      if (epoch == _epoch) _planReading = false;
+    }
+  }
+
+  Future<void> _readPlan() async {
+    final api = _api;
+    final subscription = _subscriptionId;
+    final epoch = _epoch;
+    if (api == null || subscription == null) return;
+    final version = _planSummary?.version;
+    if (version == null) {
+      _plan = null;
+      _planFresh = true;
+      _planLoadError = null;
+      notifyListeners();
+      return;
+    }
+    try {
+      final record = PlanRecord.fromJson(
+        asJson(
+          await api.call('plan.get', <String, Object?>{
+            'subscriptionId': subscription,
+            'version': version,
+          }),
+        ),
+      );
+      if (epoch != _epoch) return;
+      // 摘要在读取期间已指向别的版本时丢弃，随后的再读会取新的。
+      if (record.version != _planSummary?.version) return;
+      _applyPlan(record);
+      _planFresh = true;
+      _planLoadError = null;
+      notifyListeners();
+    } catch (error) {
+      if (epoch != _epoch) return;
+      if (error is MobileApiException && error.code == 'not_found') {
+        _plan = null;
+        _planFresh = true;
+        _planLoadError = null;
+      } else {
+        _planLoadError = describeError(error);
+      }
+      notifyListeners();
+    }
+  }
+
+  void _applyPlan(PlanRecord record) {
+    final old = _plan;
+    // 已读到结算状态的记录不会被过期的“待批准”读取退回。
+    if (old != null &&
+        old.version == record.version &&
+        !old.awaiting &&
+        record.awaiting) {
+      return;
+    }
+    _plan = record;
+    if (_planOutcome?.version != record.version) {
+      _planOutcome = null;
+      _planNote = null;
+      _planError = null;
+    }
+  }
+
+  /// 用户关闭已结算的计划卡片。
+  void dismissPlan() {
+    final shown = planShown;
+    if (shown == null || shown.awaiting) return;
+    _planDismissed = shown.version;
+    notifyListeners();
+  }
+
+  /// 批准或要求修改；与普通聊天提交无关。只有收到回执才更新：
+  /// 无回执时不做乐观结果，保留反馈草稿并提示，由用户重连后明确重试，绝不自动重发。
+  Future<void> respondPlan(PlanRecord plan, PlanDecision decision) async {
+    final api = _api;
+    final subscription = _subscriptionId;
+    if (api == null ||
+        subscription == null ||
+        !_planSupported ||
+        !plan.awaiting ||
+        _planSubmitting) {
+      return;
+    }
+    if (decision is RevisePlan) {
+      final problem = feedbackProblem(decision.feedback);
+      if (problem != null) {
+        _planError = problem;
+        notifyListeners();
+        return;
+      }
+    }
+    final epoch = _epoch;
+    _planSubmitting = true;
+    _planError = null;
+    _planNote = null;
+    notifyListeners();
+    try {
+      final result = PlanRecord.fromJson(
+        asJson(
+          await api.call('plan.respond', <String, Object?>{
+            'subscriptionId': subscription,
+            'version': plan.version,
+            'decision': decision.toJson(),
+          }),
+        ),
+      );
+      if (epoch != _epoch) return;
+      final expected = decision is ApprovePlan
+          ? PlanStatus.approved
+          : PlanStatus.revisionRequested;
+      if (result.status != expected) {
+        _planNote = '其他设备已先处理，以下是实际结果。';
+      }
+      _plan = result;
+      _planOutcome = result;
+      _planFeedback.remove(_planKey(plan.version));
+      unawaited(refreshPlan());
+    } on MobileApiException catch (error) {
+      if (epoch != _epoch) return;
+      _planError = describeError(error);
+      if (error.code == 'rejected' || error.code == 'not_found') {
+        unawaited(refreshPlan());
+      }
+    } catch (error) {
+      if (epoch != _epoch) return;
+      _planError = error is RpcException
+          ? planNoReceiptMessage
+          : describeError(error);
+    } finally {
+      if (epoch == _epoch) {
+        _planSubmitting = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// 取消待批准的计划并退出 plan 模式（手机不能进入）。与 [respondPlan] 同样只认回执：
+  /// 无回执时不做乐观结果，由用户重连后明确重试；之后以服务端状态为准重新读取。
+  Future<void> exitPlan() async {
+    final api = _api;
+    final subscription = _subscriptionId;
+    if (api == null ||
+        subscription == null ||
+        !_planSupported ||
+        _planSubmitting) {
+      return;
+    }
+    final epoch = _epoch;
+    _planSubmitting = true;
+    _planError = null;
+    _planNote = null;
+    notifyListeners();
+    try {
+      await api.call('plan.exit', <String, Object?>{
+        'subscriptionId': subscription,
+      });
+      if (epoch != _epoch) return;
+      await refreshPlan();
+    } on MobileApiException catch (error) {
+      if (epoch != _epoch) return;
+      _planError = describeError(error);
+      if (error.code == 'rejected' || error.code == 'not_found') {
+        unawaited(refreshPlan());
+      }
+    } catch (error) {
+      if (epoch != _epoch) return;
+      _planError = error is RpcException
+          ? planNoReceiptMessage
+          : describeError(error);
+    } finally {
+      if (epoch == _epoch) {
+        _planSubmitting = false;
+        notifyListeners();
+      }
+    }
   }
 
   // ——— 回答 ———

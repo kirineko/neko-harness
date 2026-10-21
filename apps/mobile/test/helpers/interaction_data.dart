@@ -3,6 +3,9 @@ import 'fake_api.dart';
 /// hello 声明了待办与提问能力的新电脑。
 const List<String> kInteractionCaps = <String>['todos', 'questions'];
 
+/// hello 另外声明了计划能力的新电脑。
+const List<String> kPlanCaps = <String>['todos', 'questions', 'plan'];
+
 /// 与协议 fixtures 同形的待办条目。
 Map<String, dynamic> todoItem(String id, String text, String status) =>
     <String, dynamic>{'id': id, 'text': text, 'status': status};
@@ -82,6 +85,7 @@ Map<String, dynamic> questionListJson(
 Map<String, dynamic> snapshotWith({
   Map<String, dynamic>? todos,
   Map<String, dynamic>? questions,
+  Map<String, dynamic>? plan,
   bool busy = false,
   List<Map<String, dynamic>> items = const <Map<String, dynamic>>[],
 }) => <String, dynamic>{
@@ -91,4 +95,36 @@ Map<String, dynamic> snapshotWith({
   ], busy: busy),
   'todos': ?todos,
   'questions': ?questions,
+  'plan': ?plan,
+};
+
+/// `plan.get` / `plan.respond` 的完整记录（默认与 fixture 的“记住我”计划同形）。
+Map<String, dynamic> planJson({
+  String version = 'v-plan-1',
+  String title = '为登录页增加记住我开关',
+  List<String>? steps,
+  String note = '默认保持关闭，不改变现有会话时长。',
+  String status = 'awaiting_approval',
+  String? feedback,
+  int? settledAt,
+}) => <String, dynamic>{
+  'version': version,
+  'title': title,
+  'steps': steps ?? <String>['阅读登录表单与会话配置', '增加 rememberMe 字段', '补充单元测试并运行'],
+  'note': note,
+  'status': status,
+  'feedback': feedback,
+  'createdAt': 1730100000000,
+  'settledAt': settledAt,
+};
+
+/// 状态里的 `plan` 摘要。
+Map<String, dynamic> planSummaryJson({
+  int revision = 1,
+  bool pending = true,
+  String? version = 'v-plan-1',
+}) => <String, dynamic>{
+  'revision': revision,
+  'pending': pending,
+  'version': ?version,
 };

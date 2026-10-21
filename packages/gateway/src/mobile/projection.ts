@@ -259,6 +259,15 @@ export function mapStatus(view: ChatView, options: { readonly readonly?: boolean
 		...(view.questions === undefined
 			? {}
 			: { questions: { revision: view.questions.revision, pendingCount: view.questions.pending.length } }),
+		...(view.plan === undefined
+			? {}
+			: {
+					plan: {
+						revision: view.plan.revision,
+						pending: view.plan.current?.status === "awaiting_approval",
+						...(view.plan.current === null ? {} : { version: view.plan.current.version }),
+					},
+				}),
 		status: view.status,
 		usage: mapUsage(view.usage),
 		...(view.taskUsage === undefined ? {} : { taskUsage: mapUsage(view.taskUsage) }),

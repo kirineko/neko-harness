@@ -14,6 +14,12 @@ export type FooterStats = {
 	readonly questionCount?: number;
 	/** The question panel is open, so Esc closes it rather than stopping the run. */
 	readonly questionOpen?: boolean;
+	/** The session is in plan mode (read-only planning); shown first in the identity so narrow rows keep it. */
+	readonly planMode?: boolean;
+	/** A submitted plan waits for the user's decision. */
+	readonly planAwaiting?: boolean;
+	/** The plan panel is open, so Esc closes it rather than stopping the run. */
+	readonly planOpen?: boolean;
 	/** Compact todo progress such as `Todos 2/5`; omitted while the list is empty or unsupported. */
 	readonly todoProgress?: string;
 	readonly model: string;
@@ -82,6 +88,7 @@ export class StatusFooter implements Component {
 						: theme.ok(statusText);
 		const modelShort = modelDisplayName(s.model);
 		const identity: Array<{ text: string; slot: (t: string) => string }> = [
+			...(s.planMode ? [{ text: "PLAN", slot: theme.warning }] : []),
 			{ text: basename(s.cwd) || s.cwd, slot: theme.muted },
 			{ text: modelShort, slot: theme.model },
 			...(s.thinkingLevel ? [{ text: `Think ${s.thinkingLevel}`, slot: theme.dim }] : []),
@@ -114,16 +121,18 @@ export class StatusFooter implements Component {
 		const jobHint = s.jobCount && !this.panelOpen ? `Jobs ${s.jobCount}` : "";
 		const questionHint = s.questionCount ? `${s.questionCount} question${s.questionCount > 1 ? "s" : ""} waiting` : "";
 		const todoHint = s.todoProgress ?? "";
+		const planHint = s.planAwaiting ? "Plan awaiting approval, /plan to view" : "";
+		const dockOpen = s.questionOpen || s.planOpen;
 		const hints = this.panelOpen
 			? ""
-			: s.questionOpen
+			: dockOpen
 				? "Esc Close · Ctrl+C Stop"
 				: s.canAbort && !s.busy
 					? "Esc Stop"
 					: s.busy
 						? labels.busyHints
 						: labels.idleHints;
-		const compactHints = s.questionOpen
+		const compactHints = dockOpen
 			? "Esc Close · Ctrl+C Stop"
 			: s.canAbort && !s.busy
 				? "Esc Stop"
@@ -142,14 +151,14 @@ export class StatusFooter implements Component {
 		const shortEssentials = [shortContext, cost].filter(Boolean).join(" · ");
 		const minimalHints = this.panelOpen
 			? ""
-			: s.questionOpen
+			: dockOpen
 				? "Esc Close"
 				: s.canAbort || s.busy
 					? "Esc Stop"
 					: "/help Keys";
-		// A waiting question is blocking, so its count outlives every other hint when the row is short.
+		// A waiting question or plan is blocking, so it outlives every other hint when the row is short.
 		const joinHints = (metric: string, hint: string, todo = true) =>
-			[metric, questionHint, todo ? todoHint : "", agentHint, jobHint, hint].filter(Boolean).join(" · ");
+			[metric, questionHint, planHint, todo ? todoHint : "", agentHint, jobHint, hint].filter(Boolean).join(" · ");
 		const candidates = this.panelOpen
 			? [joinHints(essentials, hints), joinHints(shortEssentials, hints), joinHints("", hints, false)]
 			: [
@@ -161,7 +170,7 @@ export class StatusFooter implements Component {
 				];
 		const second =
 			candidates.find((line) => visibleWidth(line) <= space) ??
-			([questionHint, agentHint, jobHint].filter(Boolean).join(" · ") || minimalHints);
+			([questionHint, planHint, agentHint, jobHint].filter(Boolean).join(" · ") || minimalHints);
 		// Ctx 占比阈值配色:>90% error、>75% warning,否则随副行弱化。
 		// 分段着色,而非 dim 包裹后字符串替换(SGR [39m 会截断外层的 dim)。
 		const shownContext = second.includes(contextText) ? contextText : shortContext;

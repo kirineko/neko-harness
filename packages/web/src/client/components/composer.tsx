@@ -18,6 +18,7 @@ import { appActions } from "../lib/bootstrap";
 import { commandSuggestions, isCommandQuery } from "../lib/command-suggestions";
 import { fitHeight } from "../lib/composer-height";
 import { type HistoryBrowse, stepHistory } from "../lib/input-history";
+import { PLAN_MODE_LABEL, PLAN_UNSUPPORTED_TEXT, planCommandArgs, planErrorText, planState } from "../lib/plan-ui";
 import { providerIssue, providerName } from "../lib/providers";
 import { questionUi } from "../lib/question-ui";
 import { getState, storeActions, useNekoState } from "../lib/store";
@@ -390,10 +391,53 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			submitting.delete(props.sessionId);
 		}
 	};
+	const plan = planState({ view, phase, operating });
+	// Handled before any busy queueing: the command is never a message, never history, never sent to the model.
+	const togglePlan = async (args: string) => {
+		if (locked.current || props.disabled) return;
+		setError("");
+		setNote("");
+		if (args !== "") {
+			setNote("/plan 不接受参数；先切换到规划模式，再正常描述需求");
+			return;
+		}
+		if (props.sessionId.startsWith("none:")) {
+			setNote("请先开始会话，再切换规划模式");
+			return;
+		}
+		if (plan === null) {
+			setNote(PLAN_UNSUPPORTED_TEXT);
+			return;
+		}
+		if (props.busy) {
+			setNote("会话运行中，请先等待回答结束或停止后再切换规划模式");
+			return;
+		}
+		locked.current = true;
+		setPending(true);
+		const before = current.current;
+		try {
+			await appActions.planMode(props.sessionId, plan.mode === "plan" ? "normal" : "plan");
+			if (current.current === before && drafts.get(props.sessionId) === before && planCommandArgs(before.text) !== null)
+				update({ ...before, text: "", requestId: crypto.randomUUID() });
+			setMenu(false);
+		} catch (e) {
+			const text = planErrorText(e);
+			(text.startsWith("会话运行中") ? setNote : setError)(text);
+		} finally {
+			locked.current = false;
+			setPending(false);
+		}
+	};
 	const submit = async () => {
 		const instructions = compactInstructions(current.current.text);
 		if (instructions !== null) {
 			await compact(instructions);
+			return;
+		}
+		const planArgs = planCommandArgs(current.current.text);
+		if (planArgs !== null) {
+			await togglePlan(planArgs);
 			return;
 		}
 		const before = current.current;
@@ -450,7 +494,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			submitting.delete(props.sessionId);
 		}
 	};
-	const menuItems = commandSuggestions(draft.text, skills);
+	const menuItems = commandSuggestions(draft.text, skills, { plan: plan !== null });
 	const selectedCommand = Math.min(commandSelected, Math.max(0, menuItems.length - 1));
 	const acceptCommand = (index = selectedCommand) => {
 		const item = menuItems[index];
@@ -746,6 +790,15 @@ function SessionComposer(props: Props & { sessionId: string }) {
 									{compaction}
 								</span>
 							)}
+							{plan?.mode === "plan" && (
+								<span
+									data-plan-mode
+									className="max-w-full whitespace-nowrap rounded-full border border-sakura-300 bg-sakura-50 px-2 py-1 text-xs font-medium text-sakura-800"
+									title="只读调研并提交计划；批准后自动退出并开始执行。输入 /plan 可退出"
+								>
+									{PLAN_MODE_LABEL}
+								</span>
+							)}
 						</output>
 						<div className="ml-auto flex items-center gap-1">
 							{props.busy && props.status !== null && (
@@ -780,6 +833,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 									props.disabled ||
 									(!draft.text.trim() && !draft.files.length) ||
 									(compactInstructions(draft.text) === null &&
+										planCommandArgs(draft.text) === null &&
 										(missingKey || noVision || draft.files.some((a) => !!a.error || a.processing)))
 								}
 								onClick={() => void submit()}

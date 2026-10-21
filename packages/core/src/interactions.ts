@@ -25,6 +25,14 @@ export const QUESTION_LIMITS = {
 	recordBytes: 65_536,
 } as const;
 
+export const PLAN_LIMITS = {
+	titleChars: 120,
+	maxSteps: 30,
+	stepChars: 500,
+	noteChars: 4_000,
+	feedbackChars: 2_000,
+} as const;
+
 export const TODO_STATUSES = ["pending", "in_progress", "completed"] as const;
 export type TodoStatus = (typeof TODO_STATUSES)[number];
 export type TodoItem = { id: string; text: string; status: TodoStatus };
@@ -293,4 +301,55 @@ export function describeSettlement(record: QuestionRecord): string {
 		: record.status === "cancelled"
 			? "Cancelled"
 			: "Waiting for your answer";
+}
+
+export type PlanMode = "normal" | "plan";
+export type PlanStatus = "awaiting_approval" | "approved" | "revision_requested" | "superseded" | "cancelled";
+export type PlanArgs = { title: string; steps: string[]; note: string };
+export type PlanDecision = { kind: "approve" } | { kind: "revise"; feedback: string };
+
+/** What frontends hold for one submitted plan: identity, version, the full text and the final decision. */
+export type PlanRecord = {
+	/** Fixed when the plan is submitted; a decision must carry it. */
+	version: string;
+	title: string;
+	steps: string[];
+	note: string;
+	status: PlanStatus;
+	feedback: string | null;
+	createdAt: number;
+	settledAt: number | null;
+};
+/** `current` is the newest plan of the session, whatever its status; null before the first submission. */
+export type PlanView = { mode: PlanMode; revision: number; current: PlanRecord | null };
+
+/** Validate `submit_plan` arguments; steps are kept verbatim and never truncated. */
+export function validatePlanArgs(input: unknown): PlanArgs {
+	if (!isRecord(input)) return fail("Plan arguments must be an object.");
+	exactKeys(input, ["title", "steps", "note"], "Plan");
+	const title = text(input.title, "title", PLAN_LIMITS.titleChars);
+	if (!Array.isArray(input.steps)) return fail("steps must be an array.");
+	if (input.steps.length < 1) fail("A plan needs at least one step.");
+	if (input.steps.length > PLAN_LIMITS.maxSteps) fail(`Too many steps (limit ${PLAN_LIMITS.maxSteps}).`);
+	const steps = input.steps.map((step, index) => text(step, `steps[${index}]`, PLAN_LIMITS.stepChars));
+	let note = "";
+	if (input.note !== undefined) {
+		if (typeof input.note !== "string") fail("note must be a string.");
+		const value = input.note as string;
+		if (value.length > PLAN_LIMITS.noteChars) fail(`note is too long (limit ${PLAN_LIMITS.noteChars} characters).`);
+		if (!blank(value)) note = value;
+	}
+	return { title, steps, note };
+}
+
+/** Validate a user's decision on a plan. */
+export function validatePlanDecision(input: unknown): PlanDecision {
+	if (!isRecord(input)) return fail("Decision must be an object.");
+	if (input.kind === "approve") {
+		exactKeys(input, ["kind"], "Decision");
+		return { kind: "approve" };
+	}
+	if (input.kind !== "revise") return fail('Decision kind must be "approve" or "revise".');
+	exactKeys(input, ["kind", "feedback"], "Decision");
+	return { kind: "revise", feedback: text(input.feedback, "feedback", PLAN_LIMITS.feedbackChars) };
 }

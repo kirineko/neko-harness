@@ -1,0 +1,13 @@
+{
+	"description": "plan.respond 请求：批准或要求修改（不是聊天输入，不进入排队）。decision 为 {kind:\"approve\"} 或 {kind:\"revise\", feedback}（反馈 1..2000 个 UTF-16 码元）；version 取自计划记录。手机不能进入 plan 模式；退出用 plan.exit。",
+	"message": {
+		"jsonrpc": "2.0",
+		"id": 52,
+		"method": "plan.respond",
+		"params": {
+			"subscriptionId": "chat-1a2b3c4d-1",
+			"version": "b7e2a9c4-51d8-4c3a-8f60-2d9e7a1c0b34",
+			"decision": { "kind": "revise", "feedback": "第二步先不要改 cookie，只加开关和测试" }
+		}
+	}
+}

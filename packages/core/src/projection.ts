@@ -6,7 +6,7 @@ import type { ImageMetadata } from "./image-metadata.ts";
 import { type DefaultImagePrompt, savedDefaultImagePrompt } from "./image-prompt.ts";
 import type { ImageInfo } from "./images.ts";
 import { type InputData, NekoInput } from "./input.ts";
-import type { QuestionList, TodoList } from "./interactions.ts";
+import type { PlanView, QuestionList, TodoList } from "./interactions.ts";
 import type { JobSummary } from "./jobs.ts";
 import { projectQueued, type QueuedInput } from "./queued.ts";
 import type { NekoModelInfo, NekoModelRef } from "./runtime.ts";
@@ -48,6 +48,8 @@ export type ChatView = {
 	changes?: ChangeSummary;
 	/** Questions waiting for the user (bounded summaries); absent on a gateway without ask_user. */
 	questions?: QuestionList;
+	/** Plan mode and the newest plan; absent on a gateway without plan mode. */
+	plan?: PlanView;
 	rounds?: Delegation[];
 	taskUsage?: UsageTotals;
 	/** Latest successful answer in the active context; unknown after compaction until a new answer. */
@@ -134,7 +136,15 @@ export type ChatItem = { order?: number } & (
 			/** Structured state of `todo` / `ask_user` calls, from the persisted tool details; never parsed from text. */
 			interaction?: ToolInteraction;
 	  }
-	| { type: "system"; key: string; id: number; text: string; jobId?: string }
+	| {
+			type: "system";
+			key: string;
+			id: number;
+			text: string;
+			jobId?: string;
+			/** Set on the record of a plan decision (approved / changes requested). */
+			planDecision?: { version: string; kind: "approve" | "revise" };
+	  }
 );
 
 /** What a todo or ask_user call shows in history: its question and settlement, or its resulting list progress. */
@@ -150,7 +160,8 @@ export type ToolInteraction =
 			labels?: string[];
 			text?: string | null;
 	  }
-	| { kind: "todo"; action: "list" | "replace"; revision: number; completed: number; total: number };
+	| { kind: "todo"; action: "list" | "replace"; revision: number; completed: number; total: number }
+	| { kind: "submit_plan"; version: string; title: string; steps: string[]; note: string };
 
 /** 正在生成的一轮（live.generation.message + live.tools 的合并投影）。 */
 export type StreamingView = {
@@ -215,6 +226,13 @@ export function toolInteraction(name: string, details: unknown): ToolInteraction
 			? { kind: "todo", action, revision, completed, total }
 			: undefined;
 	}
+	if (name === "submit_plan") {
+		const { version, title, note } = details;
+		const steps = strings(details.steps);
+		return typeof version === "string" && typeof title === "string" && typeof note === "string" && steps
+			? { kind: "submit_plan", version, title, steps, note }
+			: undefined;
+	}
 	if (name !== "ask_user") return undefined;
 	const { id, question, multiple, options, status } = details;
 	if (
@@ -274,6 +292,13 @@ export function summarizeToolCall(name: string, args: unknown): ToolSummary {
 			return {
 				args: truncateMiddle(question.replace(/\s+/g, " "), 100),
 				detail: [question, ...(lines.length ? ["", ...lines] : [])].join("\n"),
+			};
+		}
+		case "submit_plan": {
+			const steps = strings(record.steps) ?? [];
+			return {
+				args: truncateMiddle(String(record.title ?? "").replace(/\s+/g, " "), 100),
+				detail: steps.map((step, index) => `${index + 1}. ${step}`).join("\n"),
 			};
 		}
 		case "subagent":
@@ -496,6 +521,21 @@ export function projectChatView(
 	for (const entry of view.entries) {
 		const message = entry.model?.[0];
 		const jobReport = entry.kind === NekoInput.kind ? (entry.data as InputData | undefined)?.jobReport : undefined;
+		const planDecision =
+			entry.kind === NekoInput.kind ? (entry.data as InputData | undefined)?.planDecision : undefined;
+		if (message?.role === "user" && planDecision) {
+			items.push({
+				type: "system",
+				key: `e${entry.id}`,
+				id: entry.id,
+				text:
+					planDecision.kind === "approve"
+						? `Plan approved: ${planDecision.title}`
+						: `Changes requested for plan "${planDecision.title}": ${planDecision.feedback ?? ""}`,
+				planDecision: { version: planDecision.version, kind: planDecision.kind },
+			});
+			continue;
+		}
 		if (message?.role === "user" && jobReport) {
 			// A background job report is a system notice, not something the user typed.
 			items.push({

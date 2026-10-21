@@ -39,6 +39,7 @@ class SessionSummary {
     required this.lastUsedAt,
     this.lastMessageAt,
     this.awaitingAnswer,
+    this.awaitingPlan,
   });
 
   factory SessionSummary.fromJson(Json json) => SessionSummary(
@@ -50,6 +51,9 @@ class SessionSummary {
     lastMessageAt: _intOrNull(json['lastMessageAt']),
     awaitingAnswer: json['awaitingAnswer'] is bool
         ? json['awaitingAnswer'] as bool
+        : null,
+    awaitingPlan: json['awaitingPlan'] is bool
+        ? json['awaitingPlan'] as bool
         : null,
   );
 
@@ -66,6 +70,11 @@ class SessionSummary {
   final bool? awaitingAnswer;
 
   bool get waitingForAnswer => awaitingAnswer == true;
+
+  /// 空闲会话有已提交的计划等待批准；缺省表示电脑端无法判断，列表不显示任何标记。
+  final bool? awaitingPlan;
+
+  bool get waitingForPlan => awaitingPlan == true;
 
   /// 列表排序与展示用的时间：最近消息时间（无消息为创建时间），由服务端决定顺序。
   int get messageAt => lastMessageAt ?? lastUsedAt;
@@ -266,6 +275,82 @@ class QuestionsSummary {
 
   final int revision;
   final int pendingCount;
+}
+
+/// 状态里的计划摘要；缺省表示电脑端不支持，`pending == false` 表示支持但没有待批准计划。
+class PlanSummary {
+  const PlanSummary({
+    required this.revision,
+    required this.pending,
+    this.version,
+  });
+
+  factory PlanSummary.fromJson(Json json) => PlanSummary(
+    revision: _int(json['revision']),
+    pending: _bool(json['pending']),
+    version: _strOrNull(json['version']),
+  );
+
+  final int revision;
+  final bool pending;
+
+  /// 最新计划的版本（待批准时即该计划）；首个计划出现前为空。
+  final String? version;
+}
+
+enum PlanStatus {
+  awaitingApproval,
+  approved,
+  revisionRequested,
+  superseded,
+  cancelled,
+}
+
+PlanStatus _planStatus(Object? value) => switch (value) {
+  'awaiting_approval' => PlanStatus.awaitingApproval,
+  'approved' => PlanStatus.approved,
+  'revision_requested' => PlanStatus.revisionRequested,
+  'superseded' => PlanStatus.superseded,
+  // 未知终态按已取消处理：不暴露任何无法提交的控件。
+  _ => PlanStatus.cancelled,
+};
+
+/// 一份计划的完整持久记录（`plan.get` / `plan.respond` 的结果），全部按纯文本显示。
+class PlanRecord {
+  const PlanRecord({
+    required this.version,
+    required this.title,
+    required this.steps,
+    required this.note,
+    required this.status,
+    required this.createdAt,
+    this.feedback,
+    this.settledAt,
+  });
+
+  factory PlanRecord.fromJson(Json json) => PlanRecord(
+    version: _str(json['version']),
+    title: _str(json['title']),
+    steps: json['steps'] is List
+        ? (json['steps'] as List).whereType<String>().toList()
+        : <String>[],
+    note: _str(json['note']),
+    status: _planStatus(json['status']),
+    feedback: _strOrNull(json['feedback']),
+    createdAt: _int(json['createdAt']),
+    settledAt: _intOrNull(json['settledAt']),
+  );
+
+  final String version;
+  final String title;
+  final List<String> steps;
+  final String note;
+  final PlanStatus status;
+  final String? feedback;
+  final int createdAt;
+  final int? settledAt;
+
+  bool get awaiting => status == PlanStatus.awaitingApproval;
 }
 
 enum QuestionStatus { pending, answered, skipped, cancelled }
@@ -681,6 +766,7 @@ class ChatStatus {
     this.readonly = false,
     this.todos,
     this.questions,
+    this.plan,
   });
 
   factory ChatStatus.fromJson(Json json) {
@@ -709,6 +795,9 @@ class ChatStatus {
       questions: json['questions'] is Map
           ? QuestionsSummary.fromJson(_map(json['questions']))
           : null,
+      plan: json['plan'] is Map
+          ? PlanSummary.fromJson(_map(json['plan']))
+          : null,
     );
   }
 
@@ -732,6 +821,9 @@ class ChatStatus {
 
   /// 缺省表示电脑端不支持提问；`pendingCount == 0` 表示支持但没有未决问题。
   final QuestionsSummary? questions;
+
+  /// 缺省表示电脑端不支持计划；`pending == false` 表示支持但没有待批准计划。
+  final PlanSummary? plan;
 }
 
 class StreamingToolCall {

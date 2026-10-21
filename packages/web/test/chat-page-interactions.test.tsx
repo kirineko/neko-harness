@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import type { QuestionRecord } from "@neko-harness/core/interactions";
 import { JSDOM } from "jsdom";
 import * as React from "react";
-import { chatView, question } from "./support/interaction-fixtures.ts";
+import { chatView, plan, question } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html><head><title>neko.harness</title></head><body></body></html>", {
 	url: "http://localhost/",
@@ -425,4 +425,123 @@ it("queues chat typed while a question waits and never reuses it as the answer",
 	expect(submits.map((args) => args[0])).toEqual(["actually use mysql"]);
 	expect(responds).toHaveLength(0);
 	expect(card(host)).not.toBeNull();
+});
+
+const planItem = (version: string) => ({
+	type: "tool" as const,
+	key: `plan-${version}`,
+	callId: `call-plan-${version}`,
+	name: "submit_plan",
+	summary: "ignored summary",
+	detail: null,
+	phase: "done" as const,
+	isError: false,
+	output: null,
+	result: "Plan submitted. FREE TEXT THAT MUST NOT BE PARSED",
+	durationMs: 5,
+	note: null,
+	diff: null,
+	diffAdded: null,
+	diffRemoved: null,
+	interaction: {
+		kind: "submit_plan" as const,
+		version,
+		title: "Add a cache layer",
+		steps: ["Read", "Write"],
+		note: "",
+	},
+});
+
+it("places the plan card in the attention stack after the question card and before the composer", async () => {
+	const q = question();
+	records.set(7, q);
+	connect({ busy: false, questions: [q], plan: { mode: "plan", current: plan() } });
+	const host = await mount();
+	const stack = host.querySelector<HTMLElement>("[data-attention-stack]")!;
+	const planCard = host.querySelector<HTMLElement>("[data-plan-card]")!;
+	const composer = host.querySelector('section[aria-label="消息输入"]')!;
+	expect(stack.contains(planCard)).toBe(true);
+	expect(before(card(host)!, planCard)).toBe(true);
+	expect(before(stack, composer)).toBe(true);
+	expect(host.querySelector("[data-plan-mode]")!.textContent).toBe("规划模式（只读）");
+});
+
+it("renders submit_plan as a read-only history row and a plan decision as a system notice", async () => {
+	connect({
+		busy: false,
+		plan: { mode: "normal", current: plan({ status: "approved" }) },
+		items: [
+			planItem("p1"),
+			planItem("old"),
+			{
+				type: "system",
+				key: "sys-1",
+				id: 9,
+				text: "Plan approved: Add a cache layer",
+				planDecision: { version: "p1", kind: "approve" },
+			},
+		] as never,
+	});
+	const host = await mount();
+	const rows = [...host.querySelectorAll<HTMLElement>("[data-plan-row]")];
+	expect(rows).toHaveLength(2);
+	expect(rows[0]!.dataset.status).toBe("approved");
+	expect(rows[0]!.textContent).toContain("Add a cache layer");
+	expect([...rows[0]!.querySelectorAll("li")].map((li) => li.textContent?.trim())).toEqual(["Read", "Write"]);
+	expect(rows[0]!.querySelector("button")).toBeNull();
+	expect(rows[1]!.dataset.status).toBeUndefined();
+	expect(host.querySelector("[data-plan-decision]")!.textContent).toBe("Plan approved: Add a cache layer");
+	expect(host.querySelector("[data-plan-card]")).toBeNull();
+});
+
+it("labels sessions waiting for plan approval and keeps the answer label distinct", async () => {
+	connect({}, [
+		sessionSummary("self", { status: "idle", awaitingPlan: true }),
+		sessionSummary("other", { status: "idle", awaitingPlan: true, awaitingAnswer: true }),
+		sessionSummary("quiet", { status: "idle", awaitingPlan: false }),
+		sessionSummary("legacy", { status: "idle" }),
+	]);
+	const host = await mount();
+	const meta = Object.fromEntries(
+		[...host.querySelectorAll(".session-copy")].map((copy) => [
+			copy.querySelector(".truncate")!.textContent,
+			copy.querySelector(".session-meta")!,
+		]),
+	);
+	const waitingPlan = Object.values(meta).filter((el) => el.textContent?.includes("等待批准"));
+	expect(waitingPlan).toHaveLength(1);
+	expect(waitingPlan[0]!.className).toContain("font-semibold");
+	expect(meta.other!.textContent).toContain("等待回答");
+	expect(meta.other!.textContent).not.toContain("等待批准");
+	expect(meta.quiet!.className).not.toContain("font-semibold");
+	expect(meta.legacy!.textContent).not.toContain("等待");
+});
+
+it("prefixes the tab title for a waiting plan only while hidden, and restores it after", async () => {
+	let hidden = false;
+	Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+	const setHidden = (value: boolean) =>
+		act(async () => {
+			hidden = value;
+			document.dispatchEvent(new dom.window.Event("visibilitychange"));
+		});
+	connect({ busy: false, plan: { mode: "plan", current: plan() } });
+	await mount();
+	expect(document.title).toBe("neko.harness");
+	await setHidden(true);
+	expect(document.title).toBe("等待批准 · neko.harness");
+	await setHidden(false);
+	expect(document.title).toBe("neko.harness");
+	await setHidden(true);
+	await act(async () =>
+		storeActions.setView(chatView({ busy: false, plan: { current: plan({ status: "approved" }) } })),
+	);
+	expect(document.title).toBe("neko.harness");
+	await act(async () =>
+		storeActions.setView(chatView({ busy: false, plan: { mode: "plan", current: plan({ version: "p2" }) } })),
+	);
+	expect(document.title).toBe("等待批准 · neko.harness");
+	await act(async () => storeActions.setView(chatView({ busy: false })));
+	expect(document.title).toBe("neko.harness");
+	Reflect.deleteProperty(document, "hidden");
 });

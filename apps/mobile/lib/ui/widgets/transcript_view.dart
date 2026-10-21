@@ -628,7 +628,7 @@ class _ToolCardState extends State<ToolCard> {
 /// `ask_user` / `todo` 工具项的标题；状态来自结构化 `interaction`，不解析 result 文案。
 String interactionTitle(ToolInteraction interaction) => switch (interaction) {
   AskUserInteraction() => '助手提问',
-  TodoInteraction() => '待办',
+  TodoInteraction() => 'todo',
 };
 
 String _answerLine(AskUserInteraction ask) {
@@ -657,7 +657,7 @@ String interactionSummary(ToolInteraction interaction) {
         if (answer.isNotEmpty) answer,
       ].join(' · ');
     case TodoInteraction():
-      return '${interaction.action == 'replace' ? '更新待办' : '读取待办'}'
+      return '${interaction.action == 'replace' ? '更新 todo' : '读取 todo'}'
           ' · 已完成 ${interaction.completed}/${interaction.total}'
           '（修订 ${interaction.revision}）';
   }

@@ -44,6 +44,8 @@ export type FocusState = {
 	approvalFocused: boolean;
 	sessionOperation: boolean;
 	queueSelecting: boolean;
+	/** The plan panel owns the keys. */
+	planOpen?: boolean;
 };
 
 /**
@@ -58,7 +60,8 @@ export const canAutoOpen = (focus: FocusState): boolean =>
 	!focus.overlayOpen &&
 	!focus.approvalFocused &&
 	!focus.sessionOperation &&
-	!focus.queueSelecting;
+	!focus.queueSelecting &&
+	!focus.planOpen;
 
 type Zone = "list" | "text";
 type State = { draft: QuestionDraft; cursor: number; zone: Zone; input: Input };

@@ -10,6 +10,7 @@
 				"busy": true,
 				"todos": { "revision": 4, "count": 3, "completed": 1 },
 				"questions": { "revision": 5, "pendingCount": 1 },
+				"plan": { "revision": 3, "pending": true, "version": "b7e2a9c4-51d8-4c3a-8f60-2d9e7a1c0b34" },
 				"status": "运行 bash…",
 				"usage": {
 					"input": 12040,

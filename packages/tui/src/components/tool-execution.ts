@@ -1,5 +1,6 @@
 import { Box, Container, MouseRegion, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { ToolInteraction } from "@neko-harness/core";
+import type { PlanStatus } from "@neko-harness/core/interactions";
 import { plainLine, plainText } from "../plain-text.ts";
 import { getActiveThemeMode, theme } from "../theme/index.ts";
 import { languageForPath } from "../theme/syntax.ts";
@@ -103,6 +104,7 @@ export class ToolExecutionComponent extends Container {
 	#state: ToolCardState;
 	#expanded = false;
 	#waiting = false;
+	#plan: { version: string; status: PlanStatus } | undefined;
 	onOpen: (() => void) | undefined;
 	#box: Box;
 	#text: Text;
@@ -145,6 +147,19 @@ export class ToolExecutionComponent extends Container {
 		this.rebuild();
 	}
 
+	/** The `submit_plan` card's version, to match it against the session's current plan. */
+	get planVersion(): string | undefined {
+		const interaction = this.#state.interaction;
+		return interaction?.kind === "submit_plan" ? interaction.version : undefined;
+	}
+
+	/** What became of the session's newest plan; cards of older plans pass `undefined`. */
+	setPlan(plan: { version: string; status: PlanStatus } | undefined): void {
+		if (plan?.version === this.#plan?.version && plan?.status === this.#plan?.status) return;
+		this.#plan = plan;
+		this.rebuild();
+	}
+
 	#onClick(event: TuiMouseEvent): { handled: boolean } | undefined {
 		if (event.type !== "click" || event.button !== "left") return undefined;
 		if (this.onOpen) this.onOpen();
@@ -167,6 +182,14 @@ export class ToolExecutionComponent extends Container {
 			}
 			return interaction.status === "skipped" ? theme.muted("↷ Skipped") : theme.dim("✗ Cancelled");
 		}
+		if (interaction?.kind === "submit_plan") {
+			const status = this.#plan?.version === interaction.version ? this.#plan.status : undefined;
+			if (status === "awaiting_approval") return theme.warning("? Awaiting approval · /plan");
+			if (status === "approved") return theme.ok("✓ Approved");
+			if (status === "revision_requested") return theme.muted("↷ Changes requested");
+			if (status === "cancelled") return theme.dim("✗ Cancelled");
+			return theme.dim(status === "superseded" ? "Superseded" : "Plan submitted");
+		}
 		if (interaction?.kind === "todo") return theme.ok(`✓ Todos ${interaction.completed}/${interaction.total}`);
 		if (this.#waiting && phase !== "done") return theme.warning("? Waiting for your answer");
 		if (phase === "pending") return theme.dim("…");
@@ -178,8 +201,8 @@ export class ToolExecutionComponent extends Container {
 
 	rebuild(): void {
 		const state = this.#state;
-		// Question and todo text comes from the model: show it as plain text, never as terminal control.
-		const plain = state.name === "ask_user" || state.name === "todo";
+		// Question, todo and plan text comes from the model: show it as plain text, never as terminal control.
+		const plain = state.name === "ask_user" || state.name === "todo" || state.name === "submit_plan";
 		const parts = [
 			`${theme.toolTitle(`⚡ ${state.name}`)}`,
 			theme.dim((plain ? plainLine(state.summary) : state.summary) + diffCountSuffix(state)),

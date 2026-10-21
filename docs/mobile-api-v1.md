@@ -17,7 +17,7 @@
 
 - 参数：`{ apiVersions: number[], app: { version, platform, build } }`。产品 `app.version` 差异不拒绝；只按 `apiVersions` 与服务端 `[1]` 取交集。
 - 结果：`{ apiVersion, serverId, serverName, gatewayVersion, capabilities, limits }`。
-  `capabilities` 为 `["workspaces","sessions","chat","subagents","approvals","media","todos","questions"]`（`todos` / `questions` 为增量能力，API 版本仍为 1；新 App 连接缺少它们的旧电脑时隐藏对应入口，旧 App 忽略它们）；`limits` 精确为
+  `capabilities` 为 `["workspaces","sessions","chat","subagents","approvals","media","todos","questions","plan"]`（`todos` / `questions` / `plan` 为增量能力，API 版本仍为 1；新 App 连接缺少它们的旧电脑时隐藏对应入口，旧 App 忽略它们）；`limits` 精确为
   `maxFrameBytes=262144`、`maxPayloadBytes=131072`、`pageItems=50`、`chunkBytes=65536`、
   `maxConcurrentRequests=8`、`maxSendBufferBytes=2097152`。
 - 无交集：error `data = { code: "incompatible", needs: "app" | "computer" }`。
@@ -55,7 +55,7 @@
 - `sessions.list { workspace, query?, cursor? } → { sessions, nextCursor? }`
   （`sessions-list-request.json` / `sessions-list-result.json`）：按工作区过滤、按最近消息时间倒序（无消息时用创建时间，同值按会话 ID 倒序，与 Web 一致；仅打开/attach 不改变顺序）、
   每页 ≤ `pageItems`、`query` 搜索标题/首条预览；`cwd` 必须是已登记工作区（未知工作区拒绝为 `invalid_params`，不落回启动目录）。
-- 会话摘要 `{ id, workspace, title, preview, lastUsedAt, lastMessageAt, archived, awaitingAnswer? }`：`lastMessageAt` 为排序/展示用的最近消息时间（无消息时 = 创建时间）；`lastUsedAt` 为最近使用（含打开）时间，仅作回退。`lastMessageAt` 是 v1 内的新增字段：旧 App 忽略它，新 App 连接缺少该字段的旧网关时回退为 `lastUsedAt`。`awaitingAnswer`（可选，声明 `questions` 能力时出现）为真表示该会话有问题在等用户回答，列表应显示「等待回答」而非「运行中」；缺省表示电脑端无法判断，App 不应推测。
+- 会话摘要 `{ id, workspace, title, preview, lastUsedAt, lastMessageAt, archived, awaitingAnswer? }`：`lastMessageAt` 为排序/展示用的最近消息时间（无消息时 = 创建时间）；`lastUsedAt` 为最近使用（含打开）时间，仅作回退。`lastMessageAt` 是 v1 内的新增字段：旧 App 忽略它，新 App 连接缺少该字段的旧网关时回退为 `lastUsedAt`。`awaitingAnswer`（可选，声明 `questions` 能力时出现）为真表示该会话有问题在等用户回答，列表应显示「等待回答」而非「运行中」；缺省表示电脑端无法判断，App 不应推测。`awaitingPlan`（可选，声明 `plan` 能力时出现）为真表示该会话（空闲）有已提交的计划等待批准，列表应显示「等待批准」；缺省同样表示无法判断。
 - `sessions.create { workspace } → session`（`sessions-create-request.json` / `sessions-create-result.json`）：新会话用电脑默认模型。
 - 通知 `sessions.changed { revision }`（`sessions-changed-notification.json`）。
 
@@ -106,6 +106,15 @@
 - `questions.get { subscriptionId, id } → question`（`questions-get-*.json`）：完整记录 `{ id, callId, version, question, multiple, options[{ id, label, description?, recommended? }], status: pending|answered|skipped|cancelled, answer: { optionIds, text } | null, createdAt, settledAt }`。问题与选项为纯文本，`recommended` 仅是提示（不预选）。限制：问题 ≤ 2000、选项 ≤ 12 个、选项 id ≤ 64 / 标签 ≤ 200 / 说明 ≤ 500、自由文字 ≤ 4000 个 UTF-16 码元，问题参数与回答参数各自 JSON ≤ 16 KiB；单题记录远小于 `maxPayloadBytes`，不会被截断。不属于该订阅会话的 `id` → `not_found`。
 - `questions.respond { subscriptionId, id, version, response } → question`（`questions-respond-*.json`）：`response` 为 `{ kind: "answer", optionIds?, text? }`（选项与文字至少其一；单选至多一个选项；`optionIds` 返回时按选项顺序）或 `{ kind: "skip" }`。这不是聊天输入：不进入排队与输入历史，工具从原调用继续。第一次有效结算为准；他端已结算、回执丢失后重试、或停止后迟到的请求，得到的是已保存的终态记录（`answered` / `skipped` / `cancelled`）及实际答案，不覆盖。版本不符、非法选项/文字、他会话的问题 → `rejected`（附原因）；参数形状错误 → `invalid_params`；旧订阅 → `gone`。
 - 通知 `todos.changed { subscriptionId, revision }`、`questions.changed { subscriptionId, revision }`：失效提示，不含数据。收到后重新调用 `todos.get` / `questions.list`（需要时再 `questions.get`），只接受 revision 不低于已持有的结果；查询期间收到更高的 revision 要再读一次。attach 快照里的 revision 与状态同步取得，之后的变化一定会有通知；重连后重新 attach 并查询，不依赖通知重放。
+
+### plan
+
+能力 `plan`（声明后才可调用；缺失时 App 隐藏入口，不推测）。`chat.attach` 快照与 `chat.patch` 的状态里携带可选摘要 `plan: { revision, pending, version? }`（缺省 = 电脑端不支持；存在且 `pending: false` = 支持但没有待批准计划）；`version` 是最新计划的版本（待批准时即该计划），首个计划出现前缺省。工具历史项 `tool.interaction` 对 `submit_plan` 调用带 `{ kind: "submit_plan", version, title, steps, note }`。手机可以查看与决定计划，也可以用 `plan.exit` 取消计划并退出 plan 模式，但**不能进入** plan 模式（没有 `plan.enter` / `plan.mode` 等方法，一律 `not_found`）。
+
+- `plan.get { subscriptionId, version } → plan`（`plan-get-*.json`）：`{ version, title, steps, note, status: awaiting_approval|approved|revision_requested|superseded|cancelled, feedback: string | null, createdAt, settledAt }`，文本字段；`title` 与 `feedback` 按纯文本显示，`steps` 与 `note` 是 Markdown（客户端不渲染 HTML、不开链接、不加载远程图片）；标题 ≤ 120、步骤 ≤ 30 条且每条 ≤ 500、说明 ≤ 4000、反馈 ≤ 2000 个 UTF-16 码元。不属于该订阅会话的版本 → `not_found`。未知 `status` 按已结算处理。
+- `plan.respond { subscriptionId, version, decision } → plan`（`plan-respond-*.json`）：`decision` 为 `{ kind: "approve" }`（会话退出 plan 模式并自动开始执行）或 `{ kind: "revise", feedback }`（反馈 1..2000，会话留在 plan 模式）。这不是聊天输入：不进入排队。第一次有效决定为准；他端已决定、回执丢失后重试、或停止后迟到的请求，得到的是已保存的记录（`approved` / `revision_requested` / `superseded` / `cancelled`）及实际反馈，不覆盖。版本不符或不属于该会话、会话正在运行 → `rejected`（附原因）；参数形状错误（含空反馈、超长反馈、多余字段）→ `invalid_params`；旧订阅 → `gone`。
+- `plan.exit { subscriptionId } → { mode: "normal", revision }`（`plan-exit-*.json`）：退出 plan 模式；若有待批准的计划，其状态置为 `cancelled`。幂等：已是普通模式时同样成功。`revision` 是此刻的计划摘要 revision，`plan.changed` 与 `chat.patch` 的 `plan` 摘要随后更新。会话正在运行 → `rejected`；旧订阅 → `gone`；参数形状错误 → `invalid_params`。
+- 通知 `plan.changed { subscriptionId, revision }`（`plan-changed-notification.json`）：失效提示，不含数据。计划出现、被决定、被取代或取消时发出；`chat.patch` 的状态里的 `plan` 摘要同步更新，App 据 `version` 重新调用 `plan.get`，只接受 revision 不低于已持有的结果。attach 快照里的 revision 与状态同步取得，重连后重新 attach，不依赖通知重放。
 - 断线、关闭 sheet、detach 都不会结算问题；停止运行或归档会话会使问题 `cancelled`。App 不得在重连后自动重发答案。
 
 ### media

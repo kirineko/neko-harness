@@ -63,8 +63,13 @@ export const QUESTION_STATUS_LABEL: Record<QuestionStatus, string> = {
 };
 
 /** Suffix of a session row: a question waiting for the user replaces "运行中"; absent `awaitingAnswer` = unsupported. */
-export function sessionStatusText(session: { status: "idle" | "running" | "error"; awaitingAnswer?: boolean }): string {
+export function sessionStatusText(session: {
+	status: "idle" | "running" | "error";
+	awaitingAnswer?: boolean;
+	awaitingPlan?: boolean;
+}): string {
 	if (session.awaitingAnswer === true) return " · 等待回答";
+	if (session.awaitingPlan === true) return " · 等待批准";
 	return session.status === "running" ? " · 运行中" : session.status === "error" ? " · 出错" : "";
 }
 

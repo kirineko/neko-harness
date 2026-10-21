@@ -70,9 +70,29 @@ import { ImageDetails } from "./image-metadata.ts";
 import { addDefaultImagePrompt } from "./image-prompt.ts";
 import { imagePrompt, prepareInput } from "./images.ts";
 import { type InputData, NekoInput } from "./input.ts";
-import type { QuestionList, QuestionRecord, QuestionResponse, TodoList } from "./interactions.ts";
+import {
+	type PlanDecision,
+	type PlanMode,
+	type PlanRecord,
+	type PlanView,
+	type QuestionList,
+	type QuestionRecord,
+	type QuestionResponse,
+	type TodoList,
+	validatePlanDecision,
+} from "./interactions.ts";
 import { JobManager } from "./job-engine.ts";
 import { type JobOutputRead, type JobSummary, JobsDoc, summarizeJobRecord } from "./jobs.ts";
+import {
+	agentInPlanMode,
+	approvedPlanPrompt,
+	createPlanExtension,
+	PLAN_BUSY,
+	PlanService,
+	planAgentChange,
+	planRevisionPrompt,
+} from "./plan.ts";
+import type { PlanItem } from "./plan-doc.ts";
 import { totalUsage } from "./projection.ts";
 import { expandSkillCommand } from "./prompt/invoke.ts";
 import { createNekoPrompt } from "./prompt/prompt.ts";
@@ -230,6 +250,17 @@ export type NekoSession = {
 	question(id: number): Promise<QuestionRecord | undefined>;
 	/** Answer or skip a question; the first valid decision wins and later calls return it unchanged. */
 	respondQuestion(id: number, version: string, response: QuestionResponse): Promise<QuestionRecord>;
+	/** Plan mode and the newest submitted plan. */
+	plan(): Promise<PlanView>;
+	/** One plan by version; `undefined` when this session has no such plan. */
+	planRecord(version: string): Promise<PlanRecord | undefined>;
+	/** Enter or leave plan mode; only an idle session accepts it (`PLAN_BUSY`). Leaving cancels a waiting plan. */
+	setPlanMode(mode: PlanMode): Promise<PlanView>;
+	/**
+	 * Approve or ask for changes to a plan. The first valid decision wins and later calls return it unchanged.
+	 * Approval leaves plan mode and submits the execute input exactly once; changes keep plan mode and submit the feedback.
+	 */
+	respondPlan(version: string, decision: PlanDecision): Promise<PlanRecord>;
 	/** Direct children of one workspace directory ("" is the root), read-only and bounded. */
 	workspaceDir(path: string, signal?: AbortSignal): Promise<DirChildren>;
 	/** Text content of one workspace file; credential and binary files return a kind without content. */
@@ -257,6 +288,8 @@ export type NekoConversationInfo = {
 	readonly status: "idle" | "running" | "error";
 	/** A question of this running session waits for the user's answer. */
 	readonly awaitingAnswer: boolean;
+	/** A submitted plan of this idle session waits for approval. */
+	readonly awaitingPlan: boolean;
 };
 
 /** A chat model offered by the runtime's Models registry, for frontend selectors. */
@@ -598,6 +631,8 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 	registry.install(createTodoExtension());
 	let questions!: UserQuestions;
 	registry.install(createQuestionExtension(() => questions));
+	let plans!: PlanService;
+	registry.install(createPlanExtension(() => plans));
 	for (const extension of options.extensions ?? []) registry.install(extension);
 	let approvals!: ToolApprovals;
 	const approvalExtension = createApprovalExtension(() => approvals);
@@ -643,6 +678,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		}, context);
 	approvals = new ToolApprovals(harness, context);
 	questions = new UserQuestions(harness, context);
+	plans = new PlanService(harness, context);
 	const changes = new ChangeTracker(harness, context);
 	const existing = await scanConversations();
 	questions.track(...existing.map((r) => r.id));
@@ -787,18 +823,26 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			if (admissions.get(id) === work) admissions.delete(id);
 		}
 	};
+	/** The agent configuration is a projection of the plan document; repair it before anything depends on it. */
+	const syncPlanAgent = async (target: Conversation) => {
+		const mode = await plans.mode(target.id);
+		if ((mode === "plan") !== agentInPlanMode(await target.agent(context)))
+			await target.configure(planAgentChange(mode), context);
+	};
 	const submitTo = async (
 		target: Conversation,
 		content: UserMessage["content"],
 		submitOptions?: NekoSubmitOptions,
+		extra?: Pick<InputData, "planDecision">,
 	): Promise<Submission> =>
 		admit(target.id, async () => {
+			await syncPlanAgent(target);
 			const agent = await target.agent(context);
 			const workspace = executionWorkspace(agent.cwd);
 			const duplicate =
 				submitOptions?.requestId !== undefined &&
 				(await storage.submissionByRequest(target.id, submitOptions.requestId, context));
-			const data: InputData = { at: Date.now(), prompt: "", images: [] };
+			const data: InputData = { at: Date.now(), prompt: "", images: [], ...extra };
 			let invocationName: string | undefined;
 			if (!duplicate && typeof content === "string" && content.startsWith("/skill:")) {
 				const end = content.indexOf(" ");
@@ -866,10 +910,32 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 				resourceSnapshots.discard(target.id, requestId);
 				throw error;
 			}
+			if (!extra?.planDecision) await plans.supersedePending(target.id);
 			await touchConversation(target.id);
 			await metadata.reconcile(target.id);
 			return result;
 		});
+
+	/** Submit the input a settled plan decision calls for; the request id makes repeats and restarts harmless. */
+	const dispatchPlan = async (target: Conversation, item: PlanItem) => {
+		const approve = item.status === "approved";
+		await submitTo(
+			target,
+			approve ? approvedPlanPrompt(item) : planRevisionPrompt(item, item.feedback ?? ""),
+			{ requestId: `${approve ? "plan-exec" : "plan-revise"}:${item.version}`, whenBusy: "followUp" },
+			{
+				planDecision: {
+					version: item.version,
+					kind: approve ? "approve" : "revise",
+					title: item.title,
+					...(!approve && item.feedback ? { feedback: item.feedback } : {}),
+				},
+			},
+		);
+		await plans.markDispatched(target.id, item.version);
+	};
+	const isRunning = async (id: ConversationId) =>
+		(await harness.snapshot(importLiveDoc, id, context))?.run !== undefined;
 
 	const waitAnswerOf = async (target: Conversation, submission: Submission): Promise<NekoAnswer> => {
 		const settled = await submission.wait(context);
@@ -942,6 +1008,34 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		respondQuestion(id, version, response) {
 			return questions.respond(target.id, id, version, response, context);
 		},
+		plan() {
+			return plans.view(target.id);
+		},
+		planRecord(version) {
+			return plans.get(target.id, version);
+		},
+		async setPlanMode(mode) {
+			if (mode !== "normal" && mode !== "plan") throw new Error("Unknown plan mode.");
+			return admit(target.id, async () => {
+				if (await isRunning(target.id)) throw new Error(PLAN_BUSY);
+				await plans.setMode(target.id, mode);
+				await syncPlanAgent(target);
+				return plans.view(target.id);
+			});
+		},
+		async respondPlan(version, decision) {
+			const parsed = validatePlanDecision(decision);
+			const known = await plans.get(target.id, version);
+			if (!known) throw new Error("Plan not found.");
+			if (known.status === "awaiting_approval") {
+				if (await isRunning(target.id)) throw new Error(PLAN_BUSY);
+				await guardProvider((await target.agent(context)).model);
+			}
+			const { record, item } = await plans.decide(target.id, version, parsed);
+			if ((item.status === "approved" || item.status === "revision_requested") && !item.dispatched)
+				await dispatchPlan(target, item);
+			return record;
+		},
 		async workspaceDir(path, signal) {
 			return workspaceFiles.children(savedWorkspace((await target.agent(context)).cwd), path, signal ?? neverAborted());
 		},
@@ -970,8 +1064,9 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 				await target.compact(instructions?.trim() || undefined, context);
 			});
 		},
-		abort() {
-			return target.abort(context);
+		async abort() {
+			await target.abort(context);
+			await plans.cancelPending(target.id);
 		},
 		async withdraw(submissionId) {
 			const id = submissionId as SubmissionId;
@@ -1041,6 +1136,19 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		const record = await harness.commit((tx) => tx.conversation(id), context);
 		return archived || record?.owner ? undefined : makeSession(target);
 	};
+
+	// Repair interrupted plan steps: the agent configuration, and a decision whose input was never submitted.
+	for (const id of new Set([conversation.id, ...existing.map((r) => r.id)])) {
+		try {
+			const session = await getConversation(id);
+			if (!session) continue;
+			await admit(id, () => syncPlanAgent(session.conversation));
+			const pending = await plans.undispatched(id);
+			if (pending) await dispatchPlan(session.conversation, pending);
+		} catch (error) {
+			options.onReport?.(error);
+		}
+	}
 
 	return {
 		context,
@@ -1191,6 +1299,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 						lastMessageAt: info.lastMessageAt,
 						status: info.status,
 						awaitingAnswer: info.awaiting === true,
+						awaitingPlan: info.awaitingPlan === true,
 						model: (await target.agent(context)).model ?? null,
 						id: record.id,
 						archived: false,

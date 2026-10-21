@@ -25,6 +25,8 @@ import { sessionName } from "@neko-harness/core/session-display";
 import {
 	JOBS_UNSUPPORTED,
 	jobsClient,
+	PLAN_UNSUPPORTED,
+	planClient,
 	QUESTIONS_UNSUPPORTED,
 	questionsClient,
 	queueClient,
@@ -56,6 +58,8 @@ import { createInputRouter } from "./input-router.ts";
 import { confirmStop, JOBS_EMPTY, JobDetail, jobItems } from "./jobs-ui.ts";
 import { commands } from "./labels.ts";
 import { createAppLayout, usableSize } from "./layout.ts";
+import { plainText } from "./plain-text.ts";
+import { PlanDock } from "./plan-dock.ts";
 import { isProviderRejection, modelKey, openModelPanel, providerSendBlock } from "./provider-ui.ts";
 import { canAutoOpen, QuestionDock } from "./question-dock.ts";
 import { QueueRow, queueKeyAction, restoreText, steerNotice, withdrawNotice } from "./queue-ui.ts";
@@ -121,6 +125,7 @@ class NekoTuiApp {
 	readonly #panel: PickerPanel;
 	readonly #approval: ApprovalDock;
 	readonly #question: QuestionDock;
+	readonly #plan: PlanDock;
 	readonly #login: LoginPanel;
 	#thinkingModel: string | undefined;
 	#imageWarningModel: string | undefined;
@@ -207,6 +212,17 @@ class NekoTuiApp {
 				this.#ui.requestRender();
 			},
 		});
+		this.#plan = new PlanDock({
+			changed: () => this.#ui.requestRender(),
+			notify: (message, level) => this.addNotice(message, level),
+			aside: () => (this.#approval.visible ? "Approval waiting: Esc closes this panel to review it." : undefined),
+			opened: (open) => {
+				this.#ui.setFocus(open ? this.#plan : this.#editor);
+				if (open) this.#queueRow.clear();
+				if (this.#lastView) this.#syncFooter(this.#lastView);
+				this.#ui.requestRender();
+			},
+		});
 		this.#panel = new PickerPanel(
 			() => this.#ui.requestRender(),
 			() => {
@@ -221,7 +237,7 @@ class NekoTuiApp {
 				this.#modelStop = undefined;
 				clearInterval(this.#sessionPanelTimer);
 				this.#sessionPanelTimer = undefined;
-				this.#ui.setFocus(this.#question.open ? this.#question : this.#editor);
+				this.#ui.setFocus(this.#question.open ? this.#question : this.#plan.open ? this.#plan : this.#editor);
 			},
 		);
 		// Pi consumes viewport paging before focused-component keys; route its public
@@ -230,6 +246,10 @@ class NekoTuiApp {
 		this.#ui.scrollBy = (lines) => {
 			if (this.#question.open) {
 				this.#question.scroll(lines);
+				return;
+			}
+			if (this.#plan.open) {
+				this.#plan.scroll(lines);
 				return;
 			}
 			if (this.#approval.focused) {
@@ -308,6 +328,7 @@ class NekoTuiApp {
 				editor: this.#editor,
 				approval: this.#approval,
 				question: this.#question,
+				plan: this.#plan,
 				overlayOpen: () => this.#panel.open || this.#login.open,
 				busy: () => this.#busyText !== undefined,
 				compactionActive: () => !!this.#lastView?.compaction?.active.length,
@@ -319,6 +340,7 @@ class NekoTuiApp {
 				hasSubagents: () => !!this.#lastView?.subagents?.length,
 				showAgents: () => this.#showAgents(),
 				toggleQuestion: () => this.#toggleQuestion(),
+				togglePlan: () => this.#togglePlan(),
 				clipboardKey: (data) => {
 					if (!matchesKey(data, clipboardShortcutKey())) return false;
 					if (isClipboardShortcut(data)) void this.pasteClipboard();
@@ -355,6 +377,7 @@ class NekoTuiApp {
 			if (this.#exitStarted) return;
 			this.#chat = undefined;
 			this.#question.setOnline(false);
+			this.#plan.setOnline(false);
 			if (this.#lastView) this.applyView({ ...this.#lastView, busy: false, status: null, streaming: null });
 			this.addNotice("Gateway unavailable. Restart to reconnect.", "error");
 		});
@@ -386,9 +409,11 @@ class NekoTuiApp {
 				},
 				approval: this.#approval,
 				// The open question panel owns the keys; a waiting approval folds into a hint inside it.
-				approvalVisible: () => this.#approval.visible && !this.#question.open,
+				approvalVisible: () => this.#approval.visible && !this.#question.open && !this.#plan.open,
 				question: this.#question,
 				questionVisible: () => this.#question.visible,
+				plan: this.#plan,
+				planVisible: () => this.#plan.open,
 				editor: this.#editor,
 				footer: this.#footer,
 				notices,
@@ -477,6 +502,11 @@ class NekoTuiApp {
 		}
 		if (trimmed === "/question") {
 			this.#toggleQuestion();
+			return;
+		}
+		if (trimmed === "/plan" || trimmed.startsWith("/plan ")) {
+			if (trimmed === "/plan") this.#togglePlan(text);
+			else this.addNotice("Usage: /plan (no arguments)", "warning");
 			return;
 		}
 		if (trimmed === "/search") {
@@ -730,6 +760,7 @@ class NekoTuiApp {
 		this.#exitStarted = true;
 		this.#approval.close();
 		this.#question.dispose();
+		this.#plan.dispose();
 		for (const detail of this.#agentDetails.values()) detail.close();
 		this.#resolveExit();
 	}
@@ -740,6 +771,7 @@ class NekoTuiApp {
 	async switchSession(id: string): Promise<void> {
 		this.#approval.close();
 		this.#question.bind(id, undefined);
+		this.#plan.bind(id, undefined);
 		this.#chat = undefined;
 		this.#queueRow.setItems([]);
 		if (this.#jobsPanel && this.#panel.open) this.#panel.close();
@@ -752,6 +784,7 @@ class NekoTuiApp {
 		this.#chat = handle;
 		this.#sessionId = id;
 		this.#question.bind(id, questionsClient(handle));
+		this.#plan.bind(id, planClient(handle));
 		void this.#refreshSkills(handle);
 		this.#editor.setText(this.#texts.get(id) ?? "");
 		this.#editor.setHistory([]);
@@ -1003,7 +1036,7 @@ class NekoTuiApp {
 	 */
 	#autoOpenQuestion(): void {
 		if (this.#exitStarted || this.#switching) return;
-		this.#question.autoOpen(
+		const allowed = () =>
 			canAutoOpen({
 				online: this.#chat !== undefined,
 				usable: usableSize(this.#terminal.columns, this.#terminal.rows),
@@ -1013,8 +1046,54 @@ class NekoTuiApp {
 				approvalFocused: this.#approval.focused,
 				sessionOperation: this.#sessionOperation,
 				queueSelecting: this.#queueRow.selecting,
-			}),
-		);
+				planOpen: this.#plan.open,
+			});
+		this.#question.autoOpen(allowed());
+		// A waiting plan opens under the same rules; a question that just opened already holds the keys.
+		this.#plan.autoOpen(allowed() && !this.#question.open);
+	}
+	/**
+	 * `/plan` and Shift+Tab: with nothing waiting this toggles plan mode, with a plan awaiting approval it opens the
+	 * plan panel. `draft` is the typed command; a refused toggle (e.g. while running) puts it back in the editor.
+	 */
+	#togglePlan(draft?: string): void {
+		if (this.#exitStarted) return;
+		const keep = () => {
+			if (draft !== undefined && this.#editor.getText() === "") this.#editor.setText(draft);
+		};
+		const chat = this.#chat;
+		if (chat === undefined) {
+			this.addNotice("Gateway unavailable. Restart to reconnect.", "error");
+			keep();
+			return;
+		}
+		const client = planClient(chat);
+		if (!client.supported) {
+			this.addNotice(PLAN_UNSUPPORTED, "warning", { wrap: true });
+			keep();
+			return;
+		}
+		if (this.#plan.awaiting) {
+			this.#plan.openPanel();
+			return;
+		}
+		const next = client.view()?.mode === "plan" ? "normal" : "plan";
+		const session = this.#sessionId;
+		void client
+			.setMode(next)
+			.then(() => {
+				if (session === this.#sessionId)
+					this.addNotice(
+						next === "plan"
+							? "Plan mode on: the assistant can only read and plan. /plan or Shift+Tab to leave."
+							: "Plan mode off.",
+					);
+			})
+			.catch((error) => {
+				if (session !== this.#sessionId) return;
+				this.addNotice(messageOf(error), "warning", { wrap: true });
+				keep();
+			});
 	}
 	#showJobs(): void {
 		if (this.#panel.open || this.#login.open) return;
@@ -1199,6 +1278,7 @@ class NekoTuiApp {
 		if (this.#jobsPanel) this.#panel.update(jobItems(view.jobs ?? []));
 		this.#queueRow.setItems(view.queued ?? []);
 		this.#question.update(view.questions);
+		this.#plan.update(view.plan);
 		if (this.#commandCaps !== [...hiddenCommands(view)].join(",")) this.#syncCommands(view);
 		for (const identity of view.agents ?? []) {
 			const detail = this.#agentDetails.get(identity.agentId);
@@ -1248,7 +1328,10 @@ class NekoTuiApp {
 		}
 		this.#syncItems(view);
 		const waiting = this.#question.pendingCount > 0;
-		for (const card of this.#toolCards.values()) card.setWaiting(waiting && card.name === "ask_user");
+		for (const card of this.#toolCards.values()) {
+			card.setWaiting(waiting && card.name === "ask_user");
+			if (card.planVersion !== undefined) card.setPlan(view.plan?.current ?? undefined);
+		}
 		for (const child of view.subagents ?? []) {
 			const card = this.#toolCards.get(child.callId);
 			if (card) card.onOpen = () => this.#showAgents(child.taskId);
@@ -1361,7 +1444,7 @@ class NekoTuiApp {
 			this.#items.set(item.key, { kind: "job-report", component });
 			return;
 		}
-		const component = new ThemedText(item.text, theme.dim, 1, 0);
+		const component = new ThemedText(systemText(item), theme.dim, 1, 0);
 		this.#imageTranscript.addItem(component);
 		this.#items.set(item.key, { kind: "system", component });
 	}
@@ -1380,7 +1463,7 @@ class NekoTuiApp {
 			return;
 		}
 		if ((entry.kind === "system" || entry.kind === "job-report") && item.type === "system") {
-			entry.component.setText(item.text);
+			entry.component.setText(systemText(item));
 		}
 	}
 
@@ -1473,6 +1556,9 @@ class NekoTuiApp {
 			approvalCount: view.subagents?.reduce((n, d) => n + (d.approvalCount ?? 0), 0) ?? 0,
 			questionCount: this.#question.pendingCount,
 			questionOpen: this.#question.open,
+			planMode: view.plan?.mode === "plan",
+			planAwaiting: view.plan?.current?.status === "awaiting_approval",
+			planOpen: this.#plan.open,
 			...(todoProgress !== undefined ? { todoProgress } : {}),
 			model: view.model,
 			thinkingLevel: view.agent.thinkingLevel,
@@ -1539,6 +1625,11 @@ class NekoTuiApp {
 	}
 }
 
+/** A plan decision carries the user's feedback, possibly from another client: shown as plain text. */
+function systemText(item: Extract<ChatItem, { type: "system" }>): string {
+	return item.planDecision ? plainText(item.text) : item.text;
+}
+
 function assistantContent(item: Extract<ChatItem, { type: "assistant" }>): {
 	readonly thinking: string;
 	readonly text: string;
@@ -1595,6 +1686,7 @@ function hiddenCommands(view: ChatView): Set<string> {
 	const hidden = new Set<string>();
 	if (view.todos === undefined) hidden.add("todos");
 	if (view.questions === undefined) hidden.add("question");
+	if (view.plan === undefined) hidden.add("plan");
 	return hidden;
 }
 

@@ -395,6 +395,7 @@ describe("mobile api v1 workspaces and sessions", () => {
 				"media",
 				"todos",
 				"questions",
+				"plan",
 			]);
 			expect(hello.result.limits.maxFrameBytes).toBe(262144);
 			client.close(1000, "done");

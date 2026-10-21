@@ -19,6 +19,14 @@ it("discovers skills before the colon and filters command prefixes", () => {
 	expect(commandSuggestions("/unknown", skills)).toEqual([]);
 	expect(commandSuggestions("/skill:", [])).toEqual([]);
 });
+it("lists /plan only when the gateway supports plan mode", () => {
+	expect(commandSuggestions("/", skills).map((s) => s.label)).not.toContain("/plan");
+	expect(commandSuggestions("/pl", skills, { plan: false })).toEqual([]);
+	const withPlan = commandSuggestions("/", skills, { plan: true }).map((s) => s.label);
+	expect(withPlan).toEqual(["/compact", "/plan", "/skill:alpha", "/skill:beta", "/skill:plugin:task"]);
+	expect(commandSuggestions("/pl", skills, { plan: true }).map((s) => s.label)).toEqual(["/plan"]);
+	expect(commandSuggestions("/plan", [], { plan: true })[0]?.description).toBeTruthy();
+});
 it("allows discoverable skill names and stops completion at arguments", () => {
 	expect(isCommandQuery("/skill:plugin:task")).toBe(true);
 	expect(isCommandQuery("/skill:alpha args")).toBe(false);

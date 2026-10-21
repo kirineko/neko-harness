@@ -21,6 +21,9 @@ import {
 	type WireChangeSummary,
 	type WireJobOutput,
 	type WireJobSummary,
+	type WirePlanDecision,
+	type WirePlanRecord,
+	type WirePlanView,
 	type WireQuestionList,
 	type WireQuestionRecord,
 	type WireQuestionResponse,
@@ -158,6 +161,40 @@ export function questionsClient(chat: NekoChat): QuestionsClient {
 		async respond(input) {
 			if (!supported()) throw new Error(QUESTIONS_UNSUPPORTED);
 			return chat.questionRespond(input);
+		},
+	};
+}
+export const PLAN_UNSUPPORTED = "This gateway does not support plan mode. Restart the gateway to enable it.";
+export type PlanClient = {
+	/** False for a gateway built before plan mode: the view carries no `plan` field at all. */
+	readonly supported: boolean;
+	/** Mode, revision and newest plan; `undefined` when unsupported. */
+	view(): WirePlanView | undefined;
+	get(version: string): Promise<WirePlanRecord | null>;
+	/** Approve or ask for changes; resolves to the saved record, which is the first valid decision and may not be this one. */
+	respond(input: { version: string; decision: WirePlanDecision }): Promise<WirePlanRecord>;
+	/** Enter or leave plan mode; rejected while the session is running. */
+	setMode(mode: "normal" | "plan"): Promise<WirePlanView>;
+};
+/** Capability-probed access to a chat's plan mode; an old gateway degrades instead of failing. */
+export function planClient(chat: NekoChat): PlanClient {
+	const supported = () => chat.view.value?.plan !== undefined;
+	return {
+		get supported() {
+			return supported();
+		},
+		view: () => chat.view.value?.plan,
+		async get(version) {
+			if (!supported()) throw new Error(PLAN_UNSUPPORTED);
+			return chat.planGet({ version });
+		},
+		async respond(input) {
+			if (!supported()) throw new Error(PLAN_UNSUPPORTED);
+			return chat.planRespond(input);
+		},
+		async setMode(mode) {
+			if (!supported()) throw new Error(PLAN_UNSUPPORTED);
+			return chat.planMode({ mode });
 		},
 	};
 }

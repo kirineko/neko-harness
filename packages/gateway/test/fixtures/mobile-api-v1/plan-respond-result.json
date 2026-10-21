@@ -1,0 +1,17 @@
+{
+	"description": "plan.respond 结果：持久保存的最终记录。第一次有效决定为准；他端已决定或回执丢失后重试，得到的是已保存的状态与反馈，不覆盖。会话正在运行时请求被 rejected。",
+	"message": {
+		"jsonrpc": "2.0",
+		"id": 52,
+		"result": {
+			"version": "b7e2a9c4-51d8-4c3a-8f60-2d9e7a1c0b34",
+			"title": "为登录页增加记住我开关",
+			"steps": ["阅读登录表单与会话配置", "增加 rememberMe 字段并写入 cookie 有效期", "补充单元测试并运行"],
+			"note": "默认保持关闭，不改变现有会话时长。",
+			"status": "revision_requested",
+			"feedback": "第二步先不要改 cookie，只加开关和测试",
+			"createdAt": 1730100000000,
+			"settledAt": 1730100060000
+		}
+	}
+}

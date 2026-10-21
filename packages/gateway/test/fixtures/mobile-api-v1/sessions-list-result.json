@@ -1,5 +1,5 @@
 {
-	"description": "sessions.list 结果（awaitingAnswer 为可选：会话在等待用户回答问题；缺省表示电脑端无法判断，需声明 questions 能力）：按 lastMessageAt（无消息时为创建时间，同值按会话 ID 倒序）倒序、每页 ≤ pageItems，nextCursor 为 undefined 表示没有更多。",
+	"description": "sessions.list 结果（awaitingAnswer / awaitingPlan 为可选：会话在等待用户回答问题 / 已提交的计划等待批准；缺省表示电脑端无法判断，分别需声明 questions / plan 能力）：按 lastMessageAt（无消息时为创建时间，同值按会话 ID 倒序）倒序、每页 ≤ pageItems，nextCursor 为 undefined 表示没有更多。",
 	"message": {
 		"jsonrpc": "2.0",
 		"id": 11,
@@ -22,7 +22,8 @@
 					"preview": "把 session metadata 拆到独立表……",
 					"lastUsedAt": 1730300000000,
 					"lastMessageAt": 1730000000000,
-					"archived": false
+					"archived": false,
+					"awaitingPlan": true
 				}
 			],
 			"nextCursor": "100"

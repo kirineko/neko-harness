@@ -1,6 +1,6 @@
 /** Browser-safe Chord 1.3 contracts. All wire values are validated schemas. */
 import { type HostNamed, hostNamed, method, type Ref, type RemoteContract, remote } from "@earendil-works/chord";
-import { QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
+import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
 import { type Static, type TSchema, Type } from "typebox";
 
 /** Every gateway service lives on the one host that serves it; the server id is verified through application info. */
@@ -285,6 +285,28 @@ export const QuestionResponseSchema = Type.Union([
 	),
 	Type.Object({ kind: Type.Literal("skip") }, { additionalProperties: false }),
 ]);
+export const PlanRecordSchema = Type.Object({
+	version: str,
+	title: Type.String({ maxLength: PLAN_LIMITS.titleChars }),
+	steps: Type.Array(Type.String({ maxLength: PLAN_LIMITS.stepChars }), { maxItems: PLAN_LIMITS.maxSteps }),
+	note: Type.String({ maxLength: PLAN_LIMITS.noteChars }),
+	status: Type.Enum(["awaiting_approval", "approved", "revision_requested", "superseded", "cancelled"]),
+	feedback: Type.Union([Type.String({ maxLength: PLAN_LIMITS.feedbackChars }), nil]),
+	createdAt: num,
+	settledAt: Type.Union([num, nil]),
+});
+export const PlanViewSchema = Type.Object({
+	mode: Type.Enum(["normal", "plan"]),
+	revision: integer,
+	current: Type.Union([PlanRecordSchema, nil]),
+});
+export const PlanDecisionSchema = Type.Union([
+	Type.Object({ kind: Type.Literal("approve") }, { additionalProperties: false }),
+	Type.Object(
+		{ kind: Type.Literal("revise"), feedback: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.feedbackChars }) },
+		{ additionalProperties: false },
+	),
+]);
 /** What a todo / ask_user call shows in history, from the persisted tool details. */
 export const ToolInteractionSchema = Type.Union([
 	Type.Object({
@@ -305,6 +327,13 @@ export const ToolInteractionSchema = Type.Union([
 		completed: integer,
 		total: integer,
 	}),
+	Type.Object({
+		kind: Type.Literal("submit_plan"),
+		version: str,
+		title: str,
+		steps: Type.Array(str),
+		note: str,
+	}),
 ]);
 export const ChatViewSchema = Type.Object({
 	historyBefore: Type.Optional(Type.Union([integer, nil])),
@@ -317,6 +346,8 @@ export const ChatViewSchema = Type.Object({
 	todos: Type.Optional(TodoListSchema),
 	/** Absent on a gateway without ask_user; empty `pending` means supported with none. */
 	questions: Type.Optional(QuestionListSchema),
+	/** Absent on a gateway without plan mode; `current` is null before the first plan. */
+	plan: Type.Optional(PlanViewSchema),
 	/** Absent on a gateway without file change tracking; zero files means supported with none. */
 	changes: Type.Optional(ChangeSummarySchema),
 	rounds: Type.Optional(Type.Array(DelegationSchema)),
@@ -406,6 +437,9 @@ export const ChatViewSchema = Type.Object({
 				id: integer,
 				text: str,
 				jobId: Type.Optional(str),
+				planDecision: Type.Optional(
+					Type.Object({ version: str, kind: Type.Enum(["approve", "revise"]) }, { additionalProperties: false }),
+				),
 			}),
 		]),
 	),
@@ -422,6 +456,8 @@ export const SessionSummarySchema = Type.Object({
 	status: Type.Enum(["idle", "running", "error"]),
 	/** A question of this session waits for an answer; absent on a gateway that cannot tell. */
 	awaitingAnswer: Type.Optional(bool),
+	/** A submitted plan of this idle session waits for approval; absent on a gateway without plan mode. */
+	awaitingPlan: Type.Optional(bool),
 	id: str,
 });
 export const DirectoryStateSchema = Type.Object({ revision: integer, sessions: Type.Array(SessionSummarySchema) });
@@ -568,6 +604,18 @@ export const NekoChat = contract("neko.chat", {
 				questionRespond: rpc(
 					Type.Object({ id: integer, version: str, response: QuestionResponseSchema }, { additionalProperties: false }),
 					QuestionRecordSchema,
+				),
+				planGet: rpc(
+					Type.Object({ version: str }, { additionalProperties: false }),
+					Type.Union([PlanRecordSchema, nil]),
+				),
+				planRespond: rpc(
+					Type.Object({ version: str, decision: PlanDecisionSchema }, { additionalProperties: false }),
+					PlanRecordSchema,
+				),
+				planMode: rpc(
+					Type.Object({ mode: Type.Enum(["normal", "plan"]) }, { additionalProperties: false }),
+					PlanViewSchema,
 				),
 				usage: rpc(nil, usage),
 				workspaceDir: rpc(Type.Object({ path: str }, { additionalProperties: false }), WorkspaceDirSchema),
@@ -840,6 +888,9 @@ export type WireTodoItem = Static<typeof TodoItemSchema>;
 export type WireQuestionList = Static<typeof QuestionListSchema>;
 export type WireQuestionSummary = Static<typeof QuestionSummarySchema>;
 export type WireQuestionRecord = Static<typeof QuestionRecordSchema>;
+export type WirePlanRecord = Static<typeof PlanRecordSchema>;
+export type WirePlanView = Static<typeof PlanViewSchema>;
+export type WirePlanDecision = Static<typeof PlanDecisionSchema>;
 export type WireQuestionResponse = Static<typeof QuestionResponseSchema>;
 export type WireWorkspaceDir = Static<typeof WorkspaceDirSchema>;
 export type WireWorkspaceFile = Static<typeof WorkspaceFileSchema>;

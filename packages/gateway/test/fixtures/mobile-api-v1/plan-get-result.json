@@ -1,0 +1,17 @@
+{
+	"description": "plan.get 结果：完整计划（纯文本）、有序步骤与状态；feedback 仅在 revision_requested 时非空。status 取值 awaiting_approval | approved | revision_requested | superseded | cancelled，未知取值按已结算处理。",
+	"message": {
+		"jsonrpc": "2.0",
+		"id": 51,
+		"result": {
+			"version": "b7e2a9c4-51d8-4c3a-8f60-2d9e7a1c0b34",
+			"title": "为登录页增加记住我开关",
+			"steps": ["阅读登录表单与会话配置", "增加 rememberMe 字段并写入 cookie 有效期", "补充单元测试并运行"],
+			"note": "默认保持关闭，不改变现有会话时长。",
+			"status": "awaiting_approval",
+			"feedback": null,
+			"createdAt": 1730100000000,
+			"settledAt": null
+		}
+	}
+}

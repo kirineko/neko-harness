@@ -13,6 +13,7 @@ import {
 	createGatewayConnection,
 	jobsClient,
 	type NekoGatewayConnection,
+	planClient,
 	questionsClient,
 	queueClient,
 	workspaceClient,
@@ -43,6 +44,9 @@ import type {
 	NekoWorkspaceFiles,
 	NekoWorkspaceState,
 	NekoWorkspaces,
+	WirePlanDecision,
+	WirePlanRecord,
+	WirePlanView,
 	WireQuestionRecord,
 	WireQuestionResponse,
 	WireSteerResult,
@@ -371,6 +375,22 @@ export class GatewayConnection {
 	): Promise<WireQuestionRecord> {
 		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪，答案草稿已保留");
 		return questionsClient(this.#chat!).respond(input);
+	}
+	/** Plan calls are bound to the session the card or composer shows; deciding is never a chat submit. */
+	async planMode(sessionId: string, mode: "normal" | "plan"): Promise<WirePlanView> {
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪");
+		return planClient(this.#chat!).setMode(mode);
+	}
+	async planGet(sessionId: string, version: string): Promise<WirePlanRecord | null> {
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪");
+		return planClient(this.#chat!).get(version);
+	}
+	async planRespond(
+		sessionId: string,
+		input: { version: string; decision: WirePlanDecision },
+	): Promise<WirePlanRecord> {
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪，反馈草稿已保留");
+		return planClient(this.#chat!).respond(input);
 	}
 	/** Workspace browsing is bound to the session the sidebar was opened for; the host makes signals cancel requests. */
 	workspace(sessionId: string) {

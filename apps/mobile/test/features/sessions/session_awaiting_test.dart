@@ -9,6 +9,7 @@ Map<String, dynamic> _session(
   String id,
   String title, {
   bool? awaitingAnswer,
+  bool? awaitingPlan,
   String preview = '预览文字',
 }) => <String, dynamic>{
   'id': id,
@@ -19,6 +20,7 @@ Map<String, dynamic> _session(
   'lastMessageAt': 0,
   'archived': false,
   'awaitingAnswer': ?awaitingAnswer,
+  'awaitingPlan': ?awaitingPlan,
 };
 
 void main() {
@@ -53,6 +55,51 @@ void main() {
     expect(find.byKey(const Key('session-awaiting-9')), findsNothing);
     // 预览仍然显示。
     expect(find.text('预览文字'), findsNWidgets(3));
+  });
+
+  testWidgets('awaitingPlan 为真：会话列表显示“等待批准”；缺省/为假不显示任何标记', (tester) async {
+    h.api.on(
+      'sessions.list',
+      (_) => <String, dynamic>{
+        'sessions': <Object>[
+          _session('7', '修复登录页', awaitingPlan: true),
+          _session('8', '重构存储', awaitingPlan: false),
+          _session('9', '旧电脑的会话'),
+        ],
+      },
+    );
+    await h.bind();
+    await tester.pumpWidget(h.build());
+    await settle(tester);
+    await openSwitcher(tester);
+    expect(find.text('等待批准'), findsOneWidget);
+    expect(find.byKey(const Key('session-plan-7')), findsOneWidget);
+    expect(find.byKey(const Key('session-plan-8')), findsNothing);
+    expect(find.byKey(const Key('session-plan-9')), findsNothing);
+    expect(find.text('等待回答'), findsNothing);
+    expect(find.text('预览文字'), findsNWidgets(3));
+  });
+
+  testWidgets('没有预览时也显示等待批准；标记随 sessions.changed 清除', (tester) async {
+    var awaiting = true;
+    h.api.on(
+      'sessions.list',
+      (_) => <String, dynamic>{
+        'sessions': <Object>[
+          _session('7', '修复登录页', awaitingPlan: awaiting, preview: ''),
+        ],
+      },
+    );
+    await h.bind();
+    await tester.pumpWidget(h.build());
+    await settle(tester);
+    await openSwitcher(tester);
+    expect(find.byKey(const Key('session-plan-7')), findsOneWidget);
+
+    awaiting = false;
+    h.api.notify('sessions.changed', <String, dynamic>{'revision': 2});
+    await settle(tester);
+    expect(find.byKey(const Key('session-plan-7')), findsNothing);
   });
 
   testWidgets('没有预览时也显示标记；标记随 sessions.changed 清除', (tester) async {
@@ -104,6 +151,27 @@ void main() {
     expect(
       tester.getSize(find.byKey(const Key('session-7'))).height,
       greaterThanOrEqualTo(44),
+    );
+  });
+
+  test('SessionSummary.awaitingPlan 三态', () {
+    SessionSummary parse(Map<String, dynamic> json) =>
+        SessionSummary.fromJson(<String, dynamic>{
+          'id': '1',
+          'workspace': '/w',
+          'title': '',
+          'preview': '',
+          'lastUsedAt': 0,
+          ...json,
+        });
+    expect(parse(<String, dynamic>{}).awaitingPlan, isNull);
+    expect(
+      parse(<String, dynamic>{'awaitingPlan': false}).waitingForPlan,
+      isFalse,
+    );
+    expect(
+      parse(<String, dynamic>{'awaitingPlan': true}).waitingForPlan,
+      isTrue,
     );
   });
 

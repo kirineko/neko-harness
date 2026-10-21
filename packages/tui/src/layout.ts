@@ -1,4 +1,5 @@
 import { type Component, Text, VStack } from "@earendil-works/pi-tui";
+import { PLAN_MAX_ROWS } from "./plan-dock.ts";
 import { QUESTION_MAX_ROWS } from "./question-dock.ts";
 
 export const usableSize = (width: number, height: number): boolean => width >= 40 && height >= 10;
@@ -22,6 +23,9 @@ export function createAppLayout(parts: {
 	/** The assistant's question: a one-line bar, or the answer panel limited to the rows that are left over. */
 	question?: Component & { height: number };
 	questionVisible?: () => boolean;
+	/** The plan awaiting a decision; only rendered while its panel is open. */
+	plan?: Component & { height: number };
+	planVisible?: () => boolean;
 }): VStack {
 	const normal = (v: { width: number; height: number }) => {
 		if (parts.approval) parts.approval.height = Math.min(10, Math.max(7, Math.floor(v.height / 2)));
@@ -42,9 +46,19 @@ export function createAppLayout(parts: {
 			parts.questionVisible?.() && parts.question
 				? Math.min(parts.question.height, parts.question.render(v.width).length)
 				: 0;
+		if (parts.plan)
+			parts.plan.height = Math.max(
+				0,
+				Math.min(
+					PLAN_MAX_ROWS,
+					v.height - approvalRows - editorRows - 2 - noticeRows - busyRows - queueRows - questionRows - 1,
+				),
+			);
+		const planRows =
+			parts.planVisible?.() && parts.plan ? Math.min(parts.plan.height, parts.plan.render(v.width).length) : 0;
 		parts.panel.height = Math.max(
 			1,
-			v.height - approvalRows - editorRows - 2 - noticeRows - busyRows - queueRows - questionRows,
+			v.height - approvalRows - editorRows - 2 - noticeRows - busyRows - queueRows - questionRows - planRows,
 		);
 		return usableSize(v.width, v.height);
 	};
@@ -78,6 +92,11 @@ export function createAppLayout(parts: {
 			component: parts.question ?? new Text("", 0, 0),
 			shrink: 0,
 			visible: (v) => normal(v) && (parts.questionVisible?.() ?? false) && (parts.question?.height ?? 0) > 0,
+		},
+		{
+			component: parts.plan ?? new Text("", 0, 0),
+			shrink: 0,
+			visible: (v) => normal(v) && (parts.planVisible?.() ?? false) && (parts.plan?.height ?? 0) > 0,
 		},
 		{ component: parts.editor, minSize: 3, maxSize: 7, shrink: 0, visible: normal },
 		{ component: parts.footer, basis: 2, minSize: 2, shrink: 0, visible: normal },

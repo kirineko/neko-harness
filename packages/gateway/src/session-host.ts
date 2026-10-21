@@ -96,6 +96,7 @@ async function openProjection(runtime: NekoRuntime, session: NekoSession, contex
 							"app.neko.jobs",
 							"app.neko.todos",
 							"app.neko.questions",
+							"app.neko.plan",
 						].includes(change.record.kind) &&
 							change.conversationId === session.id) ||
 							(change.record.kind === "pi.usage" &&
@@ -135,7 +136,7 @@ async function openProjection(runtime: NekoRuntime, session: NekoSession, contex
 				{ models: runtime.listModels(), contextEntries: view.value.entries, compaction },
 			);
 			const jobs = (await session.jobs()).map(clipJob);
-			const [todos, questions] = await Promise.all([session.todos(), session.questions()]);
+			const [todos, questions, plan] = await Promise.all([session.todos(), session.questions(), session.plan()]);
 			const changes = await session.changeSummary().catch(() => undefined);
 			const subagents = await listDelegations(runtime.harness, session.id, context);
 			const approvals = await runtime.approvals.list(session.id, context);
@@ -162,6 +163,7 @@ async function openProjection(runtime: NekoRuntime, session: NekoSession, contex
 				jobs,
 				todos,
 				questions,
+				plan,
 				...(changes ? { changes } : {}),
 				agents: summarizeSubagents(
 					subagents,
@@ -392,6 +394,21 @@ export function serveSessions(host: Host<GatewayPrincipal>, runtime: NekoRuntime
 					return await projection.value.session.respondQuestion(id, version, response);
 				} catch (error) {
 					throw new ChordError("invalid", error instanceof Error ? error.message : "Cannot answer the question");
+				}
+			},
+			planGet: async ({ version }) => (await projection.value.session.planRecord(version)) ?? null,
+			planRespond: async ({ version, decision }) => {
+				try {
+					return await projection.value.session.respondPlan(version, decision);
+				} catch (error) {
+					throw new ChordError("invalid", error instanceof Error ? error.message : "Cannot decide the plan");
+				}
+			},
+			planMode: async ({ mode }) => {
+				try {
+					return await projection.value.session.setPlanMode(mode);
+				} catch (error) {
+					throw new ChordError("invalid", error instanceof Error ? error.message : "Cannot change plan mode");
 				}
 			},
 			skills: () => runtime.listSkills(projection.value.session.id),

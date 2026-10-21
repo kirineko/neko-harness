@@ -1,0 +1,11 @@
+{
+	"description": "plan.exit 结果：会话已处于普通模式；revision 为此刻的计划摘要 revision。待批准的计划被置为 cancelled，随后 plan.changed 与 chat.patch 的 plan 摘要同步更新。会话正在运行时请求被 rejected。",
+	"message": {
+		"jsonrpc": "2.0",
+		"id": 53,
+		"result": {
+			"mode": "normal",
+			"revision": 3
+		}
+	}
+}

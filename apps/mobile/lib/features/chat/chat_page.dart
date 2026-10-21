@@ -7,6 +7,7 @@ import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/approvals/approval_sheet.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
 import 'package:neko_mobile/features/chat/neko_drawer.dart';
+import 'package:neko_mobile/features/plan/plan_sheet.dart';
 import 'package:neko_mobile/features/questions/question_sheet.dart';
 import 'package:neko_mobile/features/sessions/session_picker.dart';
 import 'package:neko_mobile/features/sessions/sessions_controller.dart';
@@ -179,6 +180,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   enabled: chat.canControl,
                 ),
                 QuestionBar(interactions: chat.interactions),
+                PlanBar(interactions: chat.interactions),
                 StatusStrip(
                   manager: manager,
                   error: chat.error,

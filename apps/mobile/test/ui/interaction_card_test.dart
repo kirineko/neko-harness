@@ -190,10 +190,10 @@ void main() {
 
   testWidgets('todo 工具项：动作、进度与修订来自结构化状态', (tester) async {
     await _pump(tester, _todoItem('replace'));
-    expect(find.text('待办'), findsOneWidget);
-    expect(find.text('更新待办 · 已完成 1/3（修订 4）'), findsOneWidget);
+    expect(find.text('todo'), findsOneWidget);
+    expect(find.text('更新 todo · 已完成 1/3（修订 4）'), findsOneWidget);
     await _pump(tester, _todoItem('list'));
-    expect(find.text('读取待办 · 已完成 1/3（修订 4）'), findsOneWidget);
+    expect(find.text('读取 todo · 已完成 1/3（修订 4）'), findsOneWidget);
     expect(find.textContaining('Todo list, revision'), findsNothing);
   });
 

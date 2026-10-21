@@ -96,6 +96,17 @@ keystore 与密码请离线备份：丢失后无法以同一签名覆盖安装�
 - 测试：`test/core/api/interaction_models_test.dart`（fixtures 对拍）、`test/features/chat/interactions_controller_test.dart`、
   `test/features/questions/`、`test/features/todos/`、`test/ui/interaction_layout_test.dart`（窄屏/大字体/软键盘/安全区/共存）等。
 
+## 计划批准（add-plan-approve-mode）
+
+- 能力来自 `server.hello.capabilities` 的 `plan`：缺少时隐藏计划条与会话列表提示，且从不调用 `plan.*`（旧电脑只会省略它）。手机可以查看并决定计划，也可以用 `plan.exit` 取消待批准计划并退出 plan 模式；
+  没有进入 plan 模式的入口（协议里也没有对应方法）。
+- 状态在 `InteractionsController`：`chat.attach` 快照与 `chat.patch` 状态里的 `plan: { revision, pending, version? }` 与 `plan.changed` 通知都只是失效提示，
+  按摘要里的版本调用 `plan.get`；`plan.respond` 只有收到回执才更新（无回执不做乐观结果、断线后绝不自动重发），他端先决定时显示服务端保存的真实状态并附说明。
+- 界面（`lib/features/plan/plan_sheet.dart`）：输入区上方“等待批准”条 + bottom sheet，标题按纯文本、有序步骤与说明按 Markdown 渲染（`NekoMarkdown`：不渲染 HTML、不开链接、不加载远程图片）；“批准并执行”、带反馈的
+  “要求修改”与“取消并退出计划模式”（1..2000 个 UTF-16 码元，草稿按版本留在内存）；提交中所有按钮都禁用。没有待批准计划时隐藏，会话列表在 `awaitingPlan` 为真时显示“等待批准”。
+- 测试：`test/core/api/plan_models_test.dart`（fixtures 对拍）、`test/features/chat/plan_controller_test.dart`、`test/features/plan/`、
+  `test/features/sessions/session_awaiting_test.dart`。
+
 ## 真机回归
 
 `scripts/mobile-e2e-gateway.ts` 启动隔离数据目录与脚本化 faux 模型的 gateway（不访问外部模型）：

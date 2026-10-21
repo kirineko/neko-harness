@@ -1,0 +1,11 @@
+{
+	"description": "plan.exit 请求：取消待批准的计划并退出 plan 模式（手机只能退出，不能进入；没有 plan.enter）。已是普通模式时同样成功。能力 plan。",
+	"message": {
+		"jsonrpc": "2.0",
+		"id": 53,
+		"method": "plan.exit",
+		"params": {
+			"subscriptionId": "chat-1a2b3c4d-1"
+		}
+	}
+}

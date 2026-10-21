@@ -59,6 +59,11 @@ class ChatHarness {
         if (record == null) throw const MobileApiException('not_found', '');
         return record;
       })
+      ..on('plan.get', (params) {
+        final record = planRecords[params!['version']];
+        if (record == null) throw const MobileApiException('not_found', '');
+        return record;
+      })
       ..on(
         'chat.attach',
         (params) => <String, dynamic>{
@@ -87,6 +92,10 @@ class ChatHarness {
   };
   Map<int, Map<String, dynamic>> questionRecords =
       <int, Map<String, dynamic>>{};
+
+  /// `plan.get` 的脚本化数据，按版本（仅声明 plan 能力时才会被调用）。
+  Map<String, Map<String, dynamic>> planRecords =
+      <String, Map<String, dynamic>>{};
   Map<String, dynamic> snapshot = snapshotOf(<Map<String, dynamic>>[
     userItem('u-1', '你好'),
     assistantItem('a-2', '**你好**，有什么可以帮忙？'),

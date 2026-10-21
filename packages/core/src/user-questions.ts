@@ -71,7 +71,7 @@ const argsOf = (record: Pick<QuestionRecord, "question" | "multiple" | "options"
 });
 
 /** A task is live while neither it nor any task above it has an abort mark or has ended. */
-async function live(tx: Tx, id: number): Promise<boolean> {
+export async function live(tx: Tx, id: number): Promise<boolean> {
 	let cursor: number | undefined = id;
 	for (let depth = 0; cursor !== undefined && depth < 16; depth++) {
 		const task = await tx.task(cursor as TaskId);
