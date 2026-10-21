@@ -33,6 +33,7 @@ export function Icon({
 		| "trash"
 		| "eye"
 		| "phone"
+		| "palette"
 		| "layers";
 	size?: number;
 	className?: string;
@@ -65,6 +66,8 @@ export function Icon({
 		phone:
 			"M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3Zm2.5 14.5h3",
 		layers: "M12 3 3 8l9 5 9-5-9-5ZM3 12.5l9 5 9-5M3 17l9 5 9-5",
+		palette:
+			"M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-1.9-.4-1 .2-2.1 1.4-2.1H17a4 4 0 0 0 4-4c0-5-4-10-9-10ZM7.5 11h.01M10 7.5h.01M14.5 7.5h.01",
 		sparkles:
 			"M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8zM18.5 3l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8zM5 16l.7 1.8 1.8.7-1.8.7L5 21l-.7-1.8-1.8-.7 1.8-.7z",
 	};
@@ -230,7 +233,7 @@ export function DismissButton(props: { label: string; onClick: () => void }) {
 	return (
 		<button
 			type="button"
-			className="icon-btn focus-neko rounded hover:bg-black/5"
+			className="icon-btn focus-neko rounded hover:bg-ink-900/5"
 			aria-label={props.label}
 			title={props.label}
 			onClick={props.onClick}

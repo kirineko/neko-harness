@@ -290,7 +290,7 @@ function QuestionCard(props: {
 			className="flex max-h-[min(42dvh,28rem)] flex-col rounded-xl border border-tianyi-300 bg-tianyi-50 text-sm shadow-soft"
 		>
 			<div className="flex shrink-0 items-center gap-2 px-3 py-1.5">
-				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-white">
+				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-on-accent">
 					<Icon name="sparkles" size={12} />
 					助手提问
 				</span>

@@ -683,7 +683,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 							mentions.refresh();
 							setMenu(isCommandQuery(e.currentTarget.value));
 						}}
-						className="max-h-40 min-h-10 min-w-0 w-full resize-none bg-transparent px-4 py-2 text-base text-ink-900 focus:outline-none"
+						className="composer-input max-h-40 min-h-10 min-w-0 w-full resize-none bg-transparent px-4 py-2 text-ink-900 focus:outline-none"
 						onChange={(e) => {
 							browse.current = null;
 							edit({ text: e.target.value });

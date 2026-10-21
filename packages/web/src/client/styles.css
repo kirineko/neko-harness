@@ -14,6 +14,8 @@
 	/* 基底：白 / 近白 */
 	--color-base: #fefcfe;
 	--color-surface: #ffffff;
+	/* 强调底色（如 tianyi-700 徽章）上的文字色；随主题变化 */
+	--color-on-accent: #ffffff;
 
 	/* 樱花粉 sakura（H 6.2） */
 	--color-sakura-50: #fff1f3;
@@ -113,8 +115,177 @@
 	}
 }
 
-:root {
+/*
+ * 主题（外观设置，lib/appearance.ts）：<html data-theme="sakura|light|dark">，缺省 = sakura。
+ * 三块共用同一批 token 名，只换值：色阶、派生 token 与阴影。sakura 的色阶在 @theme 里是 Tailwind
+ * 生成工具类的来源，这里再复制一份，是为了让设置页预览卡（节点上写 data-theme）在任何当前主题下
+ * 都能显示 sakura 本色；两处一致由 test/theme-contrast.test.ts 守护。
+ * 深色主题的色阶「反相」：50 最接近背景、900 对比最高，使 `bg-sakura-100 text-sakura-800`
+ * 这类既有组合在深色下仍是「底色 + 可读文字」。阴影 token 引用不了 var()（会在 :root 上提前解析），
+ * 所以在每个主题块里写字面量。
+ */
+:root,
+[data-theme="sakura"] {
 	color-scheme: light;
+	--color-base: #fefcfe;
+	--color-surface: #ffffff;
+	--color-on-accent: #ffffff;
+	--color-sakura-50: #fff1f3;
+	--color-sakura-100: #ffe5ea;
+	--color-sakura-200: #ffd1da;
+	--color-sakura-300: #ffb7c5;
+	--color-sakura-400: #ed9bac;
+	--color-sakura-500: #da7f93;
+	--color-sakura-600: #c26279;
+	--color-sakura-700: #a74660;
+	--color-sakura-800: #8b314a;
+	--color-sakura-900: #6e1d36;
+	--color-tianyi-50: #eff8fe;
+	--color-tianyi-100: #dcf3ff;
+	--color-tianyi-200: #b4e6ff;
+	--color-tianyi-300: #66ccff;
+	--color-tianyi-400: #3db5eb;
+	--color-tianyi-500: #059fd7;
+	--color-tianyi-600: #0086bf;
+	--color-tianyi-700: #006ea7;
+	--color-tianyi-800: #00598f;
+	--color-tianyi-900: #004778;
+	--color-ink-50: #f7f4f8;
+	--color-ink-100: #f0ebf1;
+	--color-ink-200: #e2dbe4;
+	--color-ink-300: #c9bfcb;
+	--color-ink-400: #9e95a0;
+	--color-ink-500: #7a717c;
+	--color-ink-600: #6a5f6c;
+	--color-ink-700: #554857;
+	--color-ink-800: #443947;
+	--color-ink-900: #322b34;
+	--body-gradient: linear-gradient(150deg, #ffffff 0%, #fff5f8 42%, #eff9ff 100%);
+	--logo-gradient: linear-gradient(115deg, #c26279 0%, #da7f93 35%, #059fd7 100%);
+	--highlight-inset: rgb(255 255 255 / 0.75);
+	--mix-base: white;
+	--overlay: rgb(50 43 52 / 0.33);
+	--diff-add: #117555;
+	--diff-add-bg: oklch(0.5 0.1 165 / 0.08);
+	--diff-del: #8b314a;
+	--diff-del-bg: oklch(0.53 0.13 6.2 / 0.08);
+	--focus-ring: #d0728a;
+	--scrollbar: #ffd1da;
+	--scrollbar-hover: #ffb7c5;
+}
+
+/* 纸白：中性冷灰白，靛蓝（占 sakura 位）+ 青（占 tianyi 位） */
+[data-theme="light"] {
+	color-scheme: light;
+	--color-base: #f7f8fa;
+	--color-surface: #ffffff;
+	--color-on-accent: #ffffff;
+	--color-sakura-50: #f1f2fe;
+	--color-sakura-100: #e5e7fd;
+	--color-sakura-200: #cfd3fb;
+	--color-sakura-300: #aab1f5;
+	--color-sakura-400: #8b93ec;
+	--color-sakura-500: #6c73de;
+	--color-sakura-600: #5559c9;
+	--color-sakura-700: #4343ab;
+	--color-sakura-800: #363788;
+	--color-sakura-900: #2a2b6a;
+	--color-tianyi-50: #ecfafb;
+	--color-tianyi-100: #d3f3f6;
+	--color-tianyi-200: #a8e6ec;
+	--color-tianyi-300: #6dd1db;
+	--color-tianyi-400: #38b8c6;
+	--color-tianyi-500: #1d9bab;
+	--color-tianyi-600: #0f7f8f;
+	--color-tianyi-700: #0b6676;
+	--color-tianyi-800: #0a5160;
+	--color-tianyi-900: #093f4b;
+	--color-ink-50: #f6f7f9;
+	--color-ink-100: #eceef2;
+	--color-ink-200: #dde0e6;
+	--color-ink-300: #c2c7d0;
+	--color-ink-400: #98a0ad;
+	--color-ink-500: #68707e;
+	--color-ink-600: #565d6b;
+	--color-ink-700: #434956;
+	--color-ink-800: #323843;
+	--color-ink-900: #222731;
+	--body-gradient: linear-gradient(150deg, #ffffff 0%, #f6f7fb 50%, #eef1f6 100%);
+	--logo-gradient: linear-gradient(115deg, #4343ab 0%, #6c73de 35%, #0f7f8f 100%);
+	--highlight-inset: rgb(255 255 255 / 0.8);
+	--mix-base: white;
+	--overlay: rgb(24 28 38 / 0.35);
+	--diff-add: #0f7a52;
+	--diff-add-bg: oklch(0.5 0.1 165 / 0.08);
+	--diff-del: #a8321f;
+	--diff-del-bg: oklch(0.5 0.16 29 / 0.08);
+	--focus-ring: #6c73de;
+	--scrollbar: #cfd3fb;
+	--scrollbar-hover: #aab1f5;
+	--shadow-soft: 0 2px 10px 0 rgb(30 40 70 / 0.07);
+	--shadow-bubble: 0 2px 14px 0 rgb(30 40 70 / 0.08), 0 1px 3px 0 rgb(30 40 70 / 0.05);
+	--shadow-bubble-user: 0 3px 16px 0 rgb(67 67 171 / 0.14), 0 1px 4px 0 rgb(67 67 171 / 0.08);
+	--shadow-bubble-assistant: 0 3px 16px 0 rgb(30 40 70 / 0.09), 0 1px 4px 0 rgb(30 40 70 / 0.05);
+	--shadow-lift: 0 10px 32px 0 rgb(30 40 70 / 0.14);
+}
+
+/*
+ * 夜墨：参考 GitHub Dark / Tokyo Night 的做法——中性冷灰底（不带彩调）、层级靠明度而非色相、
+ * 单一柔和蓝紫主强调（占 sakura 位）+ 低饱和青辅色（占 tianyi 位）；边框与气泡底是低饱和灰蓝，
+ * 避免大面积彩色。色阶反相（50 最接近背景，900 对比最高）。
+ */
+[data-theme="dark"] {
+	color-scheme: dark;
+	--color-base: #0e1116;
+	--color-surface: #161b22;
+	--color-on-accent: #0b1220;
+	--color-sakura-50: #141a26;
+	--color-sakura-100: #1a2235;
+	--color-sakura-200: #263050;
+	--color-sakura-300: #34436b;
+	--color-sakura-400: #4a5f98;
+	--color-sakura-500: #7189db;
+	--color-sakura-600: #8da1e8;
+	--color-sakura-700: #a6b6f0;
+	--color-sakura-800: #c0cbf6;
+	--color-sakura-900: #dce3fb;
+	--color-tianyi-50: #11171c;
+	--color-tianyi-100: #161e25;
+	--color-tianyi-200: #252e38;
+	--color-tianyi-300: #35424f;
+	--color-tianyi-400: #468096;
+	--color-tianyi-500: #4fa3b8;
+	--color-tianyi-600: #6dbad0;
+	--color-tianyi-700: #8fcde0;
+	--color-tianyi-800: #b0dcea;
+	--color-tianyi-900: #d0ecf5;
+	--color-ink-50: #151a21;
+	--color-ink-100: #1d232b;
+	--color-ink-200: #2a313b;
+	--color-ink-300: #3d4653;
+	--color-ink-400: #667080;
+	--color-ink-500: #8b95a5;
+	--color-ink-600: #a1aab8;
+	--color-ink-700: #b8c0cc;
+	--color-ink-800: #d0d6df;
+	--color-ink-900: #e6e9ee;
+	--body-gradient: linear-gradient(160deg, #0e1116 0%, #11151c 55%, #0e1318 100%);
+	--logo-gradient: linear-gradient(115deg, #8da1e8 0%, #a6b6f0 40%, #6dbad0 100%);
+	--highlight-inset: rgb(255 255 255 / 0.05);
+	--mix-base: #0e1116;
+	--overlay: rgb(1 4 9 / 0.65);
+	--diff-add: #7ee787;
+	--diff-add-bg: rgb(46 160 67 / 0.15);
+	--diff-del: #ff7b72;
+	--diff-del-bg: rgb(248 81 73 / 0.15);
+	--focus-ring: #7189db;
+	--scrollbar: #2a313b;
+	--scrollbar-hover: #3d4653;
+	--shadow-soft: 0 2px 10px 0 rgb(1 4 9 / 0.4);
+	--shadow-bubble: 0 2px 12px 0 rgb(1 4 9 / 0.4), 0 1px 3px 0 rgb(1 4 9 / 0.3);
+	--shadow-bubble-user: 0 3px 14px 0 rgb(1 4 9 / 0.45), 0 1px 4px 0 rgb(1 4 9 / 0.35);
+	--shadow-bubble-assistant: 0 3px 14px 0 rgb(1 4 9 / 0.4), 0 1px 4px 0 rgb(1 4 9 / 0.3);
+	--shadow-lift: 0 10px 32px 0 rgb(1 4 9 / 0.6);
 }
 
 html,
@@ -125,7 +296,7 @@ body {
 body {
 	background-color: var(--color-base);
 	/* 空气感：极淡粉蓝对角渐变（fixed，不随滚动） */
-	background-image: linear-gradient(150deg, #ffffff 0%, #fff5f8 42%, #eff9ff 100%);
+	background-image: var(--body-gradient);
 	background-attachment: fixed;
 	color: var(--color-ink-900);
 	font-family: var(--font-sans);
@@ -181,7 +352,7 @@ body {
 
 * {
 	scrollbar-width: thin;
-	scrollbar-color: var(--color-sakura-200) transparent;
+	scrollbar-color: var(--scrollbar) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -194,31 +365,33 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-	background-color: var(--color-sakura-200);
+	background-color: var(--scrollbar);
 	border-radius: 8px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-	background-color: var(--color-sakura-300);
+	background-color: var(--scrollbar-hover);
 }
 
 /*
- * 可聚焦元素的 focus 样式：不用浏览器默认 outline，统一柔和的樱花粉 ring
- * （sakura-500 4px + 2px 基底色内环，随圆角、不裁切）。sakura-500 对浅色底
- * 非文本对比度 ≥3:1（1.4.11 AA）。所有交互元素加 .focus-neko。
+ * 可聚焦元素的 focus 样式：不用浏览器默认 outline，统一的主题色 ring
+ * （--focus-ring 4px + 2px 基底色内环，随圆角、不裁切）。--focus-ring 在每个主题下对页面底与卡片底
+ * 非文本对比度 ≥3:1（1.4.11 AA，test/theme-contrast.test.ts 守护）。所有交互元素加 .focus-neko。
  */
 .focus-neko {
 	outline: none;
 }
 
-.focus-neko:focus-visible {
+.focus-neko:focus-visible,
+.choice-focus:has(:focus-visible) {
 	box-shadow:
 		0 0 0 2px var(--color-base),
-		0 0 0 4px var(--color-sakura-500);
+		0 0 0 4px var(--focus-ring);
 }
 
 @media (forced-colors: active) {
-	.focus-neko:focus-visible {
+	.focus-neko:focus-visible,
+	.choice-focus:has(:focus-visible) {
 		outline: 2px solid Highlight;
 		box-shadow: none;
 	}
@@ -232,9 +405,71 @@ button {
 	color: inherit;
 }
 
+/* ---- 聊天排版（外观设置，lib/appearance.ts）：只作用于气泡正文、Markdown 正文与输入框 ----
+ * <html data-chat-font|size|weight|leading="…"> 选档；缺省 = 下面的默认值（与引入设置前一致）。
+ * 字体仅用系统字体栈，不打包字体文件；代码块、工具卡、侧栏等不读这些变量。
+ * --chat-leading：用户气泡/输入框；--chat-leading-md：助手 Markdown 正文。 */
+
+:root {
+	--chat-font-family: var(--font-sans);
+	--chat-font-size: 0.875rem;
+	--chat-font-weight: 400;
+	--chat-leading: 1.5;
+	--chat-leading-md: 1.75;
+}
+
+[data-chat-font="serif"] {
+	--chat-font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", Georgia, serif;
+}
+
+[data-chat-font="mono"] {
+	--chat-font-family: var(--font-mono);
+}
+
+[data-chat-size="13"] {
+	--chat-font-size: 0.8125rem;
+}
+
+[data-chat-size="16"] {
+	--chat-font-size: 1rem;
+}
+
+[data-chat-size="18"] {
+	--chat-font-size: 1.125rem;
+}
+
+[data-chat-weight="medium"] {
+	--chat-font-weight: 500;
+}
+
+[data-chat-weight="semibold"] {
+	--chat-font-weight: 600;
+}
+
+[data-chat-leading="compact"] {
+	--chat-leading: 1.35;
+	--chat-leading-md: 1.6;
+}
+
+[data-chat-leading="relaxed"] {
+	--chat-leading: 1.7;
+	--chat-leading-md: 2;
+}
+
+.composer-input {
+	font-family: var(--chat-font-family);
+	font-size: var(--chat-font-size);
+	font-weight: var(--chat-font-weight);
+	line-height: var(--chat-leading);
+}
+
 /* ---- 聊天气泡 ---- */
 
 .bubble-user {
+	font-family: var(--chat-font-family);
+	font-size: var(--chat-font-size);
+	font-weight: var(--chat-font-weight);
+	line-height: var(--chat-leading);
 	background-image: linear-gradient(135deg, var(--color-sakura-100) 0%, var(--color-sakura-200) 100%);
 	border: 1px solid var(--color-sakura-300);
 	color: var(--color-sakura-900);
@@ -244,6 +479,10 @@ button {
 }
 
 .bubble-assistant {
+	font-family: var(--chat-font-family);
+	font-size: var(--chat-font-size);
+	font-weight: var(--chat-font-weight);
+	line-height: var(--chat-leading);
 	background-color: var(--color-surface);
 	border: 1px solid var(--color-tianyi-200);
 	color: var(--color-ink-900);
@@ -256,17 +495,17 @@ button {
 
 .btn-primary {
 	background-image: linear-gradient(135deg, var(--color-sakura-200) 0%, var(--color-tianyi-200) 100%);
-	border: 1px solid color-mix(in oklab, var(--color-sakura-300) 60%, white);
+	border: 1px solid color-mix(in oklab, var(--color-sakura-300) 60%, var(--mix-base));
 	color: var(--color-sakura-900);
 	box-shadow:
-		inset 0 1px 0 rgb(255 255 255 / 0.75),
+		inset 0 1px 0 var(--highlight-inset),
 		var(--shadow-soft);
 }
 
 .btn-primary:hover {
 	filter: brightness(1.05);
 	box-shadow:
-		inset 0 1px 0 rgb(255 255 255 / 0.75),
+		inset 0 1px 0 var(--highlight-inset),
 		var(--shadow-lift);
 }
 
@@ -389,7 +628,7 @@ button {
 
 /* logo 粉蓝渐变文字（图形对比度 ≥3:1，1.4.11） */
 .logo-gradient {
-	background-image: linear-gradient(115deg, #c26279 0%, #da7f93 35%, #059fd7 100%);
+	background-image: var(--logo-gradient);
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
@@ -514,7 +753,7 @@ button {
 /* ---- Markdown 渲染（内容经 DOMPurify 消毒后注入） ---- */
 
 .md {
-	line-height: 1.75;
+	line-height: var(--chat-leading-md);
 	overflow-wrap: anywhere;
 }
 
@@ -551,16 +790,21 @@ button {
 }
 
 .md h1 {
-	font-size: 1.25rem;
+	font-size: 1.4286em;
 }
 
 .md h2 {
-	font-size: 1.125rem;
+	font-size: 1.2857em;
 }
 
 .md h3,
 .md h4 {
-	font-size: 1rem;
+	font-size: 1.1429em;
+}
+
+.md strong,
+.md b {
+	font-weight: 700;
 }
 
 .md a {
@@ -610,6 +854,7 @@ button {
 .md code {
 	font-family: var(--font-mono);
 	font-size: 0.85em;
+	font-weight: 400;
 	background-color: var(--color-ink-100);
 	color: var(--color-ink-800);
 	padding: 0.0625rem 0.25rem;
@@ -625,6 +870,7 @@ button {
 	border-radius: 0.75rem;
 	overflow-x: auto;
 	font-size: 0.85rem;
+	font-weight: 400;
 	line-height: 1.6;
 }
 
@@ -692,24 +938,24 @@ button {
 	color: var(--color-ink-900);
 }
 
-/* diff：增 #117555 = oklch(0.50 0.10 165)，删 sakura-800，均带 8% 底色提示 */
+/* diff：增色 --diff-add（樱花主题 #117555 = oklch(0.50 0.10 165)），删 --diff-del（樱花主题 sakura-800），均带 8% 底色提示 */
 .hljs-addition {
-	color: #117555;
-	background-color: oklch(0.5 0.1 165 / 0.08);
+	color: var(--diff-add);
+	background-color: var(--diff-add-bg);
 }
 
 .hljs-deletion {
-	color: var(--color-sakura-800);
-	background-color: oklch(0.53 0.13 6.2 / 0.08);
+	color: var(--diff-del);
+	background-color: var(--diff-del-bg);
 }
 
 /* 工具卡 diff 行：仅增删底色，语法 token 前景色由 hljs 类叠加（配色同上） */
 .diff-line-add {
-	background-color: oklch(0.5 0.1 165 / 0.08);
+	background-color: var(--diff-add-bg);
 }
 
 .diff-line-del {
-	background-color: oklch(0.53 0.13 6.2 / 0.08);
+	background-color: var(--diff-del-bg);
 }
 
 .diff-gutter {
@@ -729,6 +975,48 @@ button {
 	font-weight: 700;
 }
 
+/* 夜墨代码高亮：GitHub Dark 配色，多色相易读（对 tianyi-50 代码底的对比度由 theme-contrast.test.ts 守护） */
+[data-theme="dark"] .hljs-comment,
+[data-theme="dark"] .hljs-quote {
+	color: #8b949e;
+}
+
+[data-theme="dark"] .hljs-keyword,
+[data-theme="dark"] .hljs-selector-tag,
+[data-theme="dark"] .hljs-literal,
+[data-theme="dark"] .hljs-tag,
+[data-theme="dark"] .hljs-name {
+	color: #ff7b72;
+}
+
+[data-theme="dark"] .hljs-string,
+[data-theme="dark"] .hljs-doctag,
+[data-theme="dark"] .hljs-regexp {
+	color: #a5d6ff;
+}
+
+[data-theme="dark"] .hljs-number,
+[data-theme="dark"] .hljs-symbol,
+[data-theme="dark"] .hljs-bullet,
+[data-theme="dark"] .hljs-link {
+	color: #79c0ff;
+}
+
+[data-theme="dark"] .hljs-title,
+[data-theme="dark"] .hljs-section,
+[data-theme="dark"] .hljs-attr {
+	color: #d2a8ff;
+}
+
+[data-theme="dark"] .hljs-built_in,
+[data-theme="dark"] .hljs-type,
+[data-theme="dark"] .hljs-attribute,
+[data-theme="dark"] .hljs-selector-class,
+[data-theme="dark"] .hljs-selector-id,
+[data-theme="dark"] .hljs-meta {
+	color: #ffa657;
+}
+
 .md hr {
 	border: none;
 	border-top: 1px dashed var(--color-sakura-300);
@@ -738,7 +1026,7 @@ button {
 .md table {
 	border-collapse: collapse;
 	margin: 0.6rem 0;
-	font-size: 0.9rem;
+	font-size: 0.9em;
 }
 
 .md th,
@@ -1220,7 +1508,7 @@ button {
 		flex-direction: column;
 	}
 	.dialog::backdrop {
-		background: rgb(50 43 52 / 0.33);
+		background: var(--overlay);
 	}
 	.dialog-heading {
 		display: flex;

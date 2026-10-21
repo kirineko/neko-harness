@@ -70,7 +70,7 @@ function ThresholdBar({ items }: { items: Marker[] }) {
 							style={{ left: `${item.percent}%` }}
 						>
 							<span
-								className={`block size-4 rounded-full border-2 border-white shadow ${
+								className={`block size-4 rounded-full border-2 border-surface shadow ${
 									item.id === "pruning" ? "bg-tianyi-500" : "bg-sakura-600"
 								}`}
 							/>

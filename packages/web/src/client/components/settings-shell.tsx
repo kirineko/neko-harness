@@ -2,23 +2,24 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Icon } from "./primitives";
 
-export type SettingsSection = "credentials" | "search" | "context" | "mobile" | "about";
+export type SettingsSection = "credentials" | "search" | "context" | "appearance" | "mobile" | "about";
 
 const MENU: readonly {
 	key: SettingsSection;
 	label: string;
-	icon: "key" | "layers" | "phone" | "info" | "search";
+	icon: "key" | "layers" | "phone" | "info" | "search" | "palette";
 	to: string;
 }[] = [
 	{ key: "credentials", label: "模型服务", icon: "key", to: "/settings" },
 	{ key: "search", label: "联网搜索", icon: "search", to: "/settings/search" },
 	{ key: "context", label: "上下文", icon: "layers", to: "/settings/context" },
+	{ key: "appearance", label: "外观", icon: "palette", to: "/settings/appearance" },
 	{ key: "mobile", label: "手机配对", icon: "phone", to: "/settings/mobile" },
 	{ key: "about", label: "关于与更新", icon: "info", to: "/about" },
 ];
 
 /**
- * 设置区统一外壳：左侧栏菜单（模型服务 / 联网搜索 / 上下文 / 手机配对 / 关于与更新）+ 右侧内容。
+ * 设置区统一外壳：左侧栏菜单（模型服务 / 联网搜索 / 上下文 / 外观 / 手机配对 / 关于与更新）+ 右侧内容。
  * 移动端侧栏转为顶部横排，菜单项保持可点。
  */
 export function SettingsShell({ active, children }: { active: SettingsSection; children: ReactNode }) {
@@ -39,6 +40,7 @@ export function SettingsShell({ active, children }: { active: SettingsSection; c
 					<Link
 						key={item.key}
 						to={item.to}
+						activeOptions={{ exact: true }}
 						aria-current={active === item.key ? "page" : undefined}
 						className={`focus-neko inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm ${
 							active === item.key ? "bg-sakura-100 font-semibold text-sakura-800" : "text-ink-600 hover:bg-ink-100"

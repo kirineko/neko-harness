@@ -86,6 +86,13 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 平台命令集中在 `resolveLaunch`：WSL（linux + `WSL_DISTRO_NAME` 或 `/proc/version` 含 microsoft）按 Windows 处理，文件管理器为 `explorer.exe .`（cwd = 工作区），标签「资源管理器」；Windows 的 VS Code 由 `code.cmd` 位置推出 `Code.exe` 直接启动。每次打开前重新探测。
 - 前端 `OpenWorkspaceMenu`（顶栏分体按钮）用 localStorage `neko.openTarget` 记住上次目标；工作区栏入口是 `panel-right` 图标加改动数角标（保留 `data-workspace-entry`）。无快捷键。
 
+## Web 外观
+
+- 主题（樱花 sakura 默认 / 纸白 light / 夜墨 dark）与聊天排版（字体、字号、字重、行高）只存浏览器 localStorage `neko.appearance`，不经 gateway、不提升应用协议、不影响 TUI/移动端。设置页 `/settings/appearance`，偏好权威是 `lib/appearance.ts`（取值列表、逐项回落、`storage` 事件跨标签页同步）。
+- 生效方式是 `<html>` 上的 `data-theme` / `data-chat-font|size|weight|leading`（默认值省略属性）；`index.html` 首屏内联脚本只搬运匹配 `/^[a-z0-9-]{1,16}$/` 的字符串，样式表不认识的值等于默认。
+- 三套主题共用 `styles.css` 的同一批 token 名，只换值：`[data-theme]` 块覆盖色阶（深色主题色阶反相）、派生 token（渐变、`--on-accent`、`--focus-ring`、diff 色、阴影等）。组件里不要写 `text-white`、`bg-white` 等字面量色（二维码除外），用 token。阴影 token 在每个主题块写字面量（`var()` 会在 `:root` 上提前解析）。sakura 色阶在 `@theme` 与 `[data-theme="sakura"]` 各有一份，由 `theme-contrast.test.ts` 对拍；该测试同时按主题守护关键色对 WCAG 对比度，改色值时以它为准。
+- 聊天排版只作用于 `.bubble-user` / `.bubble-assistant` / `.md` 正文 / `.composer-input`，经 `--chat-*` 变量；代码块、工具卡、侧栏不变。字体只用系统字体栈，不打包字体文件。
+
 ## Pi 1.3 使用要点（以已安装发布包的类型与行为为准）
 
 - durable 异步调用使用 `Context`（core 默认 `BACKGROUND_CONTEXT`）；远程 Chord 引用（`Ref`）方法使用可选 `Ctx`，普通调用自动 root，需要取消/组合时使用 host.root；ctx 只能给创建它的 host 的引用用（否则 `invalid/foreign_ctx`）。

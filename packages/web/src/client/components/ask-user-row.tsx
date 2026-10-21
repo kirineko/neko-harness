@@ -32,7 +32,7 @@ export function AskUserRow({ interaction, onLocate }: { interaction: AskUser; on
 			className="rounded-card border border-tianyi-200 bg-surface px-3 py-2 text-sm shadow-soft"
 		>
 			<div className="flex flex-wrap items-center gap-2">
-				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-white">
+				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-on-accent">
 					<Icon name="sparkles" size={12} />
 					助手提问
 				</span>
