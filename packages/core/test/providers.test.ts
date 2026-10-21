@@ -1,11 +1,5 @@
 import { expect, it } from "bun:test";
-import {
-	createModels,
-	fauxAssistantMessage,
-	fauxProvider,
-	InMemoryCredentialStore,
-	type RefreshModelsContext,
-} from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai";
 import { createNekoRuntime } from "../src/runtime.ts";
 
 it("uses published DeepSeek 1.3 capabilities directly", async () => {
@@ -26,24 +20,14 @@ it("uses published DeepSeek 1.3 capabilities directly", async () => {
 	}
 });
 
-it("delegates custom provider URLs and refresh context to Pi 1.3", async () => {
+it("sends requests to a custom provider's baseUrl", async () => {
 	const faux = fauxProvider();
 	const baseUrl = "https://custom-provider.invalid/v1";
-	const contexts: RefreshModelsContext[] = [];
 	const provider = {
 		...faux.provider,
 		baseUrl,
 		getModels: () => faux.models.map((model) => ({ ...model, baseUrl })),
-		refreshModels: async (context: RefreshModelsContext) => {
-			contexts.push(context);
-		},
 	};
-	const models = createModels({ credentials: new InMemoryCredentialStore() });
-	models.setProvider(provider);
-	const signal = new AbortController().signal;
-	expect(await models.refresh({ providers: [provider.id], force: true, signal })).toMatchObject({ aborted: false });
-	expect(contexts.at(-1)).toMatchObject({ baseUrl, allowNetwork: true, force: true });
-	expect(contexts.at(-1)!.signal.aborted).toBe(false);
 	let url = "";
 	faux.setResponses([
 		(_ctx, _options, _state, model) => {

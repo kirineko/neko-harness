@@ -263,7 +263,12 @@ export type NekoGatewayConnection = {
 	detach(): Promise<void>;
 	close(): Promise<void>;
 };
-export function createGatewayConnection(link: Link, serverId: string): NekoGatewayConnection {
+export function createGatewayConnection(
+	link: Link,
+	serverId: string,
+	options: { readonly readyTimeoutMs?: number } = {},
+): NekoGatewayConnection {
+	const readyTimeoutMs = options.readyTimeoutMs ?? READY_TIMEOUT_MS;
 	let protocolMismatch = false;
 	const linkClosed = new AbortController();
 	let closeReason = "";
@@ -319,7 +324,7 @@ export function createGatewayConnection(link: Link, serverId: string): NekoGatew
 		return business;
 	};
 	const checkReady = async (signal?: AbortSignal) => {
-		await deadline(application.ready, signal);
+		await deadline(application.ready, signal, readyTimeoutMs);
 		const info = application.info.value;
 		// Identity is verified from the gateway's own state before any business service is bound.
 		if (info.serverId !== serverId) throw new GatewayIdentityError();
@@ -351,6 +356,7 @@ export function createGatewayConnection(link: Link, serverId: string): NekoGatew
 				skillMarket.ready,
 			]),
 			signal,
+			readyTimeoutMs,
 		);
 	};
 	let chat: NekoChat | undefined;
@@ -420,7 +426,7 @@ export function createGatewayConnection(link: Link, serverId: string): NekoGatew
 			chat = current;
 			stopView = current.view.subscribe(() => {});
 			try {
-				await deadline(current.ready, ctx?.signal);
+				await deadline(current.ready, ctx?.signal, readyTimeoutMs);
 				if (current !== chat) throw new Error("Attachment changed");
 				return current;
 			} catch (error) {
@@ -460,13 +466,15 @@ export function createGatewayConnection(link: Link, serverId: string): NekoGatew
 	return connection;
 }
 
-function deadline<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+const READY_TIMEOUT_MS = 5000;
+
+function deadline<T>(work: Promise<T>, signal: AbortSignal | undefined, timeoutMs: number): Promise<T> {
 	let timer: ReturnType<typeof setTimeout>;
 	let abort: () => void = () => {};
 	return Promise.race([
 		work,
 		new Promise<never>((_, reject) => {
-			timer = setTimeout(() => reject(new Error("Gateway readiness timed out")), 5000);
+			timer = setTimeout(() => reject(new Error("Gateway readiness timed out")), timeoutMs);
 			abort = () => reject(signal?.reason ?? new Error("Cancelled"));
 			signal?.addEventListener("abort", abort, { once: true });
 			if (signal?.aborted) abort();

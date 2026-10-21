@@ -111,6 +111,7 @@ for (const mode of ["failure", "cancel", "retry", "overflow"] as const) {
 			storage: "memory",
 			model: { provider: "faux", modelId: "compact" },
 			providers: [faux.provider],
+			timings: { retryBaseDelayMs: 20 },
 		});
 		const statuses: { reason: string; retry?: unknown }[] = [];
 		const stop = runtime.harness.subscribeCommits(({ changes }) => {

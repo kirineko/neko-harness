@@ -146,11 +146,14 @@ it("aborts a slow environment on the deadline", async () => {
 			ctx.abortSignal?.addEventListener("abort", abort, { once: true });
 			if (ctx.abortSignal?.aborted) abort();
 		});
+	const original = SEARCH_LIMITS.timeoutMs;
+	SEARCH_LIMITS.timeoutMs = 50;
 	try {
 		await expect(SearchText.execute({ pattern: "x" }, { env } as unknown as ToolExecutionApi, context)).rejects.toThrow(
 			"timed out",
 		);
 	} finally {
+		SEARCH_LIMITS.timeoutMs = original;
 		await files.close();
 	}
-}, 15000);
+}, 5000);

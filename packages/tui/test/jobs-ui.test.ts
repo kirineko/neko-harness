@@ -128,7 +128,7 @@ it("reads output incrementally by offset and follows new output until scrolled u
 		async () => [],
 		async () => {},
 	);
-	const detail = new JobDetail(f.client, "j1", panel, () => {}).open();
+	const detail = new JobDetail(f.client, "j1", panel, () => {}, 30).open();
 	cleanup.push(() => detail.close());
 	expect(f.reads).toEqual([undefined]);
 	f.respond(read(Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n"), 200));
@@ -142,7 +142,7 @@ it("reads output incrementally by offset and follows new output until scrolled u
 	expect(detail.help).toContain("Bottom");
 	expect(held).not.toContain("line 29");
 
-	await new Promise((resolve) => setTimeout(resolve, 1100));
+	await new Promise((resolve) => setTimeout(resolve, 150));
 	expect(f.reads).toEqual([undefined, 200]);
 	f.respond(read("\nnew tail", 209));
 	await tick();
@@ -182,13 +182,13 @@ it("drops a late response after the panel closes", async () => {
 		async () => [],
 		async () => {},
 	);
-	const detail = new JobDetail(f.client, "j1", panel, () => {}).open();
+	const detail = new JobDetail(f.client, "j1", panel, () => {}, 30).open();
 	detail.close();
 	const before = renders();
 	f.respond(read("stale output", 12));
 	await tick();
 	expect(plain(detail.lines(60, 8))).not.toContain("stale output");
-	await new Promise((resolve) => setTimeout(resolve, 1100));
+	await new Promise((resolve) => setTimeout(resolve, 150));
 	expect(f.reads).toEqual([undefined]);
 	expect(renders()).toBe(before);
 });

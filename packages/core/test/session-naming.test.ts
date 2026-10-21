@@ -80,6 +80,7 @@ it("falls back after two invalid title responses without polluting the transcrip
 		storage: "memory",
 		providers: [faux.provider],
 		model: { provider: "faux", modelId: "faux-1" },
+		timings: { namingRetryDelayMs: 20 },
 	});
 	try {
 		await runtime.submit("first question");
@@ -379,10 +380,14 @@ it("bounds hung title requests by timeout and the persisted retry budget", async
 		storage: "memory",
 		providers: [faux.provider],
 		model: { provider: "faux", modelId: "faux-1" },
+		timings: { namingRequestTimeoutMs: 100, namingRetryDelayMs: 20 },
 	});
 	try {
 		await runtime.waitAnswer(await runtime.submit("timeout question"));
-		await Bun.sleep(43_000);
+		await until(
+			async () =>
+				(await runtime.harness.snapshot(SessionMetadataDoc, runtime.root.id, runtime.context))?.naming === "fallback",
+		);
 		const saved = await runtime.harness.snapshot(SessionMetadataDoc, runtime.root.id, runtime.context);
 		expect(saved?.naming).toBe("fallback");
 		expect(saved?.attempts).toBe(2);
@@ -391,7 +396,7 @@ it("bounds hung title requests by timeout and the persisted retry budget", async
 	} finally {
 		await runtime.close();
 	}
-}, 50_000);
+}, 15_000);
 
 it("does not advance message time or name an aborted first answer", async () => {
 	const faux = fauxProvider({ tokensPerSecond: 100, tokenSize: { min: 1, max: 1 } });

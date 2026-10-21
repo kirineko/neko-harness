@@ -124,6 +124,7 @@ export {
 	type NekoModelRef,
 	type NekoRuntime,
 	type NekoRuntimeOptions,
+	type NekoRuntimeTimings,
 	type NekoSelectableModel,
 	type NekoSession,
 	type NekoSkillInfo,

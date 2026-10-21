@@ -79,7 +79,10 @@ export class JobDetail implements PickerDetail {
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#polling = false;
 
-	constructor(jobs: JobsClient, jobId: string, panel: PickerPanel, changed: () => void) {
+	#pollMs: number;
+
+	constructor(jobs: JobsClient, jobId: string, panel: PickerPanel, changed: () => void, pollMs: number = POLL_MS) {
+		this.#pollMs = pollMs;
 		this.#jobs = jobs;
 		this.jobId = jobId;
 		this.#panel = panel;
@@ -139,7 +142,7 @@ export class JobDetail implements PickerDetail {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
 		if (!this.#active || !keepGoing) return;
-		this.#timer = setTimeout(() => void this.#poll(), POLL_MS);
+		this.#timer = setTimeout(() => void this.#poll(), this.#pollMs);
 	}
 
 	scroll(delta: number): void {

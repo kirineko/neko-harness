@@ -58,6 +58,7 @@ async function open(dir: string, responses: ReturnType<typeof fauxAssistantMessa
 		credentials: new InMemoryCredentialStore(),
 		providers: [faux.provider],
 		model: { provider: "faux", modelId: "faux-1" },
+		timings: { jobStartWindowMs: 500 },
 	});
 }
 
@@ -104,6 +105,7 @@ it("marks a zero exit exited and a timeout failed with its reason", () =>
 		]);
 		try {
 			await runtime.waitAnswer(await runtime.submit("go"));
+			await until(async () => (await runtime.root.jobs()).find((j) => j.jobId === "job-2")?.status === "failed");
 			const jobs = await runtime.root.jobs();
 			expect(jobs.find((j) => j.jobId === "job-1")).toMatchObject({ status: "exited", exitCode: 0 });
 			expect(jobs.find((j) => j.jobId === "job-2")).toMatchObject({ status: "failed", reason: "timeout" });
@@ -208,7 +210,7 @@ it(
 			const runtime = await open(
 				dir,
 				[
-					call({ action: "start", command: "sleep 3; echo boom; exit 2" }),
+					call({ action: "start", command: "sleep 1.5; echo boom; exit 2" }),
 					answer(`${"waiting ".repeat(40)}`),
 					answer("handled the report"),
 				],

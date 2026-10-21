@@ -231,7 +231,10 @@ export class JobManager {
 	readonly #runner = this.#createRunner();
 	readonly extension: Extension;
 
-	constructor() {
+	readonly #startWindowMs: number;
+
+	constructor(options: { readonly startWindowMs?: number } = {}) {
+		this.#startWindowMs = options.startWindowMs ?? JOB_LIMITS.startWindowMs;
 		this.extension = this.#createExtension();
 	}
 
@@ -453,7 +456,7 @@ export class JobManager {
 		}
 		// Held here because the runner removes the entry from the registry once it settles.
 		const live = entry!;
-		await Promise.race([live.exited, delay(JOB_LIMITS.startWindowMs, context.abortSignal)]);
+		await Promise.race([live.exited, delay(this.#startWindowMs, context.abortSignal)]);
 		live.windowOpen = false;
 		if (live.suppressReport) await live.exited;
 		const job = (await io.state())?.items.find((item) => item.jobId === created.jobId) ?? created;

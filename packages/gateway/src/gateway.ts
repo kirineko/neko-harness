@@ -13,6 +13,7 @@ import {
 	loadNekoConfig,
 	type NekoModelRef,
 	type NekoRuntime,
+	type NekoRuntimeTimings,
 	type SearchProviderId,
 	type WindowsShellResolver,
 } from "@neko-harness/core";
@@ -48,6 +49,8 @@ export type NekoGatewayOptions = {
 	readonly promptHome?: string;
 	/** 替换 Windows Git Bash 探测（测试在任意平台演练 Windows 路径）；缺省仅 Windows 按配置 shell.path 探测。 */
 	readonly shellResolver?: WindowsShellResolver;
+	/** 缩短内置等待（测试用）；不由 CLI 或配置文件提供。 */
+	readonly timings?: NekoRuntimeTimings;
 	/** 技能市场 API 地址；缺省读取配置 skills.marketUrl，再回落官方市场。 */
 	readonly marketUrl?: string;
 	// —— 网关监听地址 ——
@@ -135,6 +138,7 @@ export async function startGateway(options: NekoGatewayOptions = {}): Promise<Ne
 		...(options.promptHome !== undefined ? { promptHome: options.promptHome } : {}),
 		...(fileConfig.shell?.path !== undefined ? { shellPath: fileConfig.shell.path } : {}),
 		...(options.shellResolver !== undefined ? { shellResolver: options.shellResolver } : {}),
+		...(options.timings !== undefined ? { timings: options.timings } : {}),
 	});
 	try {
 		return await bindGateway(runtime, {

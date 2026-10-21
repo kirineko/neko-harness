@@ -96,6 +96,7 @@ export async function startMobileHarness(
 			mobileNetwork: { wsl: null },
 			model: { provider: "faux", modelId: options.models?.models?.[0]?.id ?? "faux-1" },
 			providers: [faux.provider],
+			timings: { jobStartWindowMs: 500 },
 		});
 	let gateway = await launch();
 	const port = await freePort();

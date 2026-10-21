@@ -172,7 +172,7 @@ it("keeps a background job running while a question waits and reports it only af
 	harness = await startMobileHarness();
 	harness.faux.setResponses([
 		fauxAssistantMessage(
-			[fauxToolCall("job", { action: "start", command: "sleep 2.5; printf finished", title: "quick" })],
+			[fauxToolCall("job", { action: "start", command: "sleep 1.5; printf finished", title: "quick" })],
 			{
 				stopReason: "toolUse",
 			},

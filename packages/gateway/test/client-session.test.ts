@@ -95,14 +95,14 @@ it("waits for delayed initial state and returns native handles through async bou
 
 it("bounds gateway readiness when the peer never delivers a snapshot", async () => {
 	const [link, peer] = memoryLinkPair();
-	const client = createGatewayConnection(link, "absent");
+	const client = createGatewayConnection(link, "absent", { readyTimeoutMs: 100 });
 	try {
 		await expect(client.ready()).rejects.toThrow("timed out");
 	} finally {
 		await Promise.all([client.close(), client.close()]);
 		peer.close();
 	}
-}, 10000);
+}, 5000);
 
 it("rejects a gateway whose server id differs before binding any business service", async () => {
 	const faux = fauxProvider();

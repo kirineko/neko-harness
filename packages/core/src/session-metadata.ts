@@ -62,6 +62,11 @@ export const SessionMetadataDoc = defineDoc<SessionMetadata>({
 		namingUsage: { models: {}, tools: {} },
 	}),
 });
+
+export const NAMING_REQUEST_TIMEOUT_MS = 20_000;
+export const NAMING_RETRY_DELAY_MS = 2000;
+export type NamingTimings = { readonly requestTimeoutMs?: number; readonly retryDelayMs?: number };
+
 export function shortText(value: string, limit = 60): string {
 	return [
 		...stripVTControlCharacters(value)
@@ -106,7 +111,10 @@ export function mergeUsage(base: UsageState, extra: UsageState): UsageState {
 }
 
 /** Native tasks own retries, close cancellation and restart recovery; this gate only limits requests. */
-function namingTask(canUse: (provider: string, modelId: string) => Promise<boolean>) {
+function namingTask(
+	canUse: (provider: string, modelId: string) => Promise<boolean>,
+	{ requestTimeoutMs, retryDelayMs }: Required<NamingTimings>,
+) {
 	let active = 0;
 	const waits = new Set<() => void>();
 	return defineTask<
@@ -167,7 +175,7 @@ function namingTask(canUse: (provider: string, modelId: string) => Promise<boole
 					}, context);
 					let title = "",
 						usage: Usage | undefined;
-					const signal = AbortSignal.any([runtime.signal, AbortSignal.timeout(20_000)]);
+					const signal = AbortSignal.any([runtime.signal, AbortSignal.timeout(requestTimeoutMs)]);
 					try {
 						const budget = Math.max(32, Math.min(12000, Math.floor((model.contextWindow - 512) / 4)));
 						const response = await Promise.race([
@@ -215,7 +223,7 @@ function namingTask(canUse: (provider: string, modelId: string) => Promise<boole
 						} else d.naming = d.attempts >= 2 ? "fallback" : "pending";
 						return title || d.attempts >= 2
 							? { status: "terminal", outcome: { status: "completed", result: null } }
-							: { status: "running", checkpoint: { phase: "wait", until: runtime.now() + 2000 } };
+							: { status: "running", checkpoint: { phase: "wait", until: runtime.now() + retryDelayMs } };
 					}, context);
 				} finally {
 					active--;
@@ -253,8 +261,12 @@ export class SessionMetadataManager {
 		registry: Registry,
 		report: (error: unknown) => void = console.error,
 		canUseModel: (provider: string, modelId: string) => Promise<boolean> = async () => true,
+		timings: NamingTimings = {},
 	) {
-		this.task = namingTask(canUseModel);
+		this.task = namingTask(canUseModel, {
+			requestTimeoutMs: timings.requestTimeoutMs ?? NAMING_REQUEST_TIMEOUT_MS,
+			retryDelayMs: timings.retryDelayMs ?? NAMING_RETRY_DELAY_MS,
+		});
 		this.harness = harness;
 		this.storage = storage;
 		this.context = context;

@@ -133,6 +133,7 @@ export async function makeGateway(): Promise<TestGateway> {
 		mobileNetwork: { wsl: null },
 		model: { provider: "faux", modelId: "faux-1" },
 		providers: [faux.provider],
+		timings: { jobStartWindowMs: 500 },
 	});
 	trackGateway(gateway);
 	return { gateway, dir, faux, socketPath: socketPath ?? undefined, wsUrl: gateway.wsUrl ?? "", serverId };

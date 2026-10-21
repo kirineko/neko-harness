@@ -190,6 +190,19 @@ export type NekoRuntimeOptions = {
 	readonly shellPath?: string;
 	/** Replaces the Windows Git Bash probe; tests inject it to exercise the Windows path on any platform. */
 	readonly shellResolver?: WindowsShellResolver;
+	/** Shortens built-in waits so tests need not sit through them; not exposed by the CLI or the config file. */
+	readonly timings?: NekoRuntimeTimings;
+};
+
+export type NekoRuntimeTimings = {
+	/** How long `job start` waits for an early exit; default `JOB_LIMITS.startWindowMs`. */
+	readonly jobStartWindowMs?: number;
+	/** Per-attempt timeout of the session title request; default 20s. */
+	readonly namingRequestTimeoutMs?: number;
+	/** Wait before the second title attempt; default 2s. */
+	readonly namingRetryDelayMs?: number;
+	/** Base delay of Pi's durable generation retry; default is Pi's own. */
+	readonly retryBaseDelayMs?: number;
 };
 
 export type NekoSubmitOptions = {
@@ -626,7 +639,9 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			(ref) => guardProvider(ref),
 		),
 	);
-	const jobs = new JobManager();
+	const jobs = new JobManager(
+		options.timings?.jobStartWindowMs === undefined ? {} : { startWindowMs: options.timings.jobStartWindowMs },
+	);
 	registry.install(jobs.extension);
 	registry.install(createTodoExtension());
 	let questions!: UserQuestions;
@@ -646,6 +661,9 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			models,
 			registry,
 			settings: {
+				...(options.timings?.retryBaseDelayMs === undefined
+					? {}
+					: { retry: { baseDelayMs: options.timings.retryBaseDelayMs } }),
 				// Read at every use, so a saved change applies from the next threshold check without a restart.
 				get compaction() {
 					return compactionPolicy(
@@ -782,6 +800,14 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 				() => true,
 				() => false,
 			),
+		{
+			...(options.timings?.namingRequestTimeoutMs === undefined
+				? {}
+				: { requestTimeoutMs: options.timings.namingRequestTimeoutMs }),
+			...(options.timings?.namingRetryDelayMs === undefined
+				? {}
+				: { retryDelayMs: options.timings.namingRetryDelayMs }),
+		},
 	);
 	if (existing.length === 0) await metadata.initialize(conversation.id);
 	for (const record of existing)

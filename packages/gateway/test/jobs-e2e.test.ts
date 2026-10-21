@@ -40,6 +40,7 @@ it.skipIf(IS_WINDOWS)(
 				cwd: dir,
 				model: { provider: "faux", modelId: "faux-1" },
 				providers: [faux.provider],
+				timings: { jobStartWindowMs: 500 },
 			});
 			const client = await connectTestClient(gateway);
 			return { gateway, client };
@@ -50,7 +51,7 @@ it.skipIf(IS_WINDOWS)(
 		const first = await open([
 			start(
 				{ command: `echo run >> '${counter}'; sleep 3101`, title: "service" },
-				{ command: "sleep 3; echo boom; exit 2", title: "crasher" },
+				{ command: "sleep 2; echo boom; exit 2", title: "crasher" },
 			),
 			text("started both"),
 			text("service is up"),
