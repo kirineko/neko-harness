@@ -7,7 +7,7 @@
 			"apiVersion": 1,
 			"serverId": "9f2c1b7a-3d4e-4c5a-9b8d-2e7f6a5c4b3a",
 			"serverName": "kirinekoMacBook-Pro.local",
-			"gatewayVersion": "0.4.7",
+			"gatewayVersion": "0.4.8",
 			"capabilities": ["workspaces", "sessions", "chat", "subagents", "approvals", "media", "todos", "questions", "plan"],
 			"limits": {
 				"maxFrameBytes": 262144,
