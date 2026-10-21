@@ -8,9 +8,10 @@ import {
 	exportFileName,
 	exportFormatFromPath,
 } from "@neko-harness/core/conversation-export";
+import { t } from "./i18n/index.ts";
 import { expandHome } from "./image-input.ts";
 
-export const EXPORT_USAGE = "Usage: /export [path.md|path.html|path.json] [--thinking]";
+export const exportUsage = (): string => t("export.usage");
 
 export type ExportArgs = { path: string | undefined; includeThinking: boolean };
 
@@ -39,16 +40,17 @@ export function parseExportArgs(input: string): ExportArgs {
 			active = true;
 		}
 	}
-	if (quote !== "") throw new Error(`Unterminated quote. ${EXPORT_USAGE}`);
+	if (quote !== "") throw new Error(t("export.unterminatedQuote", { usage: exportUsage() }));
 	if (active) words.push({ text: word, quoted });
 
 	let includeThinking = false;
 	let path: string | undefined;
 	for (const { text, quoted: wasQuoted } of words) {
 		if (!wasQuoted && text === "--thinking") includeThinking = true;
-		else if (!wasQuoted && text.startsWith("--")) throw new Error(`Unknown option ${text}. ${EXPORT_USAGE}`);
+		else if (!wasQuoted && text.startsWith("--"))
+			throw new Error(t("export.unknownOption", { option: text, usage: exportUsage() }));
 		else if (path === undefined && text !== "") path = text;
-		else throw new Error(EXPORT_USAGE);
+		else throw new Error(exportUsage());
 	}
 	return { path, includeThinking };
 }
@@ -67,7 +69,7 @@ export type ExportToFileInput = ExportArgs & {
  */
 export async function exportToFile(input: ExportToFileInput): Promise<{ path: string; skippedImages: number }> {
 	const format: ExportFormat | null = input.path === undefined ? "markdown" : exportFormatFromPath(input.path);
-	if (format === null) throw new Error("Unsupported export format: use a .md, .html or .json path");
+	if (format === null) throw new Error(t("export.unsupported"));
 	const target = resolve(
 		input.cwd,
 		input.path === undefined
@@ -79,8 +81,8 @@ export async function exportToFile(input: ExportToFileInput): Promise<{ path: st
 		handle = await open(target, "wx");
 	} catch (error) {
 		const code = (error as NodeJS.ErrnoException).code;
-		if (code === "EEXIST") throw new Error(`File already exists: ${target}. Choose another path.`);
-		if (code === "ENOENT") throw new Error(`Directory does not exist: ${target}`);
+		if (code === "EEXIST") throw new Error(t("export.exists", { path: target }));
+		if (code === "ENOENT") throw new Error(t("export.noDirectory", { path: target }));
 		throw error;
 	}
 	try {

@@ -23,6 +23,8 @@ import type { QuestionsClient } from "@neko-harness/gateway/client-session";
 import type { WireQuestionList, WireQuestionRecord, WireQuestionSummary } from "@neko-harness/gateway/contract";
 import type { NoticeLevel } from "./components/notice.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { localizeCoreText, localizeError } from "./i18n/core-text.ts";
+import { getLanguage, type Language, t } from "./i18n/index.ts";
 import { plainLine, plainText } from "./plain-text.ts";
 import { style, theme } from "./theme/index.ts";
 
@@ -30,7 +32,7 @@ import { style, theme } from "./theme/index.ts";
 export const QUESTION_MAX_ROWS = 14;
 /** Header, one body row, one list row, note row, status row and hints: below this the panel cannot be operated. */
 export const QUESTION_MIN_ROWS = 6;
-export const SKIP_LABEL = "跳过此问题";
+export const skipLabel = (): string => t("question.skip");
 /** Key that opens or closes the panel; chosen to be free in the editor, the pickers and the queue/agents keys. */
 export const QUESTION_KEY = "ctrl+o";
 
@@ -64,7 +66,7 @@ export const canAutoOpen = (focus: FocusState): boolean =>
 	!focus.planOpen;
 
 type Zone = "list" | "text";
-type State = { draft: QuestionDraft; cursor: number; zone: Zone; input: Input };
+type State = { draft: QuestionDraft; cursor: number; zone: Zone; input: Input; language: Language };
 type Note = { text: string; tone: "error" | "warn" };
 type Entry = { key: string; id: number; version: string; preview: string };
 type Settled = { record: WireQuestionRecord; mine: boolean };
@@ -87,11 +89,13 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 
 /** The saved record says what really happened, whoever decided. */
 export function settlementText(record: WireQuestionRecord, mine: boolean): string {
-	if (record.status === "answered")
-		return `${mine ? "Answered" : "Already answered"}: ${plainLine(describeSettlement(record))}`;
-	if (record.status === "skipped") return mine ? "Skipped" : "Already skipped";
-	if (record.status === "cancelled") return "Cancelled: the run was stopped or the session closed.";
-	return "Waiting for your answer";
+	if (record.status === "answered") {
+		const answer = plainLine(describeSettlement(record));
+		return mine ? t("question.answered", { answer }) : t("question.alreadyAnswered", { answer });
+	}
+	if (record.status === "skipped") return mine ? t("question.skipped") : t("question.alreadySkipped");
+	if (record.status === "cancelled") return t("question.cancelled");
+	return t("question.waiting");
 }
 
 function sameDecision(
@@ -285,16 +289,20 @@ export class QuestionDock implements Component, Focusable {
 				tone: status === "answered" ? "ok" : status === "cancelled" ? "warn" : "dim",
 			};
 		}
-		if (this.#gone.has(entry.key))
-			return { kind: "info", text: "This question is no longer waiting for an answer.", tone: "dim" };
-		if (this.#tomb?.key === entry.key) return { kind: "info", text: "Checking the result…", tone: "dim" };
+		if (this.#gone.has(entry.key)) return { kind: "info", text: t("question.gone"), tone: "dim" };
+		if (this.#tomb?.key === entry.key) return { kind: "info", text: t("question.checking"), tone: "dim" };
 		const record = this.#records.get(entry.key);
 		const state = this.#states.get(entry.key);
 		if (record && state) return { kind: "form", record, state };
 		const error = this.#loadErrors.get(entry.key);
 		if (error)
-			return { kind: "info", text: `Could not load the question: ${plainLine(error)}`, tone: "error", retry: true };
-		return { kind: "info", text: "Loading the full question…", tone: "dim" };
+			return {
+				kind: "info",
+				text: t("question.loadFailed", { error: plainLine(localizeError(error)) }),
+				tone: "error",
+				retry: true,
+			};
+		return { kind: "info", text: t("question.loading"), tone: "dim" };
 	}
 
 	/** The panel can be operated: loaded, still pending, not sending, and tall enough to see what is being done. */
@@ -343,11 +351,7 @@ export class QuestionDock implements Component, Focusable {
 	#ensureState(key: string, record: WireQuestionRecord): State {
 		const existing = this.#states.get(key);
 		if (existing) return existing;
-		const input = new Input({
-			prompt: "✎ ",
-			placeholder: record.options.length ? "Note (optional)" : "Your answer",
-			placeholderStyle: theme.dim,
-		});
+		const input = this.#newInput(record);
 		const recommended = record.options.findIndex((option) => option.recommended);
 		const state: State = {
 			draft: emptyQuestionDraft(),
@@ -355,10 +359,30 @@ export class QuestionDock implements Component, Focusable {
 			cursor: Math.max(0, recommended),
 			zone: record.options.length ? "list" : "text",
 			input,
+			language: getLanguage(),
 		};
 		this.#states.set(key, state);
 		this.#syncFocus();
 		return state;
+	}
+
+	#newInput(record: WireQuestionRecord): Input {
+		return new Input({
+			prompt: "✎ ",
+			placeholder: record.options.length ? t("question.notePlaceholder") : t("question.answerPlaceholder"),
+			placeholderStyle: theme.dim,
+		});
+	}
+
+	/** The placeholder follows the interface language; the typed text is kept. */
+	#refreshInput(record: WireQuestionRecord, state: State): void {
+		if (state.language === getLanguage()) return;
+		const text = state.input.getValue();
+		const focused = state.input.focused;
+		state.input = this.#newInput(record);
+		state.input.setValue(text);
+		state.input.focused = focused;
+		state.language = getLanguage();
 	}
 
 	#settledElsewhere(entry: Entry, record: WireQuestionRecord): void {
@@ -407,20 +431,18 @@ export class QuestionDock implements Component, Focusable {
 		const { key } = entry;
 		if (record.status !== "pending" || this.#results.has(key)) return;
 		if (!this.#online || !this.#client) {
-			this.#note(key, "Gateway unavailable. Restart to reconnect; nothing is sent automatically.", "error");
+			this.#note(key, t("gateway.unavailableNoSend"), "error");
 			return;
 		}
 		const response = skip ? ({ kind: "skip" } as const) : draftResponse(state.draft);
 		if (!response) {
-			const hint = record.options.length
-				? "Choose an option with Space, or type a note with Tab, then press Enter."
-				: "Type your answer, then press Enter.";
+			const hint = record.options.length ? t("question.hintChoose") : t("question.hintType");
 			this.#note(key, hint, "warn");
 			return;
 		}
 		const problem = skip ? null : draftProblem(record, state.draft);
 		if (problem) {
-			this.#note(key, problem, "warn");
+			this.#note(key, localizeCoreText(problem), "warn");
 			return;
 		}
 		const session = this.#session;
@@ -568,10 +590,10 @@ export class QuestionDock implements Component, Focusable {
 	#bar(count: number, width: number): string {
 		const n = Math.max(1, count);
 		const candidates = [
-			`❓ 等待回答 (${n}) · 助手正在等待你的回答 · Ctrl+O 或 /question 打开 · 此处发送的消息会排队到回答之后`,
-			`❓ 等待回答 (${n}) · Ctrl+O 或 /question 打开 · 消息排队到回答之后`,
-			`❓ 等待回答 (${n}) · Ctrl+O 或 /question`,
-			"❓ 等待回答 · /question",
+			t("question.bar.long", { count: n }),
+			t("question.bar.medium", { count: n }),
+			t("question.bar.short", { count: n }),
+			t("question.bar.min"),
 		];
 		const text = candidates.find((candidate) => visibleWidth(candidate) <= width - 1) ?? candidates.at(-1) ?? "";
 		return theme.warning(truncateToWidth(` ${text}`, width));
@@ -582,18 +604,19 @@ export class QuestionDock implements Component, Focusable {
 		if (!entry) return [];
 		const total = Math.max(1, Math.floor(this.height));
 		if (total < QUESTION_MIN_ROWS)
-			return [theme.warning(` ❓ 助手提问 · enlarge the terminal to answer · ${shortcutHints(["Esc", "Close"])}`)];
+			return [theme.warning(` ${t("question.tooSmall", { hint: shortcutHints(["Esc", t("action.close")]) })}`)];
 		const mode = this.#mode(entry);
 		const form = mode.kind === "form" ? mode : undefined;
+		if (form) this.#refreshInput(form.record, form.state);
 		const busy = this.#busy.has(entry.key);
 		const note = this.#notes.get(entry.key);
 		const aside = this.#opts.aside?.();
 		const statusText = busy
-			? theme.dim("Submitting…")
+			? theme.dim(t("common.submitting"))
 			: note
-				? (note.tone === "error" ? theme.error : theme.warning)(plainLine(note.text, 400))
+				? (note.tone === "error" ? theme.error : theme.warning)(plainLine(localizeError(note.text), 400))
 				: form && !this.#online
-					? theme.warning("Offline: answers cannot be sent until the gateway is back.")
+					? theme.warning(t("question.offline"))
 					: aside !== undefined
 						? theme.warning(plainLine(aside, 400))
 						: undefined;
@@ -621,18 +644,18 @@ export class QuestionDock implements Component, Focusable {
 
 		const kind = form
 			? form.record.options.length === 0
-				? "Text answer"
+				? t("question.kindText")
 				: form.record.multiple
-					? "Multiple choice"
-					: "Single choice"
+					? t("question.kindMultiple")
+					: t("question.kindSingle")
 			: "";
 		const position =
 			entries.length > 1 ? ` ${entries.findIndex((e) => e.key === entry.key) + 1}/${entries.length}` : "";
 		const range = `${scroll + 1}-${scroll + bodyRows}/${bodyLines.length}`;
-		const title = theme.warning(style.bold(`❓ 助手提问${position}`));
+		const title = theme.warning(style.bold(t("question.title", { position })));
 		// Long headers give up detail before the position of a scrolled question.
 		const headers = [
-			[kind, maxScroll > 0 ? `lines ${range}` : ""],
+			[kind, maxScroll > 0 ? t("question.lines", { range }) : ""],
 			[kind, maxScroll > 0 ? range : ""],
 			["", maxScroll > 0 ? range : ""],
 			["", ""],
@@ -683,13 +706,13 @@ export class QuestionDock implements Component, Focusable {
 		const marker = atCursor ? (state.zone === "list" ? "❯" : "›") : " ";
 		const option = record.options[index];
 		if (!option) {
-			const row = `${marker} ↷ ${SKIP_LABEL}`;
+			const row = `${marker} ↷ ${skipLabel()}`;
 			return atCursor && state.zone === "list" ? theme.selection(row) : theme.muted(row);
 		}
 		const chosen = state.draft.optionIds.includes(option.id);
 		const mark = record.multiple ? (chosen ? "[x]" : "[ ]") : chosen ? "(●)" : "( )";
 		const number = index < 9 ? `${index + 1}.` : "  ";
-		const badge = option.recommended ? "[推荐] " : "";
+		const badge = option.recommended ? t("question.recommended") : "";
 		const row = truncateToWidth(`${marker} ${mark} ${number} ${badge}${plainLine(option.label, 200)}`, width, "…");
 		if (atCursor && state.zone === "list") return theme.selection(row);
 		return chosen ? theme.accent(row) : row;
@@ -697,38 +720,37 @@ export class QuestionDock implements Component, Focusable {
 
 	#hints(count: number, mode: Mode, scrollable: boolean, width: number): string {
 		type Hint = readonly [string, string];
-		const close: Hint = ["Esc", "Close"];
-		const switchHint: Hint[] = count > 1 ? [["[ ]", "Switch"]] : [];
-		const scrollHint: Hint[] = scrollable ? [["PgUp/PgDn", "Scroll"]] : [];
+		const close: Hint = ["Esc", t("action.close")];
+		const switchHint: Hint[] = count > 1 ? [["[ ]", t("action.switch")]] : [];
+		const scrollHint: Hint[] = scrollable ? [["PgUp/PgDn", t("action.scroll")]] : [];
 		let candidates: Hint[][];
 		if (mode.kind === "form") {
 			const state = this.#shown && this.#states.get(this.#shown.key);
 			const noOptions = mode.record.options.length === 0;
 			const onSkip = state?.cursor === mode.record.options.length;
-			const enter: Hint = ["Enter", state?.zone === "list" && onSkip ? "Skip" : "Submit"];
-			const pick: Hint = ["Space", mode.record.multiple ? "Toggle" : "Select"];
+			const enter: Hint = ["Enter", state?.zone === "list" && onSkip ? t("action.skip") : t("action.submit")];
+			const pick: Hint = ["Space", mode.record.multiple ? t("action.toggle") : t("action.select")];
+			const toList: Hint = ["Tab", noOptions ? t("action.skipRow") : t("action.options")];
+			const toAnswer: Hint = ["Tab", t("action.answer")];
+			const toNote: Hint = ["Tab", t("action.note")];
 			candidates =
 				state?.zone === "text"
 					? [
-							[["Tab", noOptions ? "Skip row" : "Options"], enter, ...scrollHint, close],
-							[["Tab", noOptions ? "Skip row" : "Options"], enter, close],
+							[toList, enter, ...scrollHint, close],
+							[toList, enter, close],
 							[enter, close],
 						]
 					: noOptions
-						? [
-								[["Tab", "Answer"], enter, ...switchHint, ...scrollHint, close],
-								[["Tab", "Answer"], enter, close],
-								[close],
-							]
+						? [[toAnswer, enter, ...switchHint, ...scrollHint, close], [toAnswer, enter, close], [close]]
 						: [
-								[["↑↓", "Move"], pick, ["Tab", "Note"], enter, ...switchHint, ...scrollHint, close],
-								[pick, ["Tab", "Note"], enter, ...scrollHint, close],
-								[pick, ["Tab", "Note"], enter, close],
+								[["↑↓", t("action.move")], pick, toNote, enter, ...switchHint, ...scrollHint, close],
+								[pick, toNote, enter, ...scrollHint, close],
+								[pick, toNote, enter, close],
 								[enter, close],
 							];
 		} else {
 			candidates = [
-				[...(mode.retry ? ([["Enter", "Retry"]] as const) : []), ...switchHint, ...scrollHint, close],
+				[...(mode.retry ? ([["Enter", t("action.retry")]] as const) : []), ...switchHint, ...scrollHint, close],
 				[close],
 			];
 		}

@@ -4,18 +4,21 @@ import { TODOS_UNSUPPORTED } from "@neko-harness/gateway/client-session";
 import type { WireTodoList } from "@neko-harness/gateway/contract";
 import type { PickerDetail, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { localizeCoreText } from "./i18n/core-text.ts";
+import { t } from "./i18n/index.ts";
 import { plainText } from "./plain-text.ts";
 import { theme } from "./theme/index.ts";
 
-export const TODOS_EMPTY = "No todos in this session yet.";
+export const todosEmpty = (): string => t("todos.empty");
 export const TODO_GLYPHS: Record<TodoStatus, string> = { pending: "○", in_progress: "◐", completed: "✓" };
-const LEGEND = `${TODO_GLYPHS.pending} pending  ${TODO_GLYPHS.in_progress} in progress  ${TODO_GLYPHS.completed} done`;
+const legend = (): string =>
+	t("todos.legend", { pending: TODO_GLYPHS.pending, inProgress: TODO_GLYPHS.in_progress, done: TODO_GLYPHS.completed });
 
 /** `Todos 2/5` for the status bar; `undefined` when the gateway has no todos or the list is empty. */
 export function todoProgressText(list: WireTodoList | undefined): string | undefined {
 	if (!list || list.items.length === 0) return undefined;
 	const { completed, total } = todoProgress(list.items);
-	return `Todos ${completed}/${total}`;
+	return t("todos.progress", { completed, total });
 }
 
 const styled = (status: TodoStatus, glyph: string, text: string): string =>
@@ -41,7 +44,7 @@ export class TodosDetail implements PickerDetail {
 		this.#offline = offline;
 	}
 	get help(): string {
-		return shortcutHints(["↑↓/Wheel", "Scroll"], ["PgUp/PgDn", "Page"], ["Esc", "Close"]);
+		return shortcutHints(["↑↓/Wheel", t("action.scroll")], ["PgUp/PgDn", t("action.page")], ["Esc", t("action.close")]);
 	}
 	scroll(delta: number): void {
 		this.#offset = Math.max(0, Math.min(this.#max, this.#offset + delta));
@@ -60,9 +63,9 @@ export class TodosDetail implements PickerDetail {
 		const list = this.#source();
 		const wrap = (text: string, style: (line: string) => string) =>
 			wrapTextWithAnsi(text, Math.max(1, width)).map(style);
-		if (!list) return wrap(TODOS_UNSUPPORTED, theme.warning);
-		const offline = this.#offline() ? wrap("Offline · showing the last loaded list", theme.warning) : [];
-		if (list.items.length === 0) return [...offline, ...wrap(TODOS_EMPTY, theme.dim)];
+		if (!list) return wrap(localizeCoreText(TODOS_UNSUPPORTED), theme.warning);
+		const offline = this.#offline() ? wrap(t("todos.offline"), theme.warning) : [];
+		if (list.items.length === 0) return [...offline, ...wrap(todosEmpty(), theme.dim)];
 		const { completed, total } = todoProgress(list.items);
 		const digits = String(total).length;
 		const rows: string[] = [];
@@ -77,16 +80,26 @@ export class TodosDetail implements PickerDetail {
 				rows.push(row === 0 ? styled(item.status, glyph, `${number}${line}`) : theme.dim(`${indent}${line}`));
 			});
 		});
-		const legend = height >= 5 && visibleWidth(LEGEND) <= width ? [theme.dim(LEGEND)] : [];
-		const pinned = offline.length + 1 + legend.length;
+		const legendText = legend();
+		const legendRow = height >= 5 && visibleWidth(legendText) <= width ? [theme.dim(legendText)] : [];
+		const pinned = offline.length + 1 + legendRow.length;
 		const room = Math.max(1, height - pinned);
 		this.#max = Math.max(0, rows.length - room);
 		this.#page = Math.max(1, room - 1);
 		this.#offset = Math.min(this.#offset, this.#max);
 		const range =
-			this.#max > 0 ? ` · rows ${this.#offset + 1}-${Math.min(rows.length, this.#offset + room)}/${rows.length}` : "";
-		const header = truncateToWidth(`${theme.accent(`${completed}/${total} completed`)}${theme.dim(range)}`, width);
-		return [...offline, header, ...legend, ...rows.slice(this.#offset, this.#offset + room)];
+			this.#max > 0
+				? t("todos.range", {
+						from: this.#offset + 1,
+						to: Math.min(rows.length, this.#offset + room),
+						total: rows.length,
+					})
+				: "";
+		const header = truncateToWidth(
+			`${theme.accent(t("todos.completedOf", { completed, total }))}${theme.dim(range)}`,
+			width,
+		);
+		return [...offline, header, ...legendRow, ...rows.slice(this.#offset, this.#offset + room)];
 	}
 }
 
@@ -101,11 +114,11 @@ export function showTodos(
 ): boolean {
 	if (panel.open) return false;
 	if (!source()) {
-		options.notify(TODOS_UNSUPPORTED, "warning");
+		options.notify(localizeCoreText(TODOS_UNSUPPORTED), "warning");
 		return false;
 	}
 	void panel.show(
-		"Todos",
+		t("todos.title"),
 		async () => [],
 		async () => {},
 	);

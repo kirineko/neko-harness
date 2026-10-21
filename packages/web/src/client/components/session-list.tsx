@@ -1,8 +1,10 @@
-import { matchesSession, messageTime, relativeTime, sessionName } from "@neko-harness/core/session-display";
+import { matchesSession, messageTime, sessionName } from "@neko-harness/core/session-display";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { appActions, reportError } from "../lib/bootstrap";
 import { workspaceSessions } from "../lib/gateway";
+import { formatDateTime, formatRelative } from "../lib/i18n/format.ts";
+import { useT } from "../lib/i18n/index.ts";
 import { sessionStatusText } from "../lib/interactions";
 import { useSessionTime } from "../lib/session-time";
 import { useNekoState } from "../lib/store";
@@ -10,6 +12,8 @@ import { folderName, Icon, Modal, Popover, useMobile } from "./primitives";
 import { WorkspacePicker } from "./workspace-picker";
 
 export function SessionList({ open, onClose }: { open: boolean; onClose: () => void }) {
+	const t = useT();
+	const newName = t("common.newSession");
 	const state = useNekoState();
 	const now = useSessionTime();
 	const mobile = useMobile();
@@ -36,7 +40,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 					<button
 						type="button"
 						className="workspace-trigger"
-						aria-label="切换工作区"
+						aria-label={t("sessions.switchWorkspace")}
 						aria-expanded={menu !== null && !menu.id}
 						disabled={disabled}
 						onClick={(e) => setMenu({ anchor: e.currentTarget })}
@@ -44,11 +48,17 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 						<span className="workspace-mark">
 							<Icon name="folder" />
 						</span>
-						<span className="truncate min-w-0">{folderName(state.workspaceRoot) || "工作区"}</span>
+						<span className="truncate min-w-0">{folderName(state.workspaceRoot) || t("common.workspace")}</span>
 						<Icon name="chevron" />
 					</button>
 					{!mobile && (
-						<button type="button" className="icon-btn" aria-label="收起侧栏" title="收起侧栏" onClick={onClose}>
+						<button
+							type="button"
+							className="icon-btn"
+							aria-label={t("sessions.collapse")}
+							title={t("sessions.collapse")}
+							onClick={onClose}
+						>
 							<Icon name="panel" />
 						</button>
 					)}
@@ -60,20 +70,20 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 					onClick={() => action(appActions.createSession())}
 				>
 					<Icon name="plus" />
-					新建会话
+					{t("sessions.new")}
 				</button>
 				<div className="search-box">
 					<Icon name="search" />
 					<input
-						aria-label="搜索当前工作区会话"
-						placeholder="搜索会话…"
+						aria-label={t("sessions.searchAria")}
+						placeholder={t("sessions.searchPlaceholder")}
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
 					/>
 				</div>
 			</div>
 			<div className="section-label">
-				会话 <span>{sessions.length}</span>
+				{t("sessions.heading")} <span>{sessions.length}</span>
 			</div>
 			<div className="session-scroll">
 				<ul className="session-list">
@@ -89,19 +99,19 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 							>
 								<Icon name="chat" />
 								<span className="session-copy">
-									<span className="truncate min-w-0">{sessionName(session, "新会话")}</span>
+									<span className="truncate min-w-0">{sessionName(session, newName)}</span>
 									<span
 										className={`session-meta${session.awaitingAnswer === true || session.awaitingPlan === true ? " font-semibold text-tianyi-800" : ""}`}
 									>
 										<time dateTime={new Date(messageTime(session)).toISOString()}>
-											{relativeTime(messageTime(session), now, "zh")}
+											{formatRelative(messageTime(session), now)}
 										</time>
 										{sessionStatusText(session)}
 									</span>
 									<span className="session-tooltip" role="tooltip" id={`session-tip-${session.id}`}>
-										{sessionName(session, "新会话")}
+										{sessionName(session, newName)}
 										<br />
-										{new Date(messageTime(session)).toLocaleString("zh-CN")}
+										{formatDateTime(messageTime(session))}
 									</span>
 								</span>
 							</button>
@@ -109,8 +119,8 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 								type="button"
 								className="icon-btn row-more"
 								disabled={disabled}
-								aria-label={`${sessionName(session, "新会话")}的操作`}
-								title="会话操作"
+								aria-label={t("sessions.actionsFor", { name: sessionName(session, newName) })}
+								title={t("sessions.actions")}
 								onClick={(e) => setMenu({ anchor: e.currentTarget, id: session.id })}
 							>
 								<Icon name="more" />
@@ -120,7 +130,11 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 				</ul>
 				{sessions.length === 0 && (
 					<div className="empty-text">
-						{state.phase !== "ready" ? "等待网关连接…" : query ? "没有匹配的会话" : "此工作区暂无会话"}
+						{state.phase !== "ready"
+							? t("sessions.waitingGateway")
+							: query
+								? t("sessions.noMatch")
+								: t("sessions.empty")}
 					</div>
 				)}
 			</div>
@@ -136,7 +150,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 					}}
 				>
 					<Icon name="store" />
-					技能市场
+					{t("sessions.market")}
 				</Link>
 				<Link
 					to="/settings"
@@ -146,7 +160,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 					}}
 				>
 					<Icon name="settings" />
-					设置
+					{t("sessions.settings")}
 				</Link>
 			</div>
 		</>
@@ -154,22 +168,26 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 	return (
 		<>
 			{mobile ? (
-				<Modal title="工作区与会话" drawer onClose={onClose}>
+				<Modal title={t("sessions.drawer")} drawer onClose={onClose}>
 					{content}
 				</Modal>
 			) : (
-				<aside className="chrome sidebar" aria-label="工作区与会话">
+				<aside className="chrome sidebar" aria-label={t("sessions.drawer")}>
 					{content}
 				</aside>
 			)}
 			{menu && (
-				<Popover anchor={menu.anchor} label={menu.id ? "会话操作" : "选择工作区"} onClose={() => setMenu(null)}>
+				<Popover
+					anchor={menu.anchor}
+					label={menu.id ? t("sessions.actions") : t("sessions.chooseWorkspace")}
+					onClose={() => setMenu(null)}
+				>
 					{menu.id ? (
 						<>
 							{menuSession && (
 								<div className="session-details">
-									<strong>{sessionName(menuSession, "新会话")}</strong>
-									<small>{new Date(messageTime(menuSession)).toLocaleString("zh-CN")}</small>
+									<strong>{sessionName(menuSession, newName)}</strong>
+									<small>{formatDateTime(messageTime(menuSession))}</small>
 								</div>
 							)}
 							<button
@@ -182,12 +200,12 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 								}}
 							>
 								<Icon name="archive" />
-								归档会话
+								{t("sessions.archive")}
 							</button>
 						</>
 					) : (
 						<>
-							<div className="section-label">工作区</div>
+							<div className="section-label">{t("common.workspace")}</div>
 							<div className="workspace-options">
 								{state.workspaces.map((w) => (
 									<button
@@ -207,7 +225,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 											<small>{w.path}</small>
 										</span>
 										{w.path === state.workspaceRoot && (
-											<span role="img" aria-label="当前工作区">
+											<span role="img" aria-label={t("sessions.currentWorkspace")}>
 												✓
 											</span>
 										)}
@@ -223,7 +241,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 								}}
 							>
 								<Icon name="plus" />
-								添加工作区
+								{t("sessions.addWorkspace")}
 							</button>
 						</>
 					)}
@@ -231,15 +249,15 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 			)}
 			{picker && <WorkspacePicker initialPath={state.workspaceRoot} onClose={() => setPicker(false)} />}
 			{archive && (
-				<Modal title="归档会话" locked={state.operating} onClose={() => setArchive(null)}>
+				<Modal title={t("sessions.archive")} locked={state.operating} onClose={() => setArchive(null)}>
 					<div className="confirm-body">
 						<p>
-							归档“
-							{sessionName(
-								state.sessions.find((s) => s.id === archive) ?? { title: "", firstPromptPreview: "" },
-								"新会话",
-							)}
-							”？会话将从列表中隐藏，工作区和文件仍会保留。
+							{t("sessions.archiveConfirm", {
+								name: sessionName(
+									state.sessions.find((s) => s.id === archive) ?? { title: "", firstPromptPreview: "" },
+									newName,
+								),
+							})}
 						</p>
 						{archiveError && (
 							<p role="alert" className="error-text">
@@ -248,7 +266,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 						)}
 						<div className="actions">
 							<button type="button" className="btn-outline" disabled={state.operating} onClick={() => setArchive(null)}>
-								取消
+								{t("common.cancel")}
 							</button>
 							<button
 								type="button"
@@ -261,7 +279,7 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 										.catch((e: unknown) => setArchiveError(String(e)));
 								}}
 							>
-								确认归档
+								{t("sessions.confirmArchive")}
 							</button>
 						</div>
 					</div>

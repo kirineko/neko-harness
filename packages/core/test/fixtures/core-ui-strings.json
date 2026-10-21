@@ -1,0 +1,18 @@
+{
+	"$comment": "Exact English strings core sends to the frontends. Pinned by packages/core/test/core-ui-strings.test.ts; Web, TUI and Mobile map them to the UI language.",
+	"status": [
+		{ "id": "thinking", "text": "Thinking..." },
+		{ "id": "running", "text": "Running bash...", "params": { "tool": "bash" } },
+		{ "id": "retrying", "text": "Retrying (attempt 2)...", "params": { "attempt": "2" } }
+	],
+	"systemRows": [
+		{ "id": "compacted", "text": "[context compacted]" },
+		{ "id": "newContext", "text": "[new context]" }
+	],
+	"toolNotes": [{ "id": "notRun", "text": "Not run: response interrupted." }],
+	"errors": [
+		{ "code": "PROVIDER_DISABLED", "text": "PROVIDER_DISABLED: OpenRouter is not enabled. Enable it in /login or Web settings, or switch model." },
+		{ "code": "PROVIDER_KEY_REQUIRED", "text": "PROVIDER_KEY_REQUIRED: Configure a DeepSeek API key in /login or Web settings." },
+		{ "code": "PLAN_BUSY", "text": "PLAN_BUSY: Wait for the current run to finish or stop it first." }
+	]
+}

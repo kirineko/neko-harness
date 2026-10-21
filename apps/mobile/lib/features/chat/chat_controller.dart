@@ -9,23 +9,30 @@ import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/core/storage/prefs_store.dart';
 import 'package:neko_mobile/features/chat/interactions_controller.dart';
 import 'package:neko_mobile/features/chat/transcript.dart';
+import 'package:neko_mobile/l10n/core_text.dart';
+import 'package:neko_mobile/l10n/error_text.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:uuid/uuid.dart';
 
-/// 用户可读的错误文案（不暴露内部细节）。
-String describeError(Object error) {
+/// 用户可读的错误文案（不暴露内部细节）；显示时才按当前语言解析。
+UiText describeError(Object error) {
   if (error is MobileApiException) {
     return switch (error.code) {
-      'rejected' => '电脑拒绝了请求：${error.message}',
-      'gone' => '会话已失效，请重新选择',
-      'revoked' || 'unauthorized' => '设备授权已失效',
-      'busy_limit' => '请求过于频繁，请稍后重试',
-      'not_found' => '内容不存在或已结束',
-      'invalid_params' => '请求无效：${error.message}',
-      _ => '电脑处理失败，请重试',
+      'rejected' => (l10n) => l10n.apiRejected(
+        localizeCoreError(l10n, error.message),
+      ),
+      'gone' => (l10n) => l10n.apiGone,
+      'revoked' || 'unauthorized' => (l10n) => l10n.apiUnauthorized,
+      'busy_limit' => (l10n) => l10n.apiBusyLimit,
+      'not_found' => (l10n) => l10n.apiNotFound,
+      'invalid_params' => (l10n) => l10n.apiInvalidParams(
+        localizeCoreError(l10n, error.message),
+      ),
+      _ => (l10n) => l10n.apiFailed,
     };
   }
-  if (error is RpcException) return error.message;
-  return '操作失败，请重试';
+  if (error is RpcException) return (l10n) => rpcErrorText(l10n, error);
+  return (l10n) => l10n.errorGeneric;
 }
 
 /// 按 contentRef 分块读取完整大字段（design D8）。
@@ -101,11 +108,11 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
   String? _subscriptionId;
   int _generation = 0;
   ChatPhase _phase = ChatPhase.idle;
-  String? _error;
+  UiText? _error;
   bool _loadingOlder = false;
   bool _sending = false;
   int? _withdrawingId;
-  String? _notice;
+  UiText? _notice;
   List<Approval> _approvals = <Approval>[];
   List<PendingSubmission> _pendingList = <PendingSubmission>[];
   Timer? _draftTimer;
@@ -118,7 +125,7 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
 
   String? get subscriptionId => _subscriptionId;
 
-  String? get error => _error;
+  UiText? get error => _error;
 
   @override
   bool get loadingOlder => _loadingOlder;
@@ -142,7 +149,7 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
   int? get withdrawingId => _withdrawingId;
 
   /// 撤回的非错误提示（已发送、图片未恢复等）。
-  String? get notice => _notice;
+  UiText? get notice => _notice;
 
   void clearNotice() {
     _notice = null;
@@ -472,11 +479,11 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
               ? text
               : '${input.text}\n$text';
           input.selection = TextSelection.collapsed(offset: input.text.length);
-          _notice = '无法改为引导，消息已撤回到输入框';
+          _notice = (l10n) => l10n.chatNoticeSteerWithdrawn;
         case 'unknown':
-          _notice = '该消息已不在队列中';
+          _notice = (l10n) => l10n.chatNoticeNotQueued;
         default:
-          _notice = '该消息已发送，无法引导';
+          _notice = (l10n) => l10n.chatNoticeAlreadySentSteer;
       }
     } catch (error) {
       _setError(error);
@@ -514,11 +521,13 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
               ? text
               : '${input.text}\n$text';
           input.selection = TextSelection.collapsed(offset: input.text.length);
-          if ((result['images'] as int? ?? 0) > 0) _notice = '图片未恢复，请重新添加';
+          if ((result['images'] as int? ?? 0) > 0) {
+            _notice = (l10n) => l10n.chatNoticeImagesNotRestored;
+          }
         case 'unknown':
-          _notice = '该消息已不在队列中';
+          _notice = (l10n) => l10n.chatNoticeNotQueued;
         default:
-          _notice = '该消息已发送，无法撤回';
+          _notice = (l10n) => l10n.chatNoticeAlreadySentWithdraw;
       }
     } catch (error) {
       _setError(error);

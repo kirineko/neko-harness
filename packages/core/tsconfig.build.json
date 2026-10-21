@@ -8,5 +8,5 @@
 		"declarationMap": true,
 		"sourceMap": true
 	},
-	"include": ["src"]
+	"include": ["src", "src/i18n/*.json"]
 }

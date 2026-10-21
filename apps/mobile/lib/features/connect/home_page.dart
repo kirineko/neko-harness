@@ -5,6 +5,8 @@ import 'package:neko_mobile/core/rpc/connection_manager.dart';
 import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/chat/chat_page.dart';
+import 'package:neko_mobile/features/computers/computers_page.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
@@ -56,38 +58,59 @@ class _HomePageState extends ConsumerState<HomePage>
                         state is NekoConnConnecting)))) {
           return const ChatPage();
         }
-        return _buildStatus(state);
+        return _buildStatus(state, settings: app != null);
       },
     );
   }
 
-  Widget _buildStatus(NekoConnectionState state) {
+  Widget _buildStatus(NekoConnectionState state, {required bool settings}) {
     return Scaffold(
-      appBar: AppBar(title: const Text('NekoAI')),
+      appBar: AppBar(
+        title: const Text('NekoAI'),
+        actions: <Widget>[
+          // 未连接时也能切换语言与外观：入口复用“电脑与设置”页。
+          if (settings)
+            IconButton(
+              key: const Key('home-settings'),
+              tooltip: context.l10n.computersTitle,
+              icon: const NekoIcon(NekoIcons.monitor),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const ComputersPage()),
+              ),
+            ),
+        ],
+      ),
       body: Builder(
         builder: (context) {
+          final l10n = context.l10n;
           return switch (state) {
             NekoConnIdle() => _buildIdle(),
-            NekoConnConnecting() => _buildPending('正在连接电脑…', 'connecting'),
-            NekoConnRestoring() => _buildPending('正在恢复连接…', 'restoring'),
+            NekoConnConnecting() => _buildPending(
+              l10n.homeConnecting,
+              'connecting',
+            ),
+            NekoConnRestoring() => _buildPending(
+              l10n.connRestoring,
+              'restoring',
+            ),
             NekoConnOffline(:final nextRetryIn) => _buildOffline(nextRetryIn),
             NekoConnReady(:final computer, :final hello) => _buildReady(
               computer.serverName,
               hello,
             ),
             NekoConnRevoked() => _buildTerminal(
-              '设备授权已被电脑撤销',
-              '电脑端已移除本设备。如需重新控制，请重新扫码配对。',
+              l10n.homeRevokedTitle,
+              l10n.homeRevokedGuidance,
               'revoked',
             ),
             NekoConnTrustChanged() => _buildTerminal(
-              '电脑证书与配对指纹不符',
-              '电脑可能重新生成了证书。请重新扫码配对以建立信任。',
+              l10n.certificateMismatch,
+              l10n.homeTrustChangedGuidance,
               'trust-changed',
             ),
             NekoConnIncompatible() => _buildTerminal(
-              '应用与电脑协议版本不兼容',
-              '请升级手机应用或电脑端后重试。',
+              l10n.homeIncompatibleTitle,
+              l10n.homeIncompatibleGuidance,
               'incompatible',
             ),
           };
@@ -101,12 +124,12 @@ class _HomePageState extends ConsumerState<HomePage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          const Text('尚未连接电脑', key: Key('home-idle-text')),
+          Text(context.l10n.homeIdleText, key: const Key('home-idle-text')),
           const SizedBox(height: NekoSpace.md),
           FilledButton(
             key: const Key('home-go-scan'),
             onPressed: () => context.go('/scan'),
-            child: const Text('扫码连接'),
+            child: Text(context.l10n.homeScanConnect),
           ),
         ],
       ),
@@ -128,7 +151,7 @@ class _HomePageState extends ConsumerState<HomePage>
               ref.read(connectionManagerProvider).stopToScan();
               context.go('/scan');
             },
-            child: const Text('返回扫码'),
+            child: Text(context.l10n.homeBackToScan),
           ),
         ],
       ),
@@ -137,21 +160,25 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildOffline(Duration nextRetryIn) {
     final seconds = (nextRetryIn.inMilliseconds / 1000).toStringAsFixed(1);
+    final l10n = context.l10n;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           const NekoIcon(NekoIcons.cloudOff, size: 48),
           const SizedBox(height: NekoSpace.md),
-          Text('网络不可达或电脑已离线', key: const Key('home-offline-text')),
-          Text('$seconds 秒后自动重试', key: const Key('home-offline-retry')),
+          Text(l10n.homeOfflineText, key: const Key('home-offline-text')),
+          Text(
+            l10n.homeOfflineRetry(seconds),
+            key: const Key('home-offline-retry'),
+          ),
           const SizedBox(height: NekoSpace.sm),
-          const Text('电脑上的任务不受影响，恢复后自动继续。'),
+          Text(l10n.homeOfflineHint),
           const SizedBox(height: NekoSpace.md),
           FilledButton.tonal(
             key: const Key('home-retry-now'),
             onPressed: () => ref.read(connectionManagerProvider).onForeground(),
-            child: const Text('立即重试'),
+            child: Text(l10n.connRetryNow),
           ),
           const SizedBox(height: NekoSpace.sm),
           OutlinedButton(
@@ -160,7 +187,7 @@ class _HomePageState extends ConsumerState<HomePage>
               ref.read(connectionManagerProvider).stopToScan();
               context.go('/scan');
             },
-            child: const Text('返回扫码'),
+            child: Text(l10n.homeBackToScan),
           ),
         ],
       ),
@@ -172,7 +199,10 @@ class _HomePageState extends ConsumerState<HomePage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          Text('已连接 $computerName', key: const Key('home-ready-title')),
+          Text(
+            context.l10n.homeConnected(computerName),
+            key: const Key('home-ready-title'),
+          ),
           const SizedBox(height: NekoSpace.sm),
           Text(
             'server ${hello.serverName} · api v${hello.apiVersion}',
@@ -189,7 +219,7 @@ class _HomePageState extends ConsumerState<HomePage>
               ref.read(connectionManagerProvider).stopToScan();
               context.go('/scan');
             },
-            child: const Text('返回扫码'),
+            child: Text(context.l10n.homeBackToScan),
           ),
         ],
       ),
@@ -218,7 +248,7 @@ class _HomePageState extends ConsumerState<HomePage>
               ref.read(connectionManagerProvider).stopToScan();
               context.go('/scan');
             },
-            child: const Text('重新扫码配对'),
+            child: Text(context.l10n.connRescan),
           ),
         ],
       ),

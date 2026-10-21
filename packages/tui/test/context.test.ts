@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoContextSettingsPatch, NekoContextSettingsState } from "@neko-harness/gateway";
@@ -97,7 +98,7 @@ it("lists settings with values and sources, marking custom values", () => {
 	expect(rows.find((item) => item.value === "pruning.enabled")!.rightLabel).toBe("On  Config");
 	expect(rows.find((item) => item.value === "compaction.enabled")!.rightLabel).toBe("On  Default");
 	expect(contextItems(undefined)).toEqual([]);
-	expect(commands.map((command) => command.name)).toContain("context");
+	expect(commands().map((command) => command.name)).toContain("context");
 });
 
 it("saves a preset, notifies, and returns to the list", async () => {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/core/storage/prefs_store.dart';
@@ -138,7 +139,10 @@ void main() {
     await chat.send();
     expect(chat.input.text, '需要凭据');
     expect(chat.pending, isEmpty);
-    expect(chat.error, contains('DEEPSEEK_KEY_REQUIRED'));
+    expect(
+      resolveUiText(chat.error!, kLocaleZh),
+      contains('DEEPSEEK_KEY_REQUIRED'),
+    );
   });
 
   test('离线时不发送，草稿按会话隔离持久化', () async {

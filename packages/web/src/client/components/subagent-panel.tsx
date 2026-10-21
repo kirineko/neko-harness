@@ -3,18 +3,11 @@ import { downloadImage } from "@neko-harness/core/image-transfer";
 import { mergeTranscriptItems } from "@neko-harness/core/transcript-items";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { useNekoState } from "../lib/store";
 import { ImageReaderContext } from "./image-gallery";
 import { MessageList } from "./message-list";
 
-const labels = {
-	idle: "空闲",
-	queued: "排队中",
-	running: "运行中",
-	completed: "已完成",
-	failed: "失败",
-	cancelled: "已停止",
-};
 function Detail({
 	entry,
 	active,
@@ -24,6 +17,7 @@ function Detail({
 	active: boolean;
 	target?: { taskId: number; nonce: number };
 }) {
+	const t = useT();
 	const { phase, operating, view: parentView } = useNekoState();
 	const [view, setView] = useState<ChatView | null>(null);
 	const [error, setError] = useState("");
@@ -110,16 +104,16 @@ function Detail({
 		<div className={`${active ? "flex" : "hidden"} min-h-0 flex-1 flex-col`}>
 			<div className="flex flex-wrap items-center gap-2 border-b border-sakura-100 p-3 text-xs">
 				<span>
-					{entry.historyThrough !== undefined ? "历史 · " : ""}
-					{labels[entry.status]}
+					{entry.historyThrough !== undefined ? t("subagent.history") : ""}
+					{t(`task.status.${entry.status}`)}
 				</span>
 				{view && (
-					<span title="子智能体累计用量">
+					<span title={t("subagent.usage")}>
 						↑{view.usage.input} ↓{view.usage.output} · ${view.usage.cost.toFixed(4)}
 					</span>
 				)}
 				{currentRound && (
-					<span title="当前或最近任务耗时">
+					<span title={t("subagent.duration")}>
 						{Math.max(0, Math.round(((currentRound.endedAt ?? Date.now()) - currentRound.createdAt) / 1000))}s
 					</span>
 				)}
@@ -131,7 +125,7 @@ function Detail({
 							void service?.stop({ taskId: entry.activeRoundId! }).catch((e) => setError(String(e)));
 						}}
 					>
-						停止此任务
+						{t("subagent.stop")}
 					</button>
 				)}
 			</div>
@@ -146,7 +140,7 @@ function Detail({
 					focusEntry={targetEntry !== undefined && target ? { id: targetEntry, nonce: target.nonce } : undefined}
 					onLoadEarlier={active && before != null ? history : undefined}
 					busy={view?.busy ?? false}
-					emptyLabel={entry.status === "queued" ? "任务排队中…" : "暂无内容"}
+					emptyLabel={entry.status === "queued" ? t("subagent.queued") : t("subagent.noContent")}
 				/>
 			</ImageReaderContext.Provider>
 		</div>
@@ -169,6 +163,7 @@ export function SubagentPanel({
 	approval?: ReactNode;
 	target?: { taskId: number; nonce: number };
 }) {
+	const t = useT();
 	const [visited, setVisited] = useState<string[]>([]);
 	const closeButton = useRef<HTMLButtonElement>(null);
 	const panel = useRef<HTMLElement>(null);
@@ -209,7 +204,7 @@ export function SubagentPanel({
 			ref={panel}
 			role={narrow ? "dialog" : "complementary"}
 			aria-modal={narrow && open ? true : undefined}
-			aria-label="子智能体"
+			aria-label={t("subagent.title")}
 			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:static lg:z-auto lg:w-[min(42vw,40rem)] lg:shrink-0`}
 			onKeyDown={(e) => {
 				if (!e.currentTarget.contains(e.target as Node)) return;
@@ -234,14 +229,14 @@ export function SubagentPanel({
 			}}
 		>
 			<div className="flex items-center justify-between border-b border-sakura-200 px-4 py-1.5">
-				<strong className="text-sm text-ink-800">子智能体</strong>
+				<strong className="text-sm text-ink-800">{t("subagent.title")}</strong>
 				<button
 					ref={closeButton}
 					type="button"
 					className="focus-neko rounded-lg px-2 py-1 text-sm text-ink-600 hover:bg-sakura-50"
 					onClick={onClose}
 				>
-					关闭
+					{t("common.close")}
 				</button>
 			</div>
 			<div className="max-h-44 shrink-0 overflow-auto border-b border-sakura-100 p-2">
@@ -256,7 +251,7 @@ export function SubagentPanel({
 						<span className="min-w-0 truncate">
 							<span className="text-tianyi-700">{entry.role}</span> · {entry.title}
 						</span>
-						<span className="shrink-0 text-xs text-ink-500">{entry.roundCount} 轮</span>
+						<span className="shrink-0 text-xs text-ink-500">{t("subagent.rounds", { count: entry.roundCount })}</span>
 					</button>
 				))}
 			</div>

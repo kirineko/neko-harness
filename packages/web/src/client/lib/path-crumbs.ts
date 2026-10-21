@@ -4,6 +4,8 @@
  * POSIX 路径以 `/` 为根，行为与旧实现一致。
  */
 
+import { getT } from "./i18n/index.ts";
+
 export type PathCrumb = {
 	/** 面包屑显示名（POSIX 为目录名，Windows 首项为盘符 `D:`）。 */
 	readonly label: string;
@@ -30,7 +32,7 @@ export function pathCrumbs(path: string): PathCrumbs {
 			.filter(Boolean);
 		return {
 			root: "/",
-			rootLabel: "此电脑",
+			rootLabel: getT()("path.thisComputer"),
 			crumbs: [
 				{ label: letter, path: driveRoot },
 				...names.map((name, i) => ({ label: name, path: driveRoot + names.slice(0, i + 1).join("\\") })),

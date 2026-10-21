@@ -11,6 +11,7 @@ import 'package:neko_mobile/core/storage/prefs_store.dart';
 import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
 import 'package:neko_mobile/features/sessions/sessions_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/theme.dart';
 import 'package:neko_mobile/features/connect/home_page.dart';
 import 'package:neko_mobile/features/connect/scan_controller.dart';
@@ -78,17 +79,28 @@ class NekoApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final app = ref.watch(appControllerOrNullProvider);
-    Widget build(ThemeMode mode) => MaterialApp.router(
+    Widget build(ThemeMode mode, Locale locale) => MaterialApp.router(
       title: 'NekoAI',
       theme: buildNekoTheme(Brightness.light),
       darkTheme: buildNekoTheme(Brightness.dark),
       themeMode: mode,
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: kSupportedLocales,
+      // 不跟随系统语言：无论系统是什么语言都固定回退 zh。
+      localeResolutionCallback: (locale, supported) => supported.firstWhere(
+        (s) => s.languageCode == locale?.languageCode,
+        orElse: () => kLocaleZh,
+      ),
       routerConfig: _router,
     );
-    if (app == null) return build(ThemeMode.system);
+    if (app == null) return build(ThemeMode.system, kLocaleZh);
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: app.themeMode,
-      builder: (context, mode, _) => build(mode),
+      builder: (context, mode, _) => ValueListenableBuilder<Locale>(
+        valueListenable: app.locale,
+        builder: (context, locale, _) => build(mode, locale),
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { t } from "../i18n/index.ts";
 import { labels } from "../labels.ts";
 import { style, theme } from "../theme/index.ts";
 import { shortcutHints } from "./shortcut-hints.ts";
@@ -38,6 +39,8 @@ export type PickerDetail = {
 	handleKey(data: string): boolean;
 };
 
+const newFilterInput = () => new Input({ prompt: "❯ ", placeholder: t("common.filterPlaceholder") });
+
 /** A single searchable panel. Async generations cannot reopen a closed panel. */
 export class PickerPanel implements Component {
 	pointerSelection = false;
@@ -50,7 +53,7 @@ export class PickerPanel implements Component {
 	listKey: ((data: string, value: string | undefined) => boolean) | undefined;
 	/** Ready-state footer replacing the default select hints (e.g. extra `D` key). Reset when the panel closes. */
 	help: string | undefined;
-	readonly search = new Input({ prompt: "❯ ", placeholder: "Type to filter" });
+	search = newFilterInput();
 	#items: readonly PickerItem[] = [];
 	#index = 0;
 	#pointerRows = new Map<number, number>();
@@ -93,7 +96,10 @@ export class PickerPanel implements Component {
 		this.#title = title;
 		this.#load = load;
 		this.#pick = pick;
-		this.search.setValue("");
+		// A fresh input picks up the placeholder of the current interface language.
+		const focused = this.search.focused;
+		this.search = newFilterInput();
+		this.search.focused = focused;
 		this.#index = 0;
 		await this.reload();
 	}
@@ -308,7 +314,7 @@ export class PickerPanel implements Component {
 				? labels.retry
 				: this.#state === "ready"
 					? this.agentNavigation
-						? shortcutHints(["↑↓", "Select"], ["→/Enter", "Open"], ["←", "Main"])
+						? shortcutHints(["↑↓", t("action.select")], ["→/Enter", t("action.open")], ["←", t("action.main")])
 						: (this.help ?? labels.select)
 					: labels.close;
 		const hint = this.#state === "ready" && height >= 5 ? this.#hint : "";
@@ -316,7 +322,7 @@ export class PickerPanel implements Component {
 		if (this.#state !== "ready")
 			rows.push(
 				this.#state === "error"
-					? theme.error(`Error: ${this.#error}`)
+					? theme.error(t("common.error", { message: this.#error }))
 					: this.#state === "applying"
 						? labels.applying
 						: labels.loading,

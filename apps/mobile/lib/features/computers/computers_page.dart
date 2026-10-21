@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:neko_mobile/core/pairing/pairing_models.dart';
 import 'package:neko_mobile/core/rpc/connection_manager.dart';
 import 'package:neko_mobile/features/app_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
@@ -28,17 +29,17 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('忘记「${computer.serverName}」？'),
-        content: const Text('将删除本机保存的凭据；再次控制需要重新扫码。电脑上的任务不受影响。'),
+        title: Text(context.l10n.computersForgetTitle(computer.serverName)),
+        content: Text(context.l10n.computersForgetBody),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             key: const Key('forget-confirm'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('忘记'),
+            child: Text(context.l10n.computersForget),
           ),
         ],
       ),
@@ -54,7 +55,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     final app = ref.watch(appControllerProvider);
     final tokens = NekoTokens.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('电脑与设置')),
+      appBar: AppBar(title: Text(context.l10n.computersTitle)),
       body: FutureBuilder<List<PairedComputer>>(
         future: _computers,
         builder: (context, snapshot) {
@@ -69,7 +70,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                   NekoSpace.xs,
                 ),
                 child: Text(
-                  '已配对的电脑',
+                  context.l10n.computersPaired,
                   style: TextStyle(color: tokens.textFaint),
                 ),
               ),
@@ -92,14 +93,14 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                         },
                   trailing: IconButton(
                     key: Key('forget-${computer.serverId}'),
-                    tooltip: '忘记这台电脑',
+                    tooltip: context.l10n.computersForgetTooltip,
                     icon: const NekoIcon(NekoIcons.trash),
                     onPressed: () => _forget(computer),
                   ),
                 ),
               ListTile(
                 leading: const NekoIcon(NekoIcons.scan),
-                title: const Text('扫码配对新电脑'),
+                title: Text(context.l10n.pairNewComputer),
                 onTap: () {
                   manager.stopToScan();
                   context.go('/scan');
@@ -113,7 +114,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                   NekoSpace.md,
                   NekoSpace.xs,
                 ),
-                child: Text('外观', style: context.meta(tokens.textFaint)),
+                child: Text(
+                  context.l10n.appearanceTitle,
+                  style: context.meta(tokens.textFaint),
+                ),
               ),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: app.themeMode,
@@ -122,19 +126,54 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                   onChanged: (value) {
                     if (value != null) app.setThemeMode(value);
                   },
-                  child: const Column(
+                  child: Column(
                     children: <Widget>[
                       RadioListTile<ThemeMode>(
                         value: ThemeMode.system,
-                        title: Text('跟随系统'),
+                        title: Text(context.l10n.themeFollowSystem),
                       ),
                       RadioListTile<ThemeMode>(
                         value: ThemeMode.light,
-                        title: Text('浅色'),
+                        title: Text(context.l10n.themeLight),
                       ),
                       RadioListTile<ThemeMode>(
                         value: ThemeMode.dark,
-                        title: Text('深色'),
+                        title: Text(context.l10n.themeDark),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  NekoSpace.md,
+                  NekoSpace.sm,
+                  NekoSpace.md,
+                  NekoSpace.xs,
+                ),
+                child: Text(
+                  context.l10n.languageTitle,
+                  style: context.meta(tokens.textFaint),
+                ),
+              ),
+              ValueListenableBuilder<Locale>(
+                valueListenable: app.locale,
+                builder: (context, locale, _) => RadioGroup<Locale>(
+                  groupValue: locale,
+                  onChanged: (value) {
+                    if (value != null) app.setLocale(value);
+                  },
+                  child: Column(
+                    key: const Key('computers-language'),
+                    children: <Widget>[
+                      RadioListTile<Locale>(
+                        value: kLocaleZh,
+                        title: Text(context.l10n.languageZh),
+                      ),
+                      RadioListTile<Locale>(
+                        value: kLocaleEn,
+                        title: Text(context.l10n.languageEn),
                       ),
                     ],
                   ),

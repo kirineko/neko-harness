@@ -7,7 +7,11 @@ import { Markdown, matchesKey, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { NekoGatewayClient, NekoMarketSkill } from "@neko-harness/gateway";
 import type { PickerDetail, PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints as hint } from "./components/shortcut-hints.ts";
+import { t } from "./i18n/index.ts";
 import { getActiveThemeMode, getMarkdownTheme, style, theme } from "./theme/index.ts";
+
+const scopeLabel = (scope: "user" | "project"): string =>
+	scope === "user" ? t("skill.scope.user") : t("skill.scope.project");
 
 const formatSize = (bytes: number): string =>
 	bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
@@ -46,7 +50,7 @@ class SkillDetailView implements PickerDetail {
 	#error = "";
 	#notice = "";
 	#busy = false;
-	#confirm: { prompt: string; run: () => Promise<void> } | null = null;
+	#confirm: { prompt: () => string; run: () => Promise<void> } | null = null;
 
 	readonly #name: string;
 	readonly #client: NekoGatewayClient;
@@ -70,12 +74,18 @@ class SkillDetailView implements PickerDetail {
 	}
 
 	get help(): string {
-		if (this.#confirm) return hint(["y", "Confirm"], ["n", "Cancel"]);
+		if (this.#confirm) return hint(["y", t("action.confirm")], ["n", t("action.cancel")]);
 		const skill = this.#skill;
 		const builtinOnly = skill?.installed.builtin === true && !skill.installed.user && !skill.installed.project;
 		return builtinOnly
-			? hint(["v", "Preview"], ["Esc", "Back"])
-			: hint(["u", "Install user"], ["p", "Install project"], ["d", "Remove"], ["v", "Preview"], ["Esc", "Back"]);
+			? hint(["v", t("action.preview")], ["Esc", t("action.back")])
+			: hint(
+					["u", t("action.installUser")],
+					["p", t("action.installProject")],
+					["d", t("action.remove")],
+					["v", t("action.preview")],
+					["Esc", t("action.back")],
+				);
 	}
 
 	private async refresh(): Promise<void> {
@@ -119,12 +129,13 @@ class SkillDetailView implements PickerDetail {
 		const shadowed = scope === "user" && skill.installed.project;
 		if (exists) {
 			this.#confirm = {
-				prompt: `${skill.name} exists at ${scope} level. Overwrite with market version ${skill.version}? Local edits are lost.`,
+				prompt: () =>
+					t("skill.confirmOverwrite", { name: skill.name, scope: scopeLabel(scope), version: skill.version }),
 				run: () => this.install(scope, true),
 			};
 		} else if (shadowed) {
 			this.#confirm = {
-				prompt: `Project level already has ${skill.name} and wins. Install at user level anyway?`,
+				prompt: () => t("skill.confirmShadowed", { name: skill.name }),
 				run: () => this.install(scope, false),
 			};
 		} else {
@@ -135,14 +146,14 @@ class SkillDetailView implements PickerDetail {
 	private askUninstall(skill: NekoMarketSkill): void {
 		const scope = skill.installed.project ? "project" : skill.installed.user ? "user" : null;
 		if (scope === null) {
-			this.#notice = "Not installed locally.";
+			this.#notice = t("skill.notInstalled");
 			return;
 		}
 		this.#confirm = {
-			prompt: `Uninstall ${skill.name} from ${scope} level? This cannot be undone.`,
+			prompt: () => t("skill.confirmUninstall", { name: skill.name, scope: scopeLabel(scope) }),
 			run: async () => {
 				await this.#client.skillMarket.uninstall({ name: this.#name, scope, workspaceRoot: this.#workspaceRoot });
-				this.#notice = `Uninstalled from ${scope}. Takes effect on the next message.`;
+				this.#notice = t("skill.uninstalled", { scope: scopeLabel(scope) });
 			},
 		};
 	}
@@ -157,13 +168,13 @@ class SkillDetailView implements PickerDetail {
 			});
 			this.#notice =
 				result.shadowedBy === "project"
-					? "Installed at user level, but the project-level copy still wins."
-					: `Installed at ${scope} level. Takes effect on the next message.`;
+					? t("skill.installedShadowed")
+					: t("skill.installed", { scope: scopeLabel(scope) });
 		} catch (error) {
 			// 竞态（列表陈旧、刚被其他端装上）：转成内联覆盖确认，按原作用域重试。
 			if (marketErrorCode(error) === "skill_exists") {
 				this.#confirm = {
-					prompt: `${this.#name} already exists at ${scope} level. Overwrite with the market version?`,
+					prompt: () => t("skill.confirmExists", { name: this.#name, scope: scopeLabel(scope) }),
 					run: () => this.install(scope, true),
 				};
 				return;
@@ -179,7 +190,7 @@ class SkillDetailView implements PickerDetail {
 		try {
 			await action();
 		} catch (error) {
-			this.#notice = `Failed: ${error instanceof Error ? error.message : String(error)}`;
+			this.#notice = t("skill.failed", { message: error instanceof Error ? error.message : String(error) });
 		} finally {
 			this.#busy = false;
 			await this.refresh();
@@ -188,26 +199,29 @@ class SkillDetailView implements PickerDetail {
 
 	lines(width: number, _height: number): readonly string[] {
 		if (this.#confirm) {
-			return [theme.accent("Confirm"), "", ...wrapTextWithAnsi(this.#confirm.prompt, width), ""];
+			return [theme.accent(t("action.confirm")), "", ...wrapTextWithAnsi(this.#confirm.prompt(), width), ""];
 		}
 		const skill = this.#skill;
-		if (skill === null) return [this.#error !== "" ? theme.error(`Error: ${this.#error}`) : theme.dim("Loading...")];
+		if (skill === null)
+			return [
+				this.#error !== "" ? theme.error(t("common.error", { message: this.#error })) : theme.dim(t("common.loading")),
+			];
 		const mark = (on: boolean, label: string) => (on ? theme.ok(`${label} ✓`) : theme.dim(`${label} —`));
 		const state = [
-			mark(skill.installed.project, "project"),
-			mark(skill.installed.user, "user"),
-			mark(skill.installed.builtin, "builtin"),
+			mark(skill.installed.project, t("skill.mark.project")),
+			mark(skill.installed.user, t("skill.mark.user")),
+			mark(skill.installed.builtin, t("skill.mark.builtin")),
 		].join("  ");
 		const rows = [
 			`${style.bold(skill.name)}  ${theme.dim(skill.version)}`,
 			theme.dim(
 				`${skill.source} · ${skill.category} · ${formatSize(skill.sizeBytes)} · sha256 ${skill.sha256.slice(0, 10)}…`,
 			),
-			`${theme.dim("installed:")} ${state}${skill.activeLevel ? theme.dim(`  (active: ${skill.activeLevel})`) : ""}`,
+			`${theme.dim(t("skill.installedLabel"))} ${state}${skill.activeLevel ? theme.dim(`  ${t("skill.active", { level: skill.activeLevel })}`) : ""}`,
 			"",
 			...wrapTextWithAnsi(skill.description, width),
 		];
-		if (this.#busy) rows.push("", theme.dim("Working..."));
+		if (this.#busy) rows.push("", theme.dim(t("skill.working")));
 		if (this.#notice !== "") rows.push("", theme.accent(this.#notice));
 		return rows;
 	}
@@ -225,7 +239,7 @@ export class SkillPreviewView implements PickerDetail {
 	readonly #panel: PickerPanel;
 
 	get help(): string {
-		return hint(["↑↓/Wheel", "Scroll"], ["PgUp/PgDn", "Page"], ["Esc", "Back"]);
+		return hint(["↑↓/Wheel", t("action.scroll")], ["PgUp/PgDn", t("action.page")], ["Esc", t("action.back")]);
 	}
 
 	constructor(name: string, client: NekoGatewayClient, panel: PickerPanel) {
@@ -258,12 +272,16 @@ export class SkillPreviewView implements PickerDetail {
 
 	lines(width: number, height: number): readonly string[] {
 		if (this.#markdown === null || this.#header === null)
-			return [this.#error !== "" ? theme.error(`Error: ${this.#error}`) : theme.dim("Loading preview...")];
+			return [
+				this.#error !== ""
+					? theme.error(t("common.error", { message: this.#error }))
+					: theme.dim(t("skill.loadingPreview")),
+			];
 		if (this.#renderTheme !== getActiveThemeMode()) {
 			this.#renderTheme = getActiveThemeMode();
 			this.#markdown.invalidate();
 		}
-		const flat = [`${theme.dim("files:")} ${this.#header}`, "", ...this.#markdown.render(width)];
+		const flat = [`${theme.dim(t("skill.files"))} ${this.#header}`, "", ...this.#markdown.render(width)];
 		this.#pageSize = Math.max(1, height - 1);
 		this.#maxOffset = Math.max(0, flat.length - height);
 		this.#offset = Math.min(this.#offset, this.#maxOffset);
@@ -279,7 +297,7 @@ export async function openSkillMarket(
 ): Promise<void> {
 	const openPreview = (name: string) => panel.showDetail(new SkillPreviewView(name, client, panel));
 	await panel.show(
-		"Skills Market",
+		t("skill.marketTitle"),
 		async () => toItems(await client.skillMarket.list({ workspaceRoot })),
 		async (name) => new SkillDetailView(name, client, workspaceRoot, panel, openPreview),
 	);

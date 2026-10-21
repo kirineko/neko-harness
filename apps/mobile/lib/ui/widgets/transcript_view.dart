@@ -5,6 +5,8 @@ import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/features/chat/transcript.dart';
 import 'package:neko_mobile/features/questions/question_sheet.dart'
     show questionStatusLabel;
+import 'package:neko_mobile/l10n/core_text.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 import 'package:neko_mobile/ui/widgets/markdown_view.dart';
@@ -30,7 +32,7 @@ class TranscriptView extends StatefulWidget {
     required this.actions,
     this.onOpenSubagent,
     this.onOpenQuestion,
-    this.emptyText = '还没有消息',
+    this.emptyText,
   });
 
   final TranscriptActions actions;
@@ -38,7 +40,9 @@ class TranscriptView extends StatefulWidget {
 
   /// 打开未决问题的面板；只在主会话提供（回答控件只存在于面板，转录里没有）。
   final void Function(int questionId)? onOpenQuestion;
-  final String emptyText;
+
+  /// 空转录的提示；缺省为当前语言的“还没有消息”。
+  final String? emptyText;
 
   @override
   State<TranscriptView> createState() => _TranscriptViewState();
@@ -180,7 +184,7 @@ class _TranscriptViewState extends State<TranscriptView> {
                     padding: const EdgeInsets.all(NekoSpace.xl),
                     child: Center(
                       child: Text(
-                        widget.emptyText,
+                        widget.emptyText ?? context.l10n.transcriptEmpty,
                         style: TextStyle(
                           color: NekoTokens.of(context).textFaint,
                         ),
@@ -209,7 +213,7 @@ class _TranscriptViewState extends State<TranscriptView> {
             bottom: 16,
             child: FloatingActionButton.small(
               key: const Key('transcript-to-bottom'),
-              tooltip: '回到底部',
+              tooltip: context.l10n.transcriptToBottom,
               onPressed: () => _scroll.animateTo(
                 _scroll.position.maxScrollExtent,
                 duration: const Duration(milliseconds: 200),
@@ -256,7 +260,7 @@ class StreamingView extends StatelessWidget {
       children: <Widget>[
         if (streaming.thinking.isNotEmpty)
           _Collapsible(
-            title: '思考中…',
+            title: context.l10n.transcriptThinking,
             initiallyExpanded: false,
             child: Text(
               (streaming.thinkingOmitted > 0 ? '…' : '') + streaming.thinking,
@@ -318,7 +322,7 @@ class ChatItemView extends StatelessWidget {
   String _full(String field, String preview) =>
       transcript.expanded(item.key, field) ?? preview;
 
-  Widget? _expandButton(String field) {
+  Widget? _expandButton(BuildContext context, String field) {
     final ref = item.refFor(field);
     if (ref == null || transcript.expanded(item.key, field) != null) {
       return null;
@@ -329,7 +333,7 @@ class ChatItemView extends StatelessWidget {
         key: Key('expand-${item.key}-$field'),
         onPressed: () => actions.expand(item, ref),
         icon: const NekoIcon(NekoIcons.unfold, size: 18),
-        label: Text('展开全文（${(ref.bytes / 1024).ceil()} KB）'),
+        label: Text(context.l10n.transcriptExpand((ref.bytes / 1024).ceil())),
       ),
     );
   }
@@ -367,7 +371,7 @@ class ChatItemView extends StatelessWidget {
                       _full('text', item.text),
                       style: TextStyle(color: tokens.onUserBubble),
                     ),
-                  ?_expandButton('text'),
+                  ?_expandButton(context, 'text'),
                   if (item.images.isNotEmpty)
                     _ImageStrip(images: item.images, actions: actions),
                 ],
@@ -381,7 +385,7 @@ class ChatItemView extends StatelessWidget {
           children: <Widget>[
             if (item.thinking.isNotEmpty)
               _Collapsible(
-                title: '思考过程',
+                title: context.l10n.transcriptThinkingProcess,
                 initiallyExpanded: false,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +394,7 @@ class ChatItemView extends StatelessWidget {
                       _full('thinking', item.thinking),
                       style: context.small(tokens.textMuted),
                     ),
-                    ?_expandButton('thinking'),
+                    ?_expandButton(context, 'thinking'),
                   ],
                 ),
               ),
@@ -399,11 +403,17 @@ class ChatItemView extends StatelessWidget {
                 width: double.infinity,
                 child: NekoMarkdown(_full('text', item.text)),
               ),
-            ?_expandButton('text'),
+            ?_expandButton(context, 'text'),
             if (item.note != null)
-              Text(item.note!, style: TextStyle(color: tokens.textFaint)),
+              Text(
+                localizeToolNote(context.l10n, item.note!),
+                style: TextStyle(color: tokens.textFaint),
+              ),
             if (item.error != null)
-              _Banner(text: item.error!, color: tokens.danger),
+              _Banner(
+                text: localizeCoreError(context.l10n, item.error!),
+                color: tokens.danger,
+              ),
           ],
         );
       case ChatItemType.tool:
@@ -411,7 +421,7 @@ class ChatItemView extends StatelessWidget {
           item: item,
           tool: item.tool!,
           full: _full,
-          expandButton: _expandButton,
+          expandButton: (field) => _expandButton(context, field),
           actions: actions,
           round: round,
           onOpenSubagent: onOpenSubagent,
@@ -422,7 +432,7 @@ class ChatItemView extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: NekoSpace.xs),
           child: Center(
             child: Text(
-              _full('text', item.text),
+              localizeSystemRow(context.l10n, _full('text', item.text)),
               textAlign: TextAlign.center,
               style: context.small(tokens.textFaint),
             ),
@@ -516,8 +526,15 @@ class _ToolCardState extends State<ToolCard> {
           Padding(
             padding: const EdgeInsets.only(top: NekoSpace.xs),
             child: Text(
-              '+${tool.diffAdded ?? 0} −${tool.diffRemoved ?? 0}'
-              '${tool.diffTruncated ? '（diff 已截断）' : ''}',
+              tool.diffTruncated
+                  ? context.l10n.transcriptDiffSummaryTruncated(
+                      tool.diffAdded ?? 0,
+                      tool.diffRemoved ?? 0,
+                    )
+                  : context.l10n.transcriptDiffSummary(
+                      tool.diffAdded ?? 0,
+                      tool.diffRemoved ?? 0,
+                    ),
               style: context.small(tokens.textMuted),
             ),
           ),
@@ -527,7 +544,10 @@ class _ToolCardState extends State<ToolCard> {
       if (tool.note != null)
         Padding(
           padding: const EdgeInsets.only(top: NekoSpace.xs),
-          child: Text(tool.note!, style: context.small(tokens.textFaint)),
+          child: Text(
+            localizeToolNote(context.l10n, tool.note!),
+            style: context.small(tokens.textFaint),
+          ),
         ),
       if (tool.durationMs != null)
         Padding(
@@ -566,9 +586,9 @@ class _ToolCardState extends State<ToolCard> {
                   const SizedBox(width: NekoSpace.sm),
                   Text(
                     linked != null
-                        ? '子 agent · ${linked.title}'
+                        ? context.l10n.transcriptSubagentTitle(linked.title)
                         : interaction != null
-                        ? interactionTitle(interaction)
+                        ? interactionTitle(context.l10n, interaction)
                         : tool.name,
                     style: context.text.titleSmall,
                   ),
@@ -578,7 +598,7 @@ class _ToolCardState extends State<ToolCard> {
                       linked != null
                           ? '${linked.role} · ${linked.status}'
                           : interaction != null
-                          ? interactionSummary(interaction)
+                          ? interactionSummary(context.l10n, interaction)
                           : tool.summary,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -588,7 +608,7 @@ class _ToolCardState extends State<ToolCard> {
                   if (linked != null && onOpenSubagent != null)
                     IconButton(
                       key: Key('open-subagent-${linked.taskId}'),
-                      tooltip: '查看子 agent',
+                      tooltip: context.l10n.transcriptViewSubagent,
                       icon: Badge(
                         isLabelVisible: linked.approvalCount > 0,
                         label: Text('${linked.approvalCount}'),
@@ -626,12 +646,13 @@ class _ToolCardState extends State<ToolCard> {
 }
 
 /// `ask_user` / `todo` 工具项的标题；状态来自结构化 `interaction`，不解析 result 文案。
-String interactionTitle(ToolInteraction interaction) => switch (interaction) {
-  AskUserInteraction() => '助手提问',
-  TodoInteraction() => 'todo',
-};
+String interactionTitle(AppLocalizations l10n, ToolInteraction interaction) =>
+    switch (interaction) {
+      AskUserInteraction() => l10n.questionHeader,
+      TodoInteraction() => 'todo',
+    };
 
-String _answerLine(AskUserInteraction ask) {
+String _answerLine(AppLocalizations l10n, AskUserInteraction ask) {
   final labels = ask.labels.isNotEmpty
       ? ask.labels
       : <String>[
@@ -640,26 +661,34 @@ String _answerLine(AskUserInteraction ask) {
         ];
   final text = ask.text;
   return <String>[
-    if (labels.isNotEmpty) labels.join('、'),
+    if (labels.isNotEmpty) labels.join(l10n.separatorList),
     if (text != null && text.isNotEmpty) text,
   ].join(' · ');
 }
 
-String interactionSummary(ToolInteraction interaction) {
+String interactionSummary(AppLocalizations l10n, ToolInteraction interaction) {
   switch (interaction) {
     case AskUserInteraction():
       final answer = interaction.status == QuestionStatus.answered
-          ? _answerLine(interaction)
+          ? _answerLine(l10n, interaction)
           : '';
       return <String>[
-        questionStatusLabel(interaction.status),
+        questionStatusLabel(l10n, interaction.status),
         interaction.question,
         if (answer.isNotEmpty) answer,
       ].join(' · ');
     case TodoInteraction():
-      return '${interaction.action == 'replace' ? '更新 todo' : '读取 todo'}'
-          ' · 已完成 ${interaction.completed}/${interaction.total}'
-          '（修订 ${interaction.revision}）';
+      return interaction.action == 'replace'
+          ? l10n.todoSummaryUpdate(
+              interaction.completed,
+              interaction.total,
+              interaction.revision,
+            )
+          : l10n.todoSummaryRead(
+              interaction.completed,
+              interaction.total,
+              interaction.revision,
+            );
   }
 }
 
@@ -675,11 +704,12 @@ List<Widget> _interactionDetails(
       return <Widget>[
         Padding(
           padding: const EdgeInsets.only(top: NekoSpace.xs),
-          child: Text(interactionSummary(interaction)),
+          child: Text(interactionSummary(context.l10n, interaction)),
         ),
       ];
     case AskUserInteraction():
       final answered = interaction.status == QuestionStatus.answered;
+      final l10n = context.l10n;
       return <Widget>[
         Padding(
           padding: const EdgeInsets.only(top: NekoSpace.xs),
@@ -694,7 +724,7 @@ List<Widget> _interactionDetails(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
               '${interaction.optionIds.contains(option.id) ? '✓ ' : '· '}'
-              '${option.label}${option.recommended ? '（推荐）' : ''}',
+              '${option.recommended ? l10n.transcriptOptionRecommended(option.label) : option.label}',
               style: context.small(tokens.textMuted),
             ),
           ),
@@ -702,11 +732,14 @@ List<Widget> _interactionDetails(
           padding: const EdgeInsets.only(top: NekoSpace.xs),
           child: Text(
             switch (interaction.status) {
-              QuestionStatus.pending => '等待回答',
-              QuestionStatus.answered =>
-                '已回答：${_answerLine(interaction).isEmpty ? '（无内容）' : _answerLine(interaction)}',
-              QuestionStatus.skipped => '已跳过，未提供答案',
-              QuestionStatus.cancelled => '已取消',
+              QuestionStatus.pending => l10n.questionStatusPending,
+              QuestionStatus.answered => l10n.transcriptAnswered(
+                _answerLine(l10n, interaction).isEmpty
+                    ? l10n.transcriptNoContent
+                    : _answerLine(l10n, interaction),
+              ),
+              QuestionStatus.skipped => l10n.transcriptSkippedNoAnswer,
+              QuestionStatus.cancelled => l10n.questionStatusCancelled,
             },
             key: const Key('interaction-status'),
             style: TextStyle(
@@ -721,7 +754,7 @@ List<Widget> _interactionDetails(
             child: TextButton(
               key: Key('open-question-${interaction.id}'),
               onPressed: () => onOpenQuestion(interaction.id),
-              child: const Text('查看问题'),
+              child: Text(l10n.transcriptViewQuestion),
             ),
           ),
       ];
@@ -834,7 +867,7 @@ class _ImageThumbState extends State<ImageThumb> {
   Widget build(BuildContext context) {
     final tokens = NekoTokens.of(context);
     return Semantics(
-      label: '图片 ${widget.image.name}',
+      label: context.l10n.transcriptImageLabel(widget.image.name),
       button: true,
       child: FutureBuilder<Uint8List>(
         future: _bytes,
@@ -850,7 +883,7 @@ class _ImageThumbState extends State<ImageThumb> {
             );
           } else if (snapshot.hasError) {
             child = IconButton(
-              tooltip: '重新加载图片',
+              tooltip: context.l10n.transcriptReloadImage,
               icon: NekoIcon(NekoIcons.imageOff, color: tokens.danger),
               onPressed: () => setState(() {
                 _bytes = widget.actions.image(widget.image);

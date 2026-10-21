@@ -93,6 +93,14 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 三套主题共用 `styles.css` 的同一批 token 名，只换值：`[data-theme]` 块覆盖色阶（深色主题色阶反相）、派生 token（渐变、`--on-accent`、`--focus-ring`、diff 色、阴影等）。组件里不要写 `text-white`、`bg-white` 等字面量色（二维码除外），用 token。阴影 token 在每个主题块写字面量（`var()` 会在 `:root` 上提前解析）。sakura 色阶在 `@theme` 与 `[data-theme="sakura"]` 各有一份，由 `theme-contrast.test.ts` 对拍；该测试同时按主题守护关键色对 WCAG 对比度，改色值时以它为准。
 - 聊天排版只作用于 `.bubble-user` / `.bubble-assistant` / `.md` 正文 / `.composer-input`，经 `--chat-*` 变量；代码块、工具卡、侧栏不变。字体只用系统字体栈，不打包字体文件。
 
+## 界面语言
+
+- Web / TUI / 移动端各自支持 `zh`（默认）与 `en`，偏好互相独立，不经 gateway、不提升应用协议、core 不感知语言。Web：localStorage `neko.language`（`lib/language.ts`），设置页 `/settings/language`；TUI：`~/.neko/tui.json`（`language-settings.ts`），优先级 `--lang` > `NEKO_LANG` > 已保存 > `zh`，`/language` 即时切换，`neko tui --help` 随语言输出；移动端：`PrefsStore` 持久化 + Flutter gen-l10n（`apps/mobile/lib/l10n/app_zh.arb` / `app_en.arb`，生成物提交入库），选择器与主题选择器同处。
+- 文案是类型化字典（Web `lib/i18n/{zh,en}.ts`、TUI `src/i18n/{zh,en}.ts`、移动端 ARB），统一 `t(key, params)`；新增文案必须两种语言同时补，缺键由类型或测试拦截。英文风格：简短、首字母大写、句末不加句号，子 agent 统一写 `sub-agent`。日期 `zh-CN` / `en-GB` 格式化集中在各端 `format`。
+- 受保护术语（`/plan`、`/skill:` 等命令、`pi.inbox`、provider 与工具名等不应翻译的词）列在 `packages/core/src/i18n/protected-terms.json`（`protected-terms.ts` 读取），三端字典测试对拍：中英文案都必须保留这些词。
+- core / gateway 推送的英文文案（工具标题、状态、错误前缀等）在前端映射成当前语言（`core-text`），映射表由 `packages/core/test/fixtures/core-ui-strings.json` 与 `core-ui-strings.test.ts` 对账；core 改了推送文案，该测试失败即需同步各端映射。映射不到的原样显示。已知遗留：gateway 自己拼的中文错误在 `en` 下仍是中文。
+- 防回退：Web、TUI 各有扫描 CJK 字面量的测试（Web `test/support/cjk-scan.ts`），只允许白名单内的条目（语言名本身、协议数据等），白名单要有理由；移动端同理扫描 `lib/` 下的 Dart 字面量。不要在组件里直接写中文或英文用户可见文案。
+
 ## Pi 1.3 使用要点（以已安装发布包的类型与行为为准）
 
 - durable 异步调用使用 `Context`（core 默认 `BACKGROUND_CONTEXT`）；远程 Chord 引用（`Ref`）方法使用可选 `Ctx`，普通调用自动 root，需要取消/组合时使用 host.root；ctx 只能给创建它的 host 的引用用（否则 `invalid/foreign_ctx`）。

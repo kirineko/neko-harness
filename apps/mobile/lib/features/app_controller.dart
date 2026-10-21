@@ -6,6 +6,7 @@ import 'package:neko_mobile/core/rpc/connection_manager.dart';
 import 'package:neko_mobile/core/storage/prefs_store.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
 import 'package:neko_mobile/features/sessions/sessions_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 把连接状态接到业务控制器：就绪时绑定并恢复上次会话，断开时保留内容并禁用控制。
 class AppController {
@@ -24,6 +25,9 @@ class AppController {
     ThemeMode.system,
   );
 
+  /// 界面语言：zh（默认）或 en，不跟随系统；偏好只存在本机。
+  final ValueNotifier<Locale> locale = ValueNotifier<Locale>(kLocaleZh);
+
   StreamSubscription<NekoConnectionState>? _subscription;
   String? _serverId;
   int _generation = 0;
@@ -34,6 +38,7 @@ class AppController {
       (m) => m.name == saved,
       orElse: () => ThemeMode.system,
     );
+    locale.value = parseLocale(await prefs.get(PrefKeys.language));
     _subscription = manager.states.listen(_onState);
     _onState(manager.state);
   }
@@ -41,6 +46,12 @@ class AppController {
   Future<void> setThemeMode(ThemeMode mode) async {
     themeMode.value = mode;
     await prefs.set(PrefKeys.themeMode, mode.name);
+  }
+
+  Future<void> setLocale(Locale next) async {
+    final normalized = parseLocale(localeCode(next));
+    locale.value = normalized;
+    await prefs.set(PrefKeys.language, localeCode(normalized));
   }
 
   void _onState(NekoConnectionState state) {
@@ -88,13 +99,14 @@ class AppController {
   void dispose() {
     unawaited(_subscription?.cancel());
     themeMode.dispose();
+    locale.dispose();
   }
 }
 
 final appControllerProvider = Provider<AppController>(
   (ref) =>
       ref.watch(appControllerOrNullProvider) ??
-      (throw UnimplementedError('appControllerProvider 未覆盖')),
+      (throw UnimplementedError('appControllerProvider is not overridden')),
 );
 
 /// 未覆盖时为 null（M0 冒烟测试只验证连接页）。

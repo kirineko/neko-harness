@@ -17,13 +17,21 @@ class PinnedHttpClient {
   }) : pinnedSha256 = pinnedSha256.toLowerCase(),
        _clock = clock ?? DateTime.now {
     if (pinnedHost.isEmpty) {
-      throw ArgumentError.value(pinnedHost, 'pinnedHost', '不能为空');
+      throw ArgumentError.value(pinnedHost, 'pinnedHost', 'must not be empty');
     }
     if (pinnedPort < 1 || pinnedPort > 65535) {
-      throw ArgumentError.value(pinnedPort, 'pinnedPort', '必须在 1-65535 之间');
+      throw ArgumentError.value(
+        pinnedPort,
+        'pinnedPort',
+        'must be within 1-65535',
+      );
     }
     if (!_pinPattern.hasMatch(pinnedSha256)) {
-      throw ArgumentError.value(pinnedSha256, 'pinnedSha256', '必须是 64 位十六进制');
+      throw ArgumentError.value(
+        pinnedSha256,
+        'pinnedSha256',
+        'must be 64 hex characters',
+      );
     }
     _client = HttpClient(context: SecurityContext(withTrustedRoots: false));
     _client.findProxy = directProxy;
@@ -95,14 +103,22 @@ class PinnedHttpClient {
       throw ArgumentError.value(
         url.scheme,
         'url.scheme',
-        '仅允许 $expectedScheme',
+        'only $expectedScheme is allowed',
       );
     }
     if (url.host != pinnedHost) {
-      throw ArgumentError.value(url.host, 'url.host', '与 pinnedHost 不一致');
+      throw ArgumentError.value(
+        url.host,
+        'url.host',
+        'does not match pinnedHost',
+      );
     }
     if (url.port != pinnedPort) {
-      throw ArgumentError.value(url.port, 'url.port', '与 pinnedPort 不一致');
+      throw ArgumentError.value(
+        url.port,
+        'url.port',
+        'does not match pinnedPort',
+      );
     }
   }
 

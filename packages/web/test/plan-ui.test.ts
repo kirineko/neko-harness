@@ -3,11 +3,11 @@ import { sessionStatusText } from "../src/client/lib/interactions.ts";
 import {
 	attentionTitle,
 	decisionStatus,
-	PLAN_STATUS_LABEL,
 	planCommandArgs,
 	planErrorText,
 	planSettlementText,
 	planState,
+	planStatusLabel,
 } from "../src/client/lib/plan-ui.ts";
 import { chatView, plan } from "./support/interaction-fixtures.ts";
 
@@ -59,7 +59,7 @@ it("explains what the saved record means for the user", () => {
 	expect(planSettlementText(plan({ status: "approved" }), true)).toContain("已批准");
 	expect(planSettlementText(plan({ status: "revision_requested" }), true)).toContain("修改");
 	expect(planSettlementText(plan({ status: "revision_requested" }), false)).toContain(
-		PLAN_STATUS_LABEL.revision_requested,
+		planStatusLabel("revision_requested"),
 	);
 	expect(planSettlementText(plan({ status: "superseded" }), false)).toContain("取代");
 	expect(planSettlementText(plan({ status: "cancelled" }), false)).toContain("取消");

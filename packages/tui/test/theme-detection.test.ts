@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import type { TerminalColors, TUI } from "@earendil-works/pi-tui";
 import { followTerminalTheme, modeFromColors } from "../src/detect-theme.ts";

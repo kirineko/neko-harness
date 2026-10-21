@@ -2,6 +2,7 @@ import type { ExportFormat } from "@neko-harness/core/conversation-export";
 import { sessionName } from "@neko-harness/core/session-display";
 import { useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { buildSessionExport, downloadFile, ExportCancelledError, exportNotice } from "../lib/session-export";
 import { getState, storeActions, useNekoState } from "../lib/store";
 import { Icon, Popover } from "./primitives";
@@ -13,13 +14,14 @@ const FORMATS: readonly { format: ExportFormat; label: string }[] = [
 ];
 
 export function ExportMenu() {
+	const t = useT();
 	const { view, currentSessionId, sessions } = useNekoState();
 	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 	const [includeThinking, setIncludeThinking] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
 	const empty = view === null || currentSessionId === null || view.items.length === 0;
-	const title = busy ? "导出中…" : empty ? "当前会话还没有内容可导出" : "导出会话";
+	const title = busy ? t("export.busy") : empty ? t("export.empty") : t("export.title");
 
 	const run = async (format: ExportFormat): Promise<void> => {
 		if (busyRef.current || view === null || currentSessionId === null) return;
@@ -33,7 +35,7 @@ export function ExportMenu() {
 				includeThinking,
 				snapshot: {
 					sessionId: currentSessionId,
-					title: current ? sessionName(current, "新会话") : "新会话",
+					title: current ? sessionName(current, t("common.newSession")) : t("common.newSession"),
 					model: view.model,
 					cwd: view.cwd,
 					items: view.items,
@@ -49,7 +51,7 @@ export function ExportMenu() {
 				text:
 					error instanceof ExportCancelledError
 						? error.message
-						: `导出失败：${error instanceof Error ? error.message : String(error)}`,
+						: t("export.failed", { error: error instanceof Error ? error.message : String(error) }),
 			});
 		} finally {
 			busyRef.current = false;
@@ -62,7 +64,7 @@ export function ExportMenu() {
 			<button
 				type="button"
 				className="icon-btn export-btn"
-				aria-label="导出会话"
+				aria-label={t("export.title")}
 				aria-haspopup="dialog"
 				aria-expanded={anchor !== null}
 				aria-disabled={busy || undefined}
@@ -74,11 +76,11 @@ export function ExportMenu() {
 				}}
 			>
 				<Icon name="download" />
-				<span className="export-label">{busy ? "导出中…" : "导出"}</span>
+				<span className="export-label">{busy ? t("export.busy") : t("export.button")}</span>
 			</button>
 			{anchor && (
-				<Popover anchor={anchor} label="导出会话" onClose={() => setAnchor(null)}>
-					<div className="section-label">导出格式</div>
+				<Popover anchor={anchor} label={t("export.title")} onClose={() => setAnchor(null)}>
+					<div className="section-label">{t("export.format")}</div>
 					{FORMATS.map(({ format, label }) => (
 						<button type="button" key={format} className="chrome-row" onClick={() => void run(format)}>
 							<Icon name="download" />
@@ -95,7 +97,7 @@ export function ExportMenu() {
 						<span className="export-check" aria-hidden="true">
 							{includeThinking ? "✓" : ""}
 						</span>
-						包含思考过程
+						{t("export.thinking")}
 					</button>
 				</Popover>
 			)}

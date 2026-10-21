@@ -6,7 +6,21 @@ type SubagentClient = ReturnType<NekoGatewayConnection["subagent"]>;
 
 import type { PickerDetail } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { t } from "./i18n/index.ts";
 import { theme } from "./theme/index.ts";
+
+const approvalStatus = (status: ToolApproval["status"]): string => {
+	switch (status) {
+		case "pending":
+			return t("approval.status.pending");
+		case "allowed":
+			return t("approval.status.allowed");
+		case "denied":
+			return t("approval.status.denied");
+		default:
+			return t("approval.status.cancelled");
+	}
+};
 
 export const approvalText = (text: string) =>
 	[...text]
@@ -49,17 +63,17 @@ export class ApprovalDetail implements PickerDetail {
 	}
 	get help() {
 		return shortcutHints(
-			["↑↓/Wheel", "Scroll"],
+			["↑↓/Wheel", t("action.scroll")],
 			...((this.#service.view.value?.approvals?.filter((a) => a.status === "pending").length ?? 0) > 1
-				? [["[/]", "Request"] as const]
+				? [["[/]", t("action.request")] as const]
 				: []),
 			...(this.#item.status === "pending"
 				? ([
-						["A", "Allow once"],
-						["D", "Deny"],
+						["A", t("approval.allowOnce")],
+						["D", t("approval.deny")],
 					] as const)
 				: []),
-			["Esc", "Back"],
+			["Esc", t("action.back")],
 		);
 	}
 	scroll(delta: number) {
@@ -105,13 +119,20 @@ export class ApprovalDetail implements PickerDetail {
 	lines(width: number, height: number) {
 		this.#height = height;
 		const a = this.#item;
+		const timeout = a.timeout ?? t("approval.timeoutDefault");
 		const rows = [
-			...(this.#compact ? [] : [theme.accent(`Bash approval · ${this.#busy ? "Submitting" : a.status}`)]),
+			...(this.#compact
+				? []
+				: [
+						theme.accent(
+							t("approval.title", { status: this.#busy ? t("approval.submitting") : approvalStatus(a.status) }),
+						),
+					]),
 			...wrapTextWithAnsi(
 				approvalText(
 					this.#compact
-						? `Cwd: ${a.cwd} · Timeout: ${a.timeout ?? "default"}\n${a.command}`
-						: `Cwd: ${a.cwd}\nTimeout: ${a.timeout ?? "default"}\n\n${a.command}`,
+						? `${t("approval.cwdTimeout", { cwd: a.cwd, timeout })}\n${a.command}`
+						: `${t("approval.cwd", { cwd: a.cwd })}\n${t("approval.timeout", { timeout })}\n\n${a.command}`,
 				),
 				width,
 			),
@@ -125,7 +146,7 @@ export class ApprovalDetail implements PickerDetail {
 		this.#actionRow = -1;
 		if (actionable && height > 1) {
 			this.#actionRow = visible.length;
-			visible.push(shortcutHints(["A", "Allow once"], ["D", "Deny"]));
+			visible.push(shortcutHints(["A", t("approval.allowOnce")], ["D", t("approval.deny")]));
 		}
 		return visible;
 	}

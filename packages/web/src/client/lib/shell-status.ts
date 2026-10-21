@@ -1,11 +1,13 @@
 import type { NekoShellStatus } from "./contract.ts";
+import { getT } from "./i18n/index.ts";
 
 /** Chat-page banner text; undefined = nothing to warn about (ready, or the gateway does not report a shell). */
 export function shellBannerText(shell: NekoShellStatus | null): string | undefined {
 	if (shell?.status !== "missing") return undefined;
+	const t = getT();
 	if (shell.reason === "invalid_config")
-		return `${shell.detail ?? "shell.path 配置无效。"}bash 与后台任务不可用，请修正 neko.config.json 中的 shell.path。`;
-	return "未找到 Git Bash：bash 与后台任务不可用。请安装 Git for Windows，或在 neko.config.json 中设置 shell.path。";
+		return t("shell.invalid", { detail: shell.detail ?? t("shell.invalidDefault") });
+	return t("shell.missing");
 }
 
 export type ShellRow = { label: string; tone: "ok" | "warn"; detail: string };
@@ -13,11 +15,12 @@ export type ShellRow = { label: string; tone: "ok" | "warn"; detail: string };
 /** About-page row; null = the gateway does not report a shell (non-Windows or an older gateway). */
 export function shellRow(shell: NekoShellStatus | null): ShellRow | null {
 	if (shell === null) return null;
+	const t = getT();
 	if (shell.status === "ready")
 		return {
-			label: "已就绪",
+			label: t("shell.ready"),
 			tone: "ok",
-			detail: `${shell.path}（${shell.source === "config" ? "配置 shell.path" : "自动检测"}）`,
+			detail: t(shell.source === "config" ? "shell.sourceConfig" : "shell.sourceAuto", { path: shell.path }),
 		};
-	return { label: "不可用", tone: "warn", detail: shellBannerText(shell) ?? "" };
+	return { label: t("shell.unavailable"), tone: "warn", detail: shellBannerText(shell) ?? "" };
 }

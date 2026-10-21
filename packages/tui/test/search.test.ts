@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoCredentialState, NekoSearchSettingsState } from "@neko-harness/gateway";
@@ -83,7 +84,7 @@ it("marks the current provider and points to /login when DeepSeek has no key", (
 });
 
 it("lists /search in the command completion", () => {
-	expect(commands.map((command) => command.name)).toContain("search");
+	expect(commands().map((command) => command.name)).toContain("search");
 });
 
 it("saves the chosen provider, notifies and closes the panel", async () => {

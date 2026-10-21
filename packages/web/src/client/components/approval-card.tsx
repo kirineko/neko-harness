@@ -1,7 +1,7 @@
 import type { ToolApproval } from "@neko-harness/core";
 import { useRef, useState } from "react";
+import { useT } from "../lib/i18n/index.ts";
 
-const labels = { pending: "等待审批", allowed: "已允许本次", denied: "已拒绝", cancelled: "已取消" };
 const display = (text: string) =>
 	[...text]
 		.map((c) => {
@@ -23,6 +23,7 @@ export function ApprovalCard({
 	title: string;
 	decide: (decision: "allowed" | "denied") => Promise<unknown>;
 }) {
+	const t = useT();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const sending = useRef(false);
@@ -41,17 +42,20 @@ export function ApprovalCard({
 		}
 	};
 	return (
-		<section aria-label="Bash 审批" className="min-w-0 rounded-xl border border-sakura-200 bg-surface p-3 text-sm">
+		<section
+			aria-label={t("approval.section")}
+			className="min-w-0 rounded-xl border border-sakura-200 bg-surface p-3 text-sm"
+		>
 			<output className="block font-medium text-sakura-800">
-				{title} · Bash · {labels[item.status]}
+				{title} · Bash · {t(`approval.status.${item.status}`)}
 			</output>
 			<p className="break-all text-xs text-ink-500">
-				{display(item.cwd)} · 超时：{item.timeout ?? "默认"}
+				{display(item.cwd)} · {t("approval.timeout", { value: item.timeout ?? t("approval.timeoutDefault") })}
 			</p>
 			<textarea
 				readOnly
 				rows={Math.min(6, Math.max(1, item.command.split("\n").length))}
-				aria-label="完整命令"
+				aria-label={t("approval.command")}
 				value={display(item.command)}
 				className="focus-neko my-2 w-full resize-y whitespace-pre-wrap break-all rounded-lg bg-base p-2 font-mono text-xs"
 			/>
@@ -63,7 +67,7 @@ export function ApprovalCard({
 						className="focus-neko rounded-lg bg-tianyi-100 px-3 py-1 text-tianyi-800 disabled:opacity-50"
 						onClick={() => void submit("allowed")}
 					>
-						允许本次
+						{t("approval.allow")}
 					</button>
 					<button
 						type="button"
@@ -71,7 +75,7 @@ export function ApprovalCard({
 						className="focus-neko rounded-lg border border-sakura-300 px-3 py-1 disabled:opacity-50"
 						onClick={() => void submit("denied")}
 					>
-						拒绝
+						{t("approval.deny")}
 					</button>
 				</div>
 			)}

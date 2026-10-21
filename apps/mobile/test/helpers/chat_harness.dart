@@ -9,6 +9,7 @@ import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
 import 'package:neko_mobile/features/chat/chat_page.dart';
 import 'package:neko_mobile/features/sessions/sessions_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
 import 'fake_api.dart';
@@ -113,27 +114,43 @@ class ChatHarness {
     if (attach != null) await app.chat.attach(attach);
   }
 
+  /// [localized] 时接上本地化代理并跟随 `app.locale`（与 `NekoApp` 一致）；
+  /// 缺省沿用旧行为：不装代理，`context.l10n` 固定回退 zh。
   Widget build({
     ThemeMode mode = ThemeMode.light,
     double textScale = 1,
     Widget home = const ChatPage(),
+    bool localized = false,
   }) {
+    Widget app(Locale? locale) => MaterialApp(
+      theme: buildNekoTheme(Brightness.light),
+      darkTheme: buildNekoTheme(Brightness.dark),
+      themeMode: mode,
+      locale: locale,
+      localizationsDelegates: localized
+          ? AppLocalizations.localizationsDelegates
+          : null,
+      supportedLocales: localized
+          ? kSupportedLocales
+          : const <Locale>[Locale('en', 'US')],
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: home,
+    );
     return ProviderScope(
       overrides: [
         connectionManagerProvider.overrideWithValue(manager),
-        appControllerOrNullProvider.overrideWithValue(app),
+        appControllerOrNullProvider.overrideWithValue(this.app),
       ],
-      child: MaterialApp(
-        theme: buildNekoTheme(Brightness.light),
-        darkTheme: buildNekoTheme(Brightness.dark),
-        themeMode: mode,
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(textScale)),
-          child: child!,
-        ),
-        home: home,
-      ),
+      child: localized
+          ? ValueListenableBuilder<Locale>(
+              valueListenable: this.app.locale,
+              builder: (context, locale, _) => app(locale),
+            )
+          : app(null),
     );
   }
 

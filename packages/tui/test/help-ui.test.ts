@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { NekoGatewayClient } from "@neko-harness/gateway";
@@ -9,7 +10,7 @@ import { SkillPreviewView } from "../src/skill-market-ui.ts";
 
 it("lists commands and context-specific shortcuts, with platform clipboard keys", () => {
 	const text = helpLines("darwin").map(stripTerminalSequences).join("\n");
-	for (const command of commands) expect(text).toContain(`/${command.name}`);
+	for (const command of commands()) expect(text).toContain(`/${command.name}`);
 	for (const action of [
 		"Alt+↑",
 		"Esc Esc",

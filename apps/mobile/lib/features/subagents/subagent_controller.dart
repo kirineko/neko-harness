@@ -6,6 +6,7 @@ import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
 import 'package:neko_mobile/features/chat/transcript.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 子 agent 全屏详情（design D10）：跟随主会话订阅打开/重开，返回时关闭。
 class SubagentController extends ChangeNotifier implements TranscriptActions {
@@ -24,7 +25,7 @@ class SubagentController extends ChangeNotifier implements TranscriptActions {
   int _generation = 0;
   bool _opening = false;
   bool _loadingOlder = false;
-  String? _error;
+  UiText? _error;
   StreamSubscription<RpcNotification>? _notifications;
   MobileApi? _boundApi;
   final Map<String, Uint8List> _images = <String, Uint8List>{};
@@ -35,7 +36,7 @@ class SubagentController extends ChangeNotifier implements TranscriptActions {
   @override
   bool get loadingOlder => _loadingOlder;
 
-  String? get error => _error;
+  UiText? get error => _error;
 
   void clearError() {
     _error = null;

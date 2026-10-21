@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useLanguage } from "./language.ts";
 import { attentionTitle } from "./plan-ui.ts";
 
 /**
@@ -6,6 +7,8 @@ import { attentionTitle } from "./plan-ui.ts";
  * once that settles or the tab is visible again. Passive only: no sound and no Notification permission.
  */
 export function useAwaitingTitle(pending: number, plan = false): void {
+	const language = useLanguage();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a language change must re-derive the title prefix
 	useEffect(() => {
 		let applied: { base: string; title: string } | null = null;
 		const sync = () => {
@@ -27,5 +30,5 @@ export function useAwaitingTitle(pending: number, plan = false): void {
 			document.removeEventListener("visibilitychange", sync);
 			if (applied !== null && document.title === applied.title) document.title = applied.base;
 		};
-	}, [pending, plan]);
+	}, [pending, plan, language]);
 }

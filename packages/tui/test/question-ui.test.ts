@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import {
 	Container,
@@ -160,12 +161,12 @@ it("starts the cursor on the recommended option without selecting anything, and 
 	const { dock, f, events } = setup(q);
 	await open(dock, q);
 	const first = view(dock);
-	expect(first).toContain("助手提问");
+	expect(first).toContain("Assistant question");
 	expect(first).toContain("Single choice");
 	expect(first).toContain("Question 1: which database");
-	expect(first).toContain("❯ ( ) 2. [推荐] Postgres");
+	expect(first).toContain("❯ ( ) 2. [Recommended] Postgres");
 	expect(first).not.toContain("(●)");
-	expect(first).toContain("跳过此问题");
+	expect(first).toContain("Skip this question");
 	expect(first).not.toContain("Allow once");
 	expect(first).not.toContain("Deny");
 	dock.handleInput(ENTER);
@@ -174,7 +175,7 @@ it("starts the cursor on the recommended option without selecting anything, and 
 	expect(view(dock)).toContain("Choose an option");
 	expect(dock.open).toBe(true);
 	dock.handleInput(SPACE);
-	expect(view(dock)).toContain("❯ (●) 2. [推荐] Postgres");
+	expect(view(dock)).toContain("❯ (●) 2. [Recommended] Postgres");
 	expect(f.responds).toEqual([]);
 	dock.handleInput(ENTER);
 	await tick();
@@ -190,7 +191,7 @@ it("moves with arrows and digits, selects with Space, switches to the note with 
 	dock.handleInput(UP);
 	expect(view(dock)).toContain("❯ ( ) 1. MySQL");
 	dock.handleInput(DOWN);
-	expect(view(dock)).toContain("❯ ( ) 2. [推荐] Postgres");
+	expect(view(dock)).toContain("❯ ( ) 2. [Recommended] Postgres");
 	dock.handleInput(UP);
 	dock.handleInput(UP);
 	expect(view(dock)).toContain("❯ ( ) 1. MySQL");
@@ -233,7 +234,7 @@ it("toggles several options in a multiple-choice question and reports options in
 	const text = view(dock);
 	expect(text).toContain("[x] 1. MySQL");
 	expect(text).toContain("[x] 3. SQLite");
-	expect(text).toContain("[ ] 2. [推荐] Postgres");
+	expect(text).toContain("[ ] 2. [Recommended] Postgres");
 	dock.handleInput(SPACE);
 	expect(view(dock)).toContain("[ ] 1. MySQL");
 	dock.handleInput(SPACE);
@@ -276,7 +277,7 @@ it("skips only from the dedicated last row, and closing never skips", async () =
 	expect(f.responds).toEqual([]);
 	expect(dock.openPanel()).toBe(true);
 	dock.handleInput(END);
-	expect(view(dock)).toContain("❯ ↷ 跳过此问题");
+	expect(view(dock)).toContain("❯ ↷ Skip this question");
 	expect(view(dock)).toContain("Enter Skip");
 	dock.handleInput(SPACE);
 	expect(f.responds).toEqual([]);
@@ -315,11 +316,11 @@ it("switches between several waiting questions with [ and ], wrapping around", a
 	const c = record(3, { question: "Third question?" });
 	const { dock } = setup(a, b, c);
 	await open(dock, a, b, c);
-	expect(view(dock)).toContain("助手提问 1/3");
+	expect(view(dock)).toContain("Assistant question 1/3");
 	expect(view(dock)).toContain("First question?");
 	dock.handleInput("]");
 	await tick();
-	expect(view(dock)).toContain("助手提问 2/3");
+	expect(view(dock)).toContain("Assistant question 2/3");
 	expect(view(dock)).toContain("Second question?");
 	dock.handleInput("]");
 	dock.handleInput("]");
@@ -345,7 +346,7 @@ it("keeps answer drafts per session, question and version, across closing and re
 	expect(dock.open).toBe(false);
 	expect(dock.openPanel()).toBe(true);
 	const again = view(dock);
-	expect(again).toContain("(●) 2. [推荐] Postgres");
+	expect(again).toContain("(●) 2. [Recommended] Postgres");
 	expect(again).toContain("✎ note");
 
 	dock.bind("s2", f.client);
@@ -370,7 +371,7 @@ it("keeps answer drafts per session, question and version, across closing and re
 	dock.openPanel();
 	await tick();
 	const kept = view(dock);
-	expect(kept).toContain("(●) 2. [推荐] Postgres");
+	expect(kept).toContain("(●) 2. [Recommended] Postgres");
 	expect(kept).toContain("✎ note");
 });
 
@@ -381,7 +382,7 @@ it("opens by itself once, only when nothing else holds the focus, and never agai
 	expect(dock.autoOpen(false)).toBe(false);
 	expect(dock.open).toBe(false);
 	expect(events.opened).toEqual([]);
-	expect(view(dock)).toContain("等待回答");
+	expect(view(dock)).toContain("Awaiting answer");
 	expect(dock.autoOpen(true)).toBe(false);
 	expect(dock.open).toBe(false);
 
@@ -391,7 +392,7 @@ it("opens by itself once, only when nothing else holds the focus, and never agai
 	expect(dock.open).toBe(true);
 	expect(events.opened).toEqual([true]);
 	await tick();
-	expect(view(dock)).toContain("助手提问 2/2");
+	expect(view(dock)).toContain("Assistant question 2/2");
 	dock.handleInput(ESC);
 	expect(events.opened).toEqual([true, false]);
 	dock.update(list(q, next));
@@ -401,7 +402,7 @@ it("opens by itself once, only when nothing else holds the focus, and never agai
 	const third = record(3);
 	dock.update(list(q, next, third));
 	expect(dock.autoOpen(true)).toBe(true);
-	expect(view(dock)).toContain("助手提问 3/3");
+	expect(view(dock)).toContain("Assistant question 3/3");
 	expect(dock.pendingCount).toBe(3);
 });
 
@@ -459,11 +460,11 @@ it("shows a one-line prompt bar that fits every width while the panel is closed"
 		const rows = dock.render(width);
 		expect(rows).toHaveLength(1);
 		expect(visibleWidth(rows[0]!)).toBeLessThanOrEqual(width);
-		expect(plain(rows)).toContain("等待回答");
+		expect(plain(rows)).toContain("Awaiting answer");
 	}
-	expect(view(dock, 160)).toContain("助手正在等待你的回答");
+	expect(view(dock, 160)).toContain("The assistant is waiting for your answer");
 	expect(view(dock, 160)).toContain("/question");
-	expect(view(dock, 160)).toContain("排队到回答之后");
+	expect(view(dock, 160)).toContain("queue until after the answer");
 	expect(view(dock, 160)).toContain("Ctrl+O");
 });
 
@@ -569,7 +570,7 @@ it("Esc in the open panel only closes it: consumed, the run is not stopped, draf
 	expect(h.log.aborts).toBe(1);
 
 	h.press(CTRL_O);
-	expect(view(h.dock)).toContain("(●) 2. [推荐] Postgres");
+	expect(view(h.dock)).toContain("(●) 2. [Recommended] Postgres");
 });
 
 it("keeps Ctrl+C's global meaning inside the panel: stop while running, exit when idle", async () => {
@@ -721,7 +722,7 @@ it("keeps the draft and shows the error when submitting fails, and resends only 
 	await tick();
 	const failed = view(dock);
 	expect(failed).toContain("gateway exploded");
-	expect(failed).toContain("(●) 2. [推荐] Postgres");
+	expect(failed).toContain("(●) 2. [Recommended] Postgres");
 	expect(failed).toContain("✎ ok");
 	expect(dock.open).toBe(true);
 	expect(events.notices).toEqual([]);
@@ -747,7 +748,7 @@ it("disables submit when the gateway is gone and never sends after it comes back
 	dock.setOnline(true);
 	await tick();
 	expect(f.responds).toEqual([]);
-	expect(view(dock)).toContain("(●) 2. [推荐] Postgres");
+	expect(view(dock)).toContain("(●) 2. [Recommended] Postgres");
 });
 
 // —— 其他端结算与停止 ——
@@ -886,7 +887,7 @@ it("shows question and option text as plain text without terminal control or mar
 	expect(text).toContain("\\u202e");
 	expect(text).toContain("\\u200b");
 	expect(text).toContain("**bold** <b>tag</b>    end");
-	expect(text).toContain("助手提问");
+	expect(text).toContain("Assistant question");
 	expect(plainText("a\r\nb\rc")).toBe("a\nb\nc");
 	expect(plainLine("x\n\n  y\tz", 20)).toBe("x y z");
 	expect(plainLine("abcdef", 4)).toBe("abc…");
@@ -953,14 +954,14 @@ it("renders a long question with many options inside the layout budget at every 
 		const text = plain(frame.lines);
 		expect(frame.lines).toHaveLength(height);
 		expect(frame.lines.every((line) => visibleWidth(line) <= width)).toBe(true);
-		expect(text).toContain("助手提问");
+		expect(text).toContain("Assistant question");
 		expect(text).toContain("input");
 		expect(text).toContain("question waiting");
 		expect(text).toContain("Esc Close");
 		expect(text).toContain("❯");
 		expect(text).toMatch(/\b1-\d+\/\d+/);
 		dock.handleInput(END);
-		expect(plain(stack(dock, width, height).lines)).toContain("跳过此问题");
+		expect(plain(stack(dock, width, height).lines)).toContain("Skip this question");
 	}
 });
 
@@ -984,7 +985,7 @@ it("keeps footer and editor when approval, queue-height rows and the question co
 	await open(dock, q);
 	dock.height = 3;
 	const text = view(dock, 40);
-	expect(text).toContain("助手提问");
+	expect(text).toContain("Question");
 	expect(text).toContain("enlarge the terminal");
 	dock.handleInput(SPACE);
 	dock.handleInput(ENTER);
@@ -997,12 +998,12 @@ it("occupies one row while closed and nothing when there is no question", async 
 	const { dock } = setup(q);
 	dock.update(list(q));
 	let frame = stack(dock, 80, 24);
-	expect(plain(frame.lines)).toContain("等待回答");
+	expect(plain(frame.lines)).toContain("Awaiting answer");
 	expect(plain(frame.lines)).toContain("input");
 	dock.update({ revision: 2, pending: [] });
 	frame = stack(dock, 80, 24);
-	expect(plain(frame.lines)).not.toContain("等待回答");
-	expect(plain(frame.lines)).not.toContain("助手提问");
+	expect(plain(frame.lines)).not.toContain("Awaiting answer");
+	expect(plain(frame.lines)).not.toContain("Assistant question");
 });
 
 it("counts waiting questions in the footer and marks a blocked run", () => {
@@ -1036,13 +1037,13 @@ it("marks a session waiting for an answer in the picker instead of Running", asy
 	];
 	const items = sessionPickerItems(sessions, "/w", "d", 10_000);
 	const byId = (id: string) => items.find((item) => item.value === id)!;
-	expect(byId("a").description).toContain("等待回答");
+	expect(byId("a").description).toContain("Awaiting answer");
 	expect(byId("a").description).not.toContain("Running");
-	expect(byId("a").rightLabel).toContain("等待回答");
+	expect(byId("a").rightLabel).toContain("Awaiting answer");
 	expect(byId("b").description).toContain("Running");
-	expect(byId("b").rightLabel).not.toContain("等待回答");
+	expect(byId("b").rightLabel).not.toContain("Awaiting answer");
 	expect(byId("c").description).toContain("Running");
-	expect(byId("c").description).not.toContain("等待回答");
+	expect(byId("c").description).not.toContain("Awaiting answer");
 	expect(byId("d").description).toContain("Idle");
 
 	const panel = new PickerPanel(
@@ -1056,7 +1057,7 @@ it("marks a session waiting for an answer in the picker instead of Running", asy
 		async () => {},
 	);
 	const text = plain(panel.render(80));
-	expect(text).toContain("等待回答");
+	expect(text).toContain("Awaiting answer");
 	for (const line of panel.render(40)) expect(visibleWidth(line)).toBeLessThanOrEqual(40);
 });
 
@@ -1124,7 +1125,7 @@ it("describes todo and ask_user history from the structured interaction, with no
 });
 
 it("registers the command, the shortcut and the key table in the help", () => {
-	expect(commands.map((command) => command.name)).toContain("question");
+	expect(commands().map((command) => command.name)).toContain("question");
 	const text = plain(helpLines("darwin"));
 	for (const expected of [
 		"/question",
@@ -1132,7 +1133,7 @@ it("registers the command, the shortcut and the key table in the help", () => {
 		"Space",
 		"Tab",
 		"[ / ]",
-		"跳过此问题",
+		"Skip this question",
 		"PgUp / PgDn",
 		"Esc",
 		"queued until the question is settled",

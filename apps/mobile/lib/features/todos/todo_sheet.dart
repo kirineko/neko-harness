@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/features/chat/interactions_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
-String todoStatusLabel(TodoStatus status) => switch (status) {
-  TodoStatus.pending => '待办',
-  TodoStatus.inProgress => '进行中',
-  TodoStatus.completed => '已完成',
-};
+String todoStatusLabel(AppLocalizations l10n, TodoStatus status) =>
+    switch (status) {
+      TodoStatus.pending => l10n.todoStatusPending,
+      TodoStatus.inProgress => l10n.todoStatusInProgress,
+      TodoStatus.completed => l10n.todoStatusCompleted,
+    };
 
 /// 顶栏的待办进度入口（如 1/3）：列表为空、电脑端不支持或尚未取得时不占位。
 class TodoEntry extends StatelessWidget {
@@ -24,11 +26,11 @@ class TodoEntry extends StatelessWidget {
     }
     final tokens = NekoTokens.of(context);
     final stale = !interactions.todosCurrent;
-    final label = '待办进度 ${todos.completed}/${todos.total}';
+    final label = context.l10n.todoProgressLabel(todos.completed, todos.total);
     return Tooltip(
       message: label,
       child: Semantics(
-        label: stale ? '$label（非最新）' : label,
+        label: stale ? context.l10n.todoStale(label) : label,
         button: true,
         child: InkWell(
           key: const Key('todo-entry'),
@@ -122,8 +124,11 @@ class TodoSheet extends StatelessWidget {
                 header: true,
                 child: Text(
                   todos == null || items.isEmpty
-                      ? '待办'
-                      : '待办 · 已完成 ${todos.completed}/${todos.total}',
+                      ? context.l10n.todoTitle
+                      : context.l10n.todoTitleProgress(
+                          todos.completed,
+                          todos.total,
+                        ),
                   key: const Key('todo-title'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
@@ -132,14 +137,14 @@ class TodoSheet extends StatelessWidget {
             if (!interactions.connected)
               _Banner(
                 key: const Key('todo-offline'),
-                text: '当前离线：显示的是上次加载的待办，不一定是最新状态。',
+                text: context.l10n.todoOffline,
                 color: tokens.warning,
               )
             else if (!interactions.todosCurrent &&
                 interactions.todosError == null)
               _Banner(
                 key: const Key('todo-refreshing'),
-                text: '正在更新待办…',
+                text: context.l10n.todoRefreshing,
                 color: tokens.textMuted,
               ),
             if (interactions.todosError != null && !interactions.todosCurrent)
@@ -147,7 +152,7 @@ class TodoSheet extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      interactions.todosError!,
+                      interactions.todosError!(context.l10n),
                       key: const Key('todo-error'),
                       style: context.small(tokens.danger),
                     ),
@@ -157,7 +162,7 @@ class TodoSheet extends StatelessWidget {
                     onPressed: interactions.connected
                         ? interactions.refreshTodos
                         : null,
-                    child: const Text('重试'),
+                    child: Text(context.l10n.commonRetry),
                   ),
                 ],
               ),
@@ -166,7 +171,7 @@ class TodoSheet extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: NekoSpace.xl),
                 child: Center(
                   child: Text(
-                    '当前没有待办',
+                    context.l10n.todoEmpty,
                     key: const Key('todo-empty'),
                     style: context.small(tokens.textFaint),
                   ),
@@ -193,11 +198,11 @@ class _TodoRow extends StatelessWidget {
       TodoStatus.inProgress => (NekoIcons.radioOn, tokens.primary),
       TodoStatus.completed => (NekoIcons.checkCircle, tokens.success),
     };
-    final label = todoStatusLabel(item.status);
+    final label = todoStatusLabel(context.l10n, item.status);
     final done = item.status == TodoStatus.completed;
     return Semantics(
       container: true,
-      label: '$label：${item.text}',
+      label: context.l10n.todoItemSemantics(label, item.text),
       excludeSemantics: true,
       child: Padding(
         key: Key('todo-item-${item.id}'),

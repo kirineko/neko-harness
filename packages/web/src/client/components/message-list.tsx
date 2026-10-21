@@ -3,6 +3,8 @@ import { copyText } from "@neko-harness/core/conversation-export";
 import type { PlanRecord, QuestionSummary } from "@neko-harness/core/interactions";
 import type { SkillInvocation } from "@neko-harness/core/skill-invocation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { localizeCoreText } from "../lib/i18n/core-text.ts";
+import { type Translate, useT } from "../lib/i18n/index.ts";
 import { questionUi } from "../lib/question-ui";
 import { getState } from "../lib/store";
 import { AskUserRow } from "./ask-user-row";
@@ -17,15 +19,19 @@ import { ToolCard } from "./tool-card";
 
 const BOTTOM_THRESHOLD = 48;
 
+type TaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+const taskStatus = (t: Translate, status: TaskStatus): string => t(`task.status.${status}`);
+
 /** 空会话占位：内联 SVG 小猫（无外部资源），颜色取自主题 tokens。 */
 function WelcomeCat() {
+	const t = useT();
 	const sakura200 = "var(--color-sakura-200)";
 	const sakura300 = "var(--color-sakura-300)";
 	const tianyi800 = "var(--color-tianyi-800)";
 	const sakura800 = "var(--color-sakura-800)";
 	return (
 		<svg width="132" height="112" viewBox="0 0 132 112" fill="none" aria-hidden="true">
-			<title>neko 小猫</title>
+			<title>{t("message.cat")}</title>
 			<path d="M30 46 L24 14 L54 30 Z" fill={sakura200} stroke={sakura300} strokeWidth="2.5" strokeLinejoin="round" />
 			<path d="M102 46 L108 14 L78 30 Z" fill={sakura200} stroke={sakura300} strokeWidth="2.5" strokeLinejoin="round" />
 			<path d="M32 39 L29 23 L46 32 Z" fill={sakura300} opacity="0.55" />
@@ -57,6 +63,7 @@ function UserRow({
 	skill?: SkillInvocation;
 	defaultImagePrompt?: DefaultImagePrompt;
 }) {
+	const t = useT();
 	// /skill: 展开块渲染为折叠卡片；参数仍以用户气泡显示，未命中时原样渲染。
 	if (invocation !== undefined) {
 		return (
@@ -80,7 +87,7 @@ function UserRow({
 				{defaultImagePrompt && (
 					<details className="min-w-0 text-sm">
 						<summary className="cursor-pointer min-h-8 py-1 text-ink-500 focus-visible:outline-2 focus-visible:outline-sakura-500">
-							默认图片提示
+							{t("message.defaultImagePrompt")}
 						</summary>
 						<p className="pt-2 whitespace-pre-wrap break-words">{defaultImagePrompt.text}</p>
 					</details>
@@ -102,6 +109,7 @@ function AssistantBody({ thinking, text }: { thinking: string; text: string }) {
 }
 
 function AssistantRow({ item }: { item: Extract<ChatItem, { type: "assistant" }> }) {
+	const t = useT();
 	// 只有工具调用、没有文本/thinking/提示时不渲染气泡（工具卡片独立成行）；
 	// 流式期间文本从无到有，出现时再渲染，不会闪烁。
 	if (item.text.trim() === "" && item.thinking.trim() === "" && item.note === null) return null;
@@ -109,17 +117,18 @@ function AssistantRow({ item }: { item: Extract<ChatItem, { type: "assistant" }>
 		<div className="chat-row anim-other flex flex-col items-start">
 			<div className="bubble-assistant space-y-1.5 px-4 py-2.5">
 				<AssistantBody thinking={item.thinking} text={item.text} />
-				{item.note !== null && <div className="text-xs text-sakura-800 italic">⚠ {item.note}</div>}
+				{item.note !== null && <div className="text-xs text-sakura-800 italic">⚠ {localizeCoreText(item.note, t)}</div>}
 			</div>
-			<CopyButton text={copyText(item)} label="复制回答" />
+			<CopyButton text={copyText(item)} label={t("message.copyAnswer")} />
 		</div>
 	);
 }
 
 function SystemRow({ text, decision }: { text: string; decision?: boolean }) {
+	const t = useT();
 	return (
 		<div className="chat-row anim-other flex justify-center" data-plan-decision={decision ? "" : undefined}>
-			<span className="rounded-full bg-ink-100 px-3 py-1 text-xs text-ink-600">{text}</span>
+			<span className="rounded-full bg-ink-100 px-3 py-1 text-xs text-ink-600">{localizeCoreText(text, t)}</span>
 		</div>
 	);
 }
@@ -230,6 +239,7 @@ export function MessageList({
 	onLoadEarlier?: () => Promise<void>;
 	tray?: ReactNode;
 }) {
+	const t = useT();
 	const containerRef = useRef<HTMLDivElement>(null);
 	const focusedEntry = useRef("");
 	const stickRef = useRef(true);
@@ -303,7 +313,7 @@ export function MessageList({
 									<span className="text-tianyi-600">.</span>
 									<span className="logo-gradient">harness</span>
 								</div>
-								<p className="max-w-sm text-sm text-ink-600">输入消息开始吧 ✦</p>
+								<p className="max-w-sm text-sm text-ink-600">{t("message.welcome")}</p>
 							</div>
 						))}
 					{items.map((item) => {
@@ -317,21 +327,22 @@ export function MessageList({
 										{round && (
 											<details className="chat-row border-t border-sakura-200 pt-2 text-xs text-ink-500">
 												<summary className="cursor-pointer">
-													任务 {round.round ?? ""} · {round.title} ·{" "}
-													{
-														{
-															queued: "排队中",
-															running: "运行中",
-															completed: "已完成",
-															failed: "失败",
-															cancelled: "已停止",
-														}[round.status]
-													}
+													{t("message.round", {
+														round: round.round ?? "",
+														title: round.title,
+														status: taskStatus(t, round.status),
+													})}
 												</summary>
 												<p className="pt-1">
 													{round.roundUsage
-														? `本轮 ↑${round.roundUsage.input} ↓${round.roundUsage.output} · 缓存 ${round.roundUsage.cacheRead}/${round.roundUsage.cacheWrite} · $${round.roundUsage.cost.toFixed(4)}`
-														: "本轮用量未记录"}
+														? t("message.roundUsage", {
+																input: round.roundUsage.input,
+																output: round.roundUsage.output,
+																cacheRead: round.roundUsage.cacheRead,
+																cacheWrite: round.roundUsage.cacheWrite,
+																cost: round.roundUsage.cost.toFixed(4),
+															})
+														: t("message.roundUsageMissing")}
 												</p>
 											</details>
 										)}
@@ -358,16 +369,10 @@ export function MessageList({
 									>
 										<span className="text-tianyi-700">{child.role}</span> · {child.title}
 										<span className="block text-xs text-ink-500">
-											{child.status === "completed"
-												? "已完成"
-												: child.status === "cancelled"
-													? "已停止"
-													: child.status === "failed"
-														? "失败"
-														: child.status === "queued"
-															? "排队中"
-															: "运行中"}{" "}
-											{child.approvalCount ? `· 待审批 ${child.approvalCount}` : "· 查看完整过程"}
+											{taskStatus(t, child.status)}{" "}
+											{child.approvalCount
+												? t("message.approvalsPending", { count: child.approvalCount })
+												: t("message.viewProcess")}
 										</span>
 									</button>
 								) : (
@@ -377,12 +382,9 @@ export function MessageList({
 											?.filter((a) => a.callId === item.callId && a.status !== "pending")
 											.map((a) => (
 												<p key={a.id} className="chat-row text-xs text-ink-500">
-													审批 ·{" "}
-													{
-														{ allowed: "已允许本次", denied: "已拒绝", cancelled: "已取消" }[
-															a.status as "allowed" | "denied" | "cancelled"
-														]
-													}
+													{t("message.approvalLine", {
+														status: t(`approval.status.${a.status as "allowed" | "denied" | "cancelled"}`),
+													})}
 												</p>
 											))}
 									</div>
@@ -419,7 +421,7 @@ export function MessageList({
 							}}
 							className="focus-neko rounded-full border border-sakura-300 bg-surface px-3.5 py-1 text-xs font-medium text-sakura-800 hover:bg-sakura-50"
 						>
-							回到底部 ↓
+							{t("message.toBottom")}
 						</button>
 					)}
 				</div>

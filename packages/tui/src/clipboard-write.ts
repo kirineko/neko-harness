@@ -3,6 +3,7 @@ import { getNativeClipboard } from "@earendil-works/pi-tui";
 import type { ChatItem } from "@neko-harness/core";
 import { lastAnswerText } from "@neko-harness/core/conversation-export";
 import type { NoticeLevel } from "./components/notice.ts";
+import { t } from "./i18n/index.ts";
 
 /** Largest base64 payload sent through OSC 52; many terminals drop longer sequences. */
 export const OSC52_MAX_BASE64_LENGTH = 100_000;
@@ -101,10 +102,7 @@ export async function copyToClipboard(text: string, deps: ClipboardWriteDeps): P
 			osc52Sent = true;
 		}
 	}
-	if (method === null && !osc52Sent)
-		throw new Error(
-			`Clipboard unavailable: no clipboard tool worked and ${text.length} chars is too large for OSC 52. Use /export to save it to a file.`,
-		);
+	if (method === null && !osc52Sent) throw new Error(t("clipboard.tooLarge", { count: text.length }));
 	return { method: method ?? "osc52", osc52Sent };
 }
 
@@ -113,14 +111,12 @@ export type CopyOutcome = { level: NoticeLevel; message: string };
 /** `/copy`: copies the last answer body (never thinking) and describes the result for a notice. */
 export async function copyLastAnswer(items: readonly ChatItem[], deps: ClipboardWriteDeps): Promise<CopyOutcome> {
 	const text = lastAnswerText(items);
-	if (text === null) return { level: "warning", message: "Nothing to copy yet: no assistant answer in this session." };
+	if (text === null) return { level: "warning", message: t("copy.nothing") };
 	try {
 		const result = await copyToClipboard(text, deps);
 		return {
 			level: "info",
-			message: result.osc52Sent
-				? `Sent to terminal clipboard via OSC 52 (${text.length} chars); your terminal must allow it`
-				: `Copied last response (${text.length} chars)`,
+			message: result.osc52Sent ? t("copy.osc52", { count: text.length }) : t("copy.copied", { count: text.length }),
 		};
 	} catch (error) {
 		return { level: "error", message: error instanceof Error ? error.message : String(error) };

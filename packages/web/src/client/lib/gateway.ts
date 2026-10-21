@@ -52,6 +52,7 @@ import type {
 	WireSteerResult,
 	WireWithdrawResult,
 } from "./contract.ts";
+import { getT } from "./i18n/index.ts";
 
 export type ConnPhase = "connecting" | "ready" | "reconnecting" | "error";
 export type GatewayEvents = {
@@ -88,7 +89,7 @@ export function workspaceSessions(sessions: readonly NekoSessionSummary[], path:
 /** Single attachment, serialized navigation, and generation-guarded snapshots. */
 export class GatewayConnection {
 	subagent(taskId: number | string) {
-		if (!this.ready || !this.#client) throw new Error("会话未就绪");
+		if (!this.ready || !this.#client) throw new Error(getT()("gw.sessionNotReady"));
 		return this.#client.subagent(taskId);
 	}
 	readonly #options: GatewayConnectionOptions;
@@ -135,35 +136,35 @@ export class GatewayConnection {
 		return this.#connected && !this.#operating;
 	}
 	async saveCredential(provider: string, key: string): Promise<void> {
-		if (!this.#connected || !this.#credentials) throw new Error("网关未连接");
+		if (!this.#connected || !this.#credentials) throw new Error(getT()("gw.notConnected"));
 		await this.#credentials.save({ provider, key });
 	}
 	async removeCredential(provider: string): Promise<void> {
-		if (!this.#connected || !this.#credentials) throw new Error("网关未连接");
+		if (!this.#connected || !this.#credentials) throw new Error(getT()("gw.notConnected"));
 		await this.#credentials.remove({ provider });
 	}
 	async setProviderEnabled(provider: string, enabled: boolean): Promise<void> {
-		if (!this.#connected || !this.#credentials) throw new Error("网关未连接");
+		if (!this.#connected || !this.#credentials) throw new Error(getT()("gw.notConnected"));
 		await this.#credentials.setEnabled({ provider, enabled });
 	}
 	async setSearchProvider(provider: SearchProviderId): Promise<void> {
-		if (!this.#connected || !this.#searchSettings) throw new Error("网关未连接");
+		if (!this.#connected || !this.#searchSettings) throw new Error(getT()("gw.notConnected"));
 		await this.#searchSettings.set({ provider });
 	}
 	async setContextSettings(patch: NekoContextSettingsPatch): Promise<void> {
-		if (!this.#connected || !this.#contextSettings) throw new Error("网关未连接");
+		if (!this.#connected || !this.#contextSettings) throw new Error(getT()("gw.notConnected"));
 		await this.#contextSettings.set(patch);
 	}
 	async resetContextSettings(): Promise<void> {
-		if (!this.#connected || !this.#contextSettings) throw new Error("网关未连接");
+		if (!this.#connected || !this.#contextSettings) throw new Error(getT()("gw.notConnected"));
 		await this.#contextSettings.reset({});
 	}
 	async setDefaultModel(model: NekoModelRef): Promise<void> {
-		if (!this.#connected || !this.#defaultModel) throw new Error("网关未连接");
+		if (!this.#connected || !this.#defaultModel) throw new Error(getT()("gw.notConnected"));
 		await this.#defaultModel.set(model);
 	}
 	async clearDefaultModel(): Promise<void> {
-		if (!this.#connected || !this.#defaultModel) throw new Error("网关未连接");
+		if (!this.#connected || !this.#defaultModel) throw new Error(getT()("gw.notConnected"));
 		await this.#defaultModel.clear(null);
 	}
 	async start(): Promise<void> {
@@ -183,17 +184,17 @@ export class GatewayConnection {
 	#error(error: unknown) {
 		this.#options.events.onError(
 			error instanceof ApplicationProtocolError
-				? "版本不兼容，请运行 neko update 后重新启动本地 neko。"
+				? getT()("gw.incompatible")
 				: error instanceof Error
 					? error.message
 					: String(error),
 		);
 	}
 	#assert(epoch: number) {
-		if (this.#disposed || epoch !== this.#epoch) throw new Error("连接已变化，请重试");
+		if (this.#disposed || epoch !== this.#epoch) throw new Error(getT()("gw.connectionChanged"));
 	}
 	async #operate(operation: (epoch: number) => Promise<void>): Promise<void> {
-		if (!this.managementReady) throw new Error("操作进行中或网关未连接，请稍后重试");
+		if (!this.managementReady) throw new Error(getT()("gw.busy"));
 		this.#operating = true;
 		this.#options.events.onOperation(true);
 		const epoch = this.#epoch;
@@ -207,7 +208,8 @@ export class GatewayConnection {
 	}
 	async selectWorkspace(path: string): Promise<void> {
 		await this.#operate(async (epoch) => {
-			if (!this.#workspaces?.state.value.workspaces.some((w) => w.path === path)) throw new Error("工作区不存在");
+			if (!this.#workspaces?.state.value.workspaces.some((w) => w.path === path))
+				throw new Error(getT()("gw.workspaceMissing"));
 			await this.#select(path, undefined, epoch);
 		});
 	}
@@ -219,13 +221,13 @@ export class GatewayConnection {
 		});
 	}
 	async browse(options: NekoBrowseOptions): Promise<NekoDirectoryPage> {
-		if (!this.#connected || !this.#workspaces) throw new Error("网关未连接");
+		if (!this.#connected || !this.#workspaces) throw new Error(getT()("gw.notConnected"));
 		return this.#workspaces.browse(options);
 	}
 	async attachTo(id: string): Promise<void> {
 		await this.#operate(async (epoch) => {
 			const entry = this.#sessions.find((s) => s.id === id && s.workspaceRoot === this.#workspace);
-			if (!entry) throw new Error("会话不属于当前工作区或已归档");
+			if (!entry) throw new Error(getT()("gw.sessionNotInWorkspace"));
 			await this.#attach(id, epoch);
 		});
 	}
@@ -296,7 +298,7 @@ export class GatewayConnection {
 		void this.#operate((epoch) => this.#select(this.#workspace, undefined, epoch)).catch((e) => this.#error(e));
 	}
 	async configure(change: NekoConversationChange): Promise<void> {
-		if (!this.ready) throw new Error("会话未就绪");
+		if (!this.ready) throw new Error(getT()("gw.sessionNotReady"));
 		await this.#chat!.configure(change);
 	}
 	async submit(
@@ -305,8 +307,9 @@ export class GatewayConnection {
 		requestId: string = crypto.randomUUID(),
 		sessionId?: string,
 	): Promise<void> {
-		if (sessionId !== undefined && sessionId !== this.#currentSessionId) throw new Error("会话已切换，草稿已保留");
-		if (!this.ready) throw new Error("会话未就绪");
+		if (sessionId !== undefined && sessionId !== this.#currentSessionId)
+			throw new Error(getT()("gw.sessionChangedDraft"));
+		if (!this.ready) throw new Error(getT()("gw.sessionNotReady"));
 		const chat = this.#chat!;
 		const ids: string[] = [];
 		try {
@@ -326,11 +329,11 @@ export class GatewayConnection {
 	}
 	async searchFiles(query: string, workspaceRoot: string, signal: AbortSignal) {
 		if (!this.managementReady || !this.#workspaceFiles || workspaceRoot !== this.#workspace)
-			throw new Error("工作区未就绪");
+			throw new Error(getT()("gw.workspaceNotReady"));
 		return this.#client!.host.root((ctx) => this.#workspaceFiles!.search({ workspaceRoot, query }, ctx), { signal });
 	}
 	async workspaceImage(path: string, sessionId: string, signal: AbortSignal): Promise<ImageFile> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换，草稿已保留");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedDraft"));
 		const chat = this.#chat!;
 		return this.#client!.host.root(
 			async (ctx) => {
@@ -346,55 +349,56 @@ export class GatewayConnection {
 		);
 	}
 	async compact(instructions: string, sessionId?: string): Promise<void> {
-		if (sessionId !== undefined && sessionId !== this.#currentSessionId) throw new Error("会话已切换，草稿已保留");
-		if (!this.ready) throw new Error("会话未就绪");
+		if (sessionId !== undefined && sessionId !== this.#currentSessionId)
+			throw new Error(getT()("gw.sessionChangedDraft"));
+		if (!this.ready) throw new Error(getT()("gw.sessionNotReady"));
 		await this.#chat!.compact({ instructions });
 	}
 	/** Background job calls are bound to the session the panel was opened for. */
 	#jobs(sessionId: string) {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChanged"));
 		return jobsClient(this.#chat!);
 	}
 	/** Queued-input calls are bound to the session the queue bar shows. */
 	async steer(sessionId: string, id: number): Promise<WireSteerResult> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChanged"));
 		return queueClient(this.#chat!).steer(id);
 	}
 	async withdraw(sessionId: string, id: number): Promise<WireWithdrawResult> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChanged"));
 		return queueClient(this.#chat!).withdraw(id);
 	}
 	/** Question calls are bound to the session the card shows; answering is never a chat submit. */
 	async questionGet(sessionId: string, id: number): Promise<WireQuestionRecord | null> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedOrNotReady"));
 		return questionsClient(this.#chat!).get(id);
 	}
 	async questionRespond(
 		sessionId: string,
 		input: { id: number; version: string; response: WireQuestionResponse },
 	): Promise<WireQuestionRecord> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪，答案草稿已保留");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedAnswerDraft"));
 		return questionsClient(this.#chat!).respond(input);
 	}
 	/** Plan calls are bound to the session the card or composer shows; deciding is never a chat submit. */
 	async planMode(sessionId: string, mode: "normal" | "plan"): Promise<WirePlanView> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedOrNotReady"));
 		return planClient(this.#chat!).setMode(mode);
 	}
 	async planGet(sessionId: string, version: string): Promise<WirePlanRecord | null> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedOrNotReady"));
 		return planClient(this.#chat!).get(version);
 	}
 	async planRespond(
 		sessionId: string,
 		input: { version: string; decision: WirePlanDecision },
 	): Promise<WirePlanRecord> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪，反馈草稿已保留");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedFeedbackDraft"));
 		return planClient(this.#chat!).respond(input);
 	}
 	/** Workspace browsing is bound to the session the sidebar was opened for; the host makes signals cancel requests. */
 	workspace(sessionId: string) {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话已切换或未就绪");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedOrNotReady"));
 		return workspaceClient(this.#chat!, this.#client!.host);
 	}
 	async jobOutput(sessionId: string, jobId: string, since?: number) {
@@ -404,8 +408,9 @@ export class GatewayConnection {
 		return this.#jobs(sessionId).stop(jobId);
 	}
 	async image(entryId: number, contentIndex: number, sessionId?: string): Promise<ImageFile> {
-		if (sessionId !== undefined && sessionId !== this.#currentSessionId) throw new Error("会话已切换，草稿已保留");
-		if (!this.ready) throw new Error("会话未就绪");
+		if (sessionId !== undefined && sessionId !== this.#currentSessionId)
+			throw new Error(getT()("gw.sessionChangedDraft"));
+		if (!this.ready) throw new Error(getT()("gw.sessionNotReady"));
 		const chat = this.#chat!;
 		return downloadImage((offset) => chat.getImage({ entryId, contentIndex, offset }));
 	}
@@ -413,7 +418,7 @@ export class GatewayConnection {
 		if (this.ready) void this.#chat!.abort(null).catch((e: unknown) => this.#error(e));
 	}
 	async listSkills(sessionId: string, signal: AbortSignal): Promise<readonly NekoSkillInfo[]> {
-		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error("会话未就绪");
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionNotReady"));
 		return this.#client!.host.root((ctx) => this.#chat!.skills(null, ctx), { signal });
 	}
 	async listModels(): Promise<readonly NekoSelectableModel[]> {
@@ -421,19 +426,19 @@ export class GatewayConnection {
 	}
 	/** 技能市场：读操作直发；工作区缺省用当前工作区（项目级状态判定的依据）。 */
 	marketList(query?: string): Promise<readonly NekoMarketSkill[]> {
-		if (!this.#skillMarket) return Promise.reject(new Error("网关未连接"));
+		if (!this.#skillMarket) return Promise.reject(new Error(getT()("gw.notConnected")));
 		return this.#skillMarket.list({ ...(query ? { query } : {}), workspaceRoot: this.#workspace });
 	}
 	marketDetail(name: string): Promise<NekoMarketSkill> {
-		if (!this.#skillMarket) return Promise.reject(new Error("网关未连接"));
+		if (!this.#skillMarket) return Promise.reject(new Error(getT()("gw.notConnected")));
 		return this.#skillMarket.detail({ name, workspaceRoot: this.#workspace });
 	}
 	marketPreview(name: string): Promise<NekoMarketPreview> {
-		if (!this.#skillMarket) return Promise.reject(new Error("网关未连接"));
+		if (!this.#skillMarket) return Promise.reject(new Error(getT()("gw.notConnected")));
 		return this.#skillMarket.preview({ name });
 	}
 	marketInstall(name: string, scope: "user" | "project", overwrite?: boolean): Promise<NekoMarketInstallResult> {
-		if (!this.#skillMarket) return Promise.reject(new Error("网关未连接"));
+		if (!this.#skillMarket) return Promise.reject(new Error(getT()("gw.notConnected")));
 		return this.#skillMarket.install({
 			name,
 			scope,
@@ -442,7 +447,7 @@ export class GatewayConnection {
 		});
 	}
 	async marketUninstall(name: string, scope: "user" | "project"): Promise<void> {
-		if (!this.#skillMarket) return Promise.reject(new Error("网关未连接"));
+		if (!this.#skillMarket) return Promise.reject(new Error(getT()("gw.notConnected")));
 		await this.#skillMarket.uninstall({ name, scope, workspaceRoot: this.#workspace });
 	}
 	async #connect(): Promise<void> {
@@ -558,7 +563,7 @@ export class GatewayConnection {
 			.catch(() => {});
 	}
 	async checkUpdates(): Promise<UpdateState> {
-		if (!this.#client) throw new Error("网关未连接");
+		if (!this.#client) throw new Error(getT()("gw.notConnected"));
 		return this.#client.application.check(null);
 	}
 	#scheduleReconnect(): void {

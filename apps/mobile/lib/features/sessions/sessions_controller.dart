@@ -5,6 +5,7 @@ import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/core/storage/prefs_store.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 工作区与会话列表（design D6/D10）：按工作区过滤、搜索、分页、新建与恢复上次选择。
 class SessionsController extends ChangeNotifier {
@@ -24,7 +25,7 @@ class SessionsController extends ChangeNotifier {
   String? _nextCursor;
   String _query = '';
   bool _loading = false;
-  String? _error;
+  UiText? _error;
   Future<SessionSummary?>? _creating;
   Timer? _searchTimer;
 
@@ -61,7 +62,7 @@ class SessionsController extends ChangeNotifier {
 
   bool get creating => _creating != null;
 
-  String? get error => _error;
+  UiText? get error => _error;
 
   bool get ready => _api != null;
 

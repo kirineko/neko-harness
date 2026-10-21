@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/core/rpc/rpc_client.dart';
 import 'package:neko_mobile/core/storage/prefs_store.dart';
@@ -537,7 +538,10 @@ void main() {
       expect(winner.status, QuestionStatus.answered);
       expect(winner.answer?.optionIds, <String>['my']);
       expect(winner.answer?.text, '桌面端先答');
-      expect(env.x.settlementNote(record), contains('其他设备'));
+      expect(
+        resolveUiText(env.x.settlementNote(record)!, kLocaleZh),
+        contains('其他设备'),
+      );
     });
 
     test('停止后迟到的回答得到 cancelled 终态', () async {
@@ -572,7 +576,10 @@ void main() {
         const AnswerResponse(optionIds: <String>['pg'], text: '草稿'),
       );
       await pumpEventQueue();
-      expect(env.x.submitError(record), contains('version mismatch'));
+      expect(
+        resolveUiText(env.x.submitError(record)!, kLocaleZh),
+        contains('version mismatch'),
+      );
       expect(env.x.isSubmitting(record), isFalse);
       expect(env.x.draftFor(record).text, '草稿');
       expect(env.x.draftFor(record).optionIds, <String>['pg']);
@@ -588,7 +595,10 @@ void main() {
         const AnswerResponse(optionIds: <String>['pg', 'my']),
       );
       expect(_calls(env, 'questions.respond'), 0);
-      expect(env.x.submitError(pending()), contains('只能选择一项'));
+      expect(
+        resolveUiText(env.x.submitError(pending())!, kLocaleZh),
+        contains('只能选择一项'),
+      );
     });
 
     test('离线不发送；在途回答断线后无回执：不显示成功、不自动重发', () async {
@@ -682,7 +692,7 @@ void main() {
       await env.bind('7');
       env.records.remove(612);
       await env.x.loadQuestion(612);
-      expect(env.x.loadError(612), contains('不存在'));
+      expect(resolveUiText(env.x.loadError(612)!, kLocaleZh), contains('不存在'));
       expect(env.x.pending, isEmpty);
     });
   });

@@ -13,6 +13,8 @@ import 'package:neko_mobile/features/sessions/session_picker.dart';
 import 'package:neko_mobile/features/sessions/sessions_controller.dart';
 import 'package:neko_mobile/features/subagents/subagent_page.dart';
 import 'package:neko_mobile/features/todos/todo_sheet.dart';
+import 'package:neko_mobile/l10n/core_text.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 import 'package:neko_mobile/ui/widgets/transcript_view.dart';
@@ -87,7 +89,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     children: <Widget>[
                       Flexible(
                         child: Semantics(
-                          label: '切换会话',
+                          label: context.l10n.chatSwitchSession,
                           button: true,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -98,7 +100,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                     ? 'NekoAI'
                                     : (session?.title.isNotEmpty ?? false)
                                     ? session!.title
-                                    : '新会话',
+                                    : context.l10n.sessionNewTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 key: const Key('chat-title'),
@@ -106,8 +108,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               Text(
                                 status.busy
                                     ? (waiting
-                                          ? '等待你的回答'
-                                          : (status.status ?? '运行中…'))
+                                          ? context.l10n.chatWaitingForAnswer
+                                          : (status.status == null
+                                                ? context.l10n.chatRunning
+                                                : localizeStatus(
+                                                    context.l10n,
+                                                    status.status!,
+                                                  )))
                                     : (sessions.currentWorkspace?.name ?? ''),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -135,7 +142,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               const ConnectionIndicator(),
               IconButton(
                 key: const Key('sessions-new'),
-                tooltip: '新建会话',
+                tooltip: context.l10n.sessionNew,
                 onPressed:
                     !sessions.ready ||
                         sessions.creating ||
@@ -229,8 +236,8 @@ class _EmptySession extends StatelessWidget {
           children: <Widget>[
             Text(
               sessions.workspaces.isEmpty
-                  ? '电脑上还没有登记工作区，请先在电脑端添加。'
-                  : '选择一个会话或新建会话',
+                  ? context.l10n.chatNoWorkspaces
+                  : context.l10n.chatSelectOrCreate,
               textAlign: TextAlign.center,
               style: TextStyle(color: tokens.textMuted),
             ),
@@ -242,7 +249,7 @@ class _EmptySession extends StatelessWidget {
                     ? null
                     : () => createAndOpenSession(sessions, chat),
                 icon: const NekoIcon(NekoIcons.plus),
-                label: const Text('新建会话'),
+                label: Text(context.l10n.sessionNew),
               ),
           ],
         ),
@@ -266,7 +273,7 @@ class _AttachError extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
-            chat.error ?? '加载会话失败',
+            chat.error?.call(context.l10n) ?? context.l10n.chatLoadFailed,
             textAlign: TextAlign.center,
             style: TextStyle(color: tokens.textMuted),
           ),
@@ -276,7 +283,7 @@ class _AttachError extends StatelessWidget {
             onPressed: chat.api != null
                 ? () => chat.attach(chat.sessionId!)
                 : null,
-            child: const Text('重试'),
+            child: Text(context.l10n.commonRetry),
           ),
         ],
       ),
@@ -298,40 +305,61 @@ class ConnectionIndicator extends ConsumerWidget {
       initialData: manager.state,
       builder: (context, snapshot) {
         final state = snapshot.data ?? const NekoConnIdle();
+        final l10n = context.l10n;
         final (
           NekoIconData icon,
           Color color,
           String label,
           bool spinning,
         ) = switch (state) {
-          NekoConnReady() => (NekoIcons.dot, tokens.success, '在线', false),
+          NekoConnReady() => (
+            NekoIcons.dot,
+            tokens.success,
+            l10n.connOnline,
+            false,
+          ),
           NekoConnConnecting() => (
             NekoIcons.spinner,
             tokens.warning,
-            '连接中',
+            l10n.connConnecting,
             true,
           ),
           NekoConnRestoring() => (
             NekoIcons.spinner,
             tokens.warning,
-            '重连中',
+            l10n.connReconnecting,
             true,
           ),
-          NekoConnOffline() => (NekoIcons.cloudOff, tokens.danger, '离线', false),
-          NekoConnRevoked() => (NekoIcons.block, tokens.danger, '授权已撤销', false),
+          NekoConnOffline() => (
+            NekoIcons.cloudOff,
+            tokens.danger,
+            l10n.connOffline,
+            false,
+          ),
+          NekoConnRevoked() => (
+            NekoIcons.block,
+            tokens.danger,
+            l10n.connRevoked,
+            false,
+          ),
           NekoConnTrustChanged() => (
             NekoIcons.shieldAlert,
             tokens.danger,
-            '证书已变更',
+            l10n.connCertChanged,
             false,
           ),
           NekoConnIncompatible() => (
             NekoIcons.alert,
             tokens.danger,
-            '版本不兼容',
+            l10n.connIncompatible,
             false,
           ),
-          NekoConnIdle() => (NekoIcons.dot, tokens.textFaint, '未连接', false),
+          NekoConnIdle() => (
+            NekoIcons.dot,
+            tokens.textFaint,
+            l10n.connIdle,
+            false,
+          ),
         };
         final retryable =
             state is NekoConnOffline ||
@@ -416,18 +444,19 @@ class ConnectionBanner extends StatelessWidget {
       initialData: manager.state,
       builder: (context, snapshot) {
         final state = snapshot.data;
+        final l10n = context.l10n;
         final (String? text, Widget? leading, Widget? action) = switch (state) {
           NekoConnOffline(:final nextRetryIn) => (
-            '电脑暂不可达，${nextRetryIn.inSeconds + 1} 秒后重试；电脑上的任务不受影响',
+            l10n.connBannerOffline(nextRetryIn.inSeconds + 1),
             null,
             TextButton(
               key: const Key('banner-retry'),
               onPressed: manager.onForeground,
-              child: const Text('立即重试'),
+              child: Text(l10n.connRetryNow),
             ),
           ),
           NekoConnConnecting() || NekoConnRestoring() => (
-            '正在恢复连接…',
+            l10n.connRestoring,
             const SizedBox.square(
               dimension: 14,
               child: CircularProgressIndicator(strokeWidth: 2),
@@ -435,11 +464,11 @@ class ConnectionBanner extends StatelessWidget {
             TextButton(
               key: const Key('banner-retry'),
               onPressed: manager.onForeground,
-              child: const Text('立即重连'),
+              child: Text(l10n.connReconnectNow),
             ),
           ),
           NekoConnRevoked() => (
-            '设备授权已被电脑撤销，请重新扫码配对',
+            l10n.connBannerRevoked,
             NekoIcon(NekoIcons.block, size: 18, color: tokens.danger),
             TextButton(
               key: const Key('banner-rescan'),
@@ -447,11 +476,11 @@ class ConnectionBanner extends StatelessWidget {
                 manager.stopToScan();
                 context.go('/scan');
               },
-              child: const Text('重新配对'),
+              child: Text(l10n.connRepair),
             ),
           ),
           NekoConnTrustChanged() => (
-            '电脑证书已变更，请重新扫码配对',
+            l10n.connBannerTrustChanged,
             NekoIcon(NekoIcons.shieldAlert, size: 18, color: tokens.danger),
             TextButton(
               key: const Key('banner-rescan'),
@@ -459,11 +488,11 @@ class ConnectionBanner extends StatelessWidget {
                 manager.stopToScan();
                 context.go('/scan');
               },
-              child: const Text('重新配对'),
+              child: Text(l10n.connRepair),
             ),
           ),
           NekoConnIncompatible() => (
-            '应用与电脑协议版本不兼容，请升级后重试',
+            l10n.connBannerIncompatible,
             NekoIcon(NekoIcons.alert, size: 18, color: tokens.danger),
             null,
           ),
@@ -522,7 +551,7 @@ class ErrorBanner extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '关闭',
+            tooltip: context.l10n.commonClose,
             onPressed: onClose,
             icon: const NekoIcon(NekoIcons.close),
           ),
@@ -547,23 +576,24 @@ class StatusStrip extends StatelessWidget {
   });
 
   final ConnectionManager manager;
-  final String? error;
+  final UiText? error;
   final VoidCallback? onCloseError;
-  final String? notice;
+  final UiText? notice;
   final VoidCallback? onCloseNotice;
   final Widget? pending;
   final Widget? queue;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         ConnectionBanner(manager: manager),
         if (error != null)
-          ErrorBanner(text: error!, onClose: onCloseError ?? () {}),
+          ErrorBanner(text: error!(l10n), onClose: onCloseError ?? () {}),
         if (notice != null)
-          NoticeBanner(text: notice!, onClose: onCloseNotice ?? () {}),
+          NoticeBanner(text: notice!(l10n), onClose: onCloseNotice ?? () {}),
         ?pending,
         ?queue,
       ],
@@ -593,7 +623,7 @@ class NoticeBanner extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '关闭',
+            tooltip: context.l10n.commonClose,
             onPressed: onClose,
             icon: const NekoIcon(NekoIcons.close),
           ),
@@ -631,14 +661,16 @@ class QueueTray extends StatelessWidget {
                 child: Row(
                   children: <Widget>[
                     Text(
-                      item.steer ? '引导' : '排队',
+                      item.steer
+                          ? context.l10n.chatSteer
+                          : context.l10n.chatQueued,
                       style: context.small(tokens.primary),
                     ),
                     const SizedBox(width: NekoSpace.sm),
                     Expanded(
                       child: Text(
                         item.preview.isEmpty && item.images > 0
-                            ? '（仅图片）'
+                            ? context.l10n.chatImagesOnly
                             : item.preview,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -651,14 +683,18 @@ class QueueTray extends StatelessWidget {
                         onPressed: chat.canControl && chat.withdrawingId == null
                             ? () => chat.steer(item)
                             : null,
-                        child: const Text('引导'),
+                        child: Text(context.l10n.chatSteer),
                       ),
                     TextButton(
                       key: Key('queued-withdraw-${item.id}'),
                       onPressed: chat.canControl && chat.withdrawingId == null
                           ? () => chat.withdraw(item)
                           : null,
-                      child: Text(chat.withdrawingId == item.id ? '撤回中' : '撤回'),
+                      child: Text(
+                        chat.withdrawingId == item.id
+                            ? context.l10n.chatWithdrawing
+                            : context.l10n.chatWithdraw,
+                      ),
                     ),
                   ],
                 ),
@@ -693,7 +729,7 @@ class PendingTray extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      '待确认：${record.text}',
+                      context.l10n.chatPendingLabel(record.text),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: context.small(tokens.textMuted),
@@ -704,12 +740,12 @@ class PendingTray extends StatelessWidget {
                     onPressed: chat.canControl && !chat.sending
                         ? () => chat.retry(record)
                         : null,
-                    child: const Text('重试'),
+                    child: Text(context.l10n.commonRetry),
                   ),
                   TextButton(
                     key: Key('pending-discard-${record.requestId}'),
                     onPressed: () => chat.discard(record),
-                    child: const Text('放弃'),
+                    child: Text(context.l10n.chatDiscard),
                   ),
                 ],
               ),
@@ -775,15 +811,18 @@ class _ComposerState extends State<Composer> {
                         Expanded(
                           child: Text(
                             View.of(context).viewInsets.bottom > 0
-                                ? '消息会排队，回答后才处理'
-                                : '助手正在等待你的回答；此处发送的消息会排队，回答后才处理。',
+                                ? context.l10n.chatQuestionHintShort
+                                : context.l10n.chatQuestionHintLong,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: context.small(tokens.textMuted),
                           ),
                         ),
                         const SizedBox(width: NekoSpace.sm),
-                        Text('回答问题', style: context.small(tokens.primary)),
+                        Text(
+                          context.l10n.chatAnswerQuestion,
+                          style: context.small(tokens.primary),
+                        ),
                         NekoIcon(
                           NekoIcons.chevronUp,
                           size: 16,
@@ -807,19 +846,19 @@ class _ComposerState extends State<Composer> {
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       hintText: !can
-                          ? '未连接，可继续编辑草稿'
+                          ? context.l10n.chatHintOffline
                           : waiting
-                          ? '消息会排队，回答问题后才处理'
+                          ? context.l10n.chatHintWaiting
                           : busy
-                          ? '回答结束后排队处理，可在上方排队条引导或撤回'
-                          : '发消息给 Agent',
+                          ? context.l10n.chatHintBusy
+                          : context.l10n.chatHintIdle,
                     ),
                   ),
                 ),
                 if (busy)
                   IconButton(
                     key: const Key('composer-stop'),
-                    tooltip: '停止当前运行',
+                    tooltip: context.l10n.chatStop,
                     onPressed: can ? chat.abort : null,
                     icon: NekoIcon(NekoIcons.stop, color: tokens.danger),
                   ),
@@ -827,7 +866,9 @@ class _ComposerState extends State<Composer> {
                   listenable: chat.input,
                   builder: (context, _) => IconButton.filled(
                     key: const Key('composer-send'),
-                    tooltip: busy ? '排队' : '发送',
+                    tooltip: busy
+                        ? context.l10n.chatQueue
+                        : context.l10n.chatSend,
                     onPressed:
                         can &&
                             !chat.sending &&

@@ -1,6 +1,7 @@
 import type { ChatImage } from "@neko-harness/core";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { getT, useT } from "../lib/i18n/index.ts";
 import { useNekoState } from "../lib/store";
 import { Modal } from "./primitives";
 
@@ -9,6 +10,7 @@ export const ImageReaderContext = createContext<
 >(null);
 
 function HistoryImage({ image }: { image: ChatImage }) {
+	const t = useT();
 	const { currentSessionId, phase } = useNekoState();
 	const reader = useContext(ImageReaderContext);
 	const [url, setUrl] = useState("");
@@ -38,7 +40,7 @@ function HistoryImage({ image }: { image: ChatImage }) {
 					setError("");
 				})
 				.catch(() => {
-					if (!disposed) setError("图片加载失败，点击重试");
+					if (!disposed) setError(getT()("image.loadFailed"));
 				});
 		});
 		if (ref.current) observer.observe(ref.current);
@@ -52,7 +54,7 @@ function HistoryImage({ image }: { image: ChatImage }) {
 		<div ref={ref} className="max-w-full">
 			<button
 				type="button"
-				aria-label={`查看图片 ${image.name}`}
+				aria-label={t("image.view", { name: image.name })}
 				className="focus-neko max-w-full rounded-xl border border-sakura-200 p-1"
 				onClick={() => {
 					if (error) {
@@ -64,7 +66,7 @@ function HistoryImage({ image }: { image: ChatImage }) {
 				{url ? (
 					<img src={url} alt={image.name} className="max-h-40 max-w-full rounded-lg object-contain" />
 				) : (
-					<span className="text-sm">{error || "加载图片…"}</span>
+					<span className="text-sm">{error || t("image.loading")}</span>
 				)}
 			</button>
 			{open && url && (
@@ -89,7 +91,7 @@ function HistoryImage({ image }: { image: ChatImage }) {
 							>
 								<path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4" />
 							</svg>
-							保存图片
+							{t("image.save")}
 						</a>
 					</div>
 				</Modal>

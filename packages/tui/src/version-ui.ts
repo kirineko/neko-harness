@@ -8,6 +8,7 @@ import {
 	upgradeCommand,
 } from "@neko-harness/core/application-version";
 import type { PickerDetail, PickerPanel } from "./components/picker.ts";
+import { t } from "./i18n/index.ts";
 
 type VersionOptions = { runningVersion?: string; platform?: NodeJS.Platform };
 function actionFor(state: UpdateState | null, installed: string | null, runningVersion: string) {
@@ -23,11 +24,11 @@ export function versionNotice(
 	const action = actionFor(state, installed, options.runningVersion ?? RUNNING_VERSION);
 	return {
 		none: "",
-		install: `Update available · Run ${upgradeCommand(options.platform ?? process.platform)} · /version`,
-		"restart-service": "Updated · Restart neko · /version",
-		"restart-tui": "Updated · Restart neko tui",
+		install: t("version.notice.install", { command: upgradeCommand(options.platform ?? process.platform) }),
+		"restart-service": t("version.notice.restartService"),
+		"restart-tui": t("version.notice.restartTui"),
 		"refresh-page": "",
-		incompatible: "Protocol incompatible · Update and restart neko · /version",
+		incompatible: t("version.notice.incompatible"),
 	}[action];
 }
 export function versionOverview(
@@ -37,29 +38,28 @@ export function versionOverview(
 ): string {
 	const running = options.runningVersion ?? RUNNING_VERSION;
 	const command = upgradeCommand(options.platform ?? process.platform);
-	const current = `Current: ${stableVersion(running) ? `v${running}` : running}`;
+	const current = t("version.current", { version: stableVersion(running) ? `v${running}` : running });
 	const action = actionFor(state, installed, running);
 	let status: string;
 	switch (action) {
 		case "incompatible":
-			status = `Protocol incompatible\nExit neko, run ${command}, then restart neko.`;
+			status = t("version.incompatible", { command });
 			break;
 		case "restart-service":
-			status =
-				"Restart neko\nFinish tasks and close TUI/Web and any neko serve sharing this gateway. Then run neko tui or neko web.";
+			status = t("version.restartService");
 			break;
 		case "restart-tui":
-			status = "Restart neko tui\nFinish tasks, exit this TUI, then run neko tui.";
+			status = t("version.restartTui");
 			break;
 		case "install":
-			status = `Update available\nLatest: v${state!.latestVersion}\nExit neko, then run:\n${command}\nRestart neko after updating.`;
+			status = t("version.install", { latest: state!.latestVersion ?? "", command });
 			break;
 		default:
-			if (!stableVersion(running) || state?.checkState === "development") status = "Development build";
-			else if (!state) status = "Check not available";
-			else if (state.checkState === "checking") status = "Checking for updates...";
-			else if (state.checkState === "failed") status = "Check failed · Retry";
-			else if (state.checkState === "unknown") status = "Not checked";
+			if (!stableVersion(running) || state?.checkState === "development") status = t("version.development");
+			else if (!state) status = t("version.unavailable");
+			else if (state.checkState === "checking") status = t("version.checking");
+			else if (state.checkState === "failed") status = t("version.checkFailed");
+			else if (state.checkState === "unknown") status = t("version.notChecked");
 			else if (
 				!stableVersion(installed) ||
 				!stableVersion(state.installedVersion) ||
@@ -67,15 +67,18 @@ export function versionOverview(
 				!stableVersion(state.latestVersion) ||
 				state.checkedAt === null
 			)
-				status = "Check not available";
-			else status = "Up to date";
+				status = t("version.unavailable");
+			else status = t("version.upToDate");
 	}
 	// A failed explicit check stays visible even when an actionable restart has priority.
-	if (state?.checkState === "failed" && !status.includes("Check failed")) status += "\nCheck failed · Retry";
+	if (state?.checkState === "failed" && !status.includes(t("version.checkFailed")))
+		status += `\n${t("version.checkFailed")}`;
 	return `${current}\n${status}`;
 }
 class VersionDetail implements PickerDetail {
-	help = "Up/Down Scroll · Esc Back";
+	get help() {
+		return t("version.help");
+	}
 	#offset = 0;
 	readonly body: string;
 	constructor(body: string) {
@@ -100,11 +103,11 @@ export function openVersion(
 	options: VersionOptions = {},
 ): Promise<void> {
 	return panel.show(
-		"Version",
+		t("version.title"),
 		async () => [
-			{ value: "info", label: "Version" },
-			{ value: "check", label: "Check for updates" },
-			{ value: "details", label: "Version details" },
+			{ value: "info", label: t("version.title") },
+			{ value: "check", label: t("version.checkForUpdates") },
+			{ value: "details", label: t("version.details") },
 		],
 		async (value) => {
 			let checked: UpdateState | undefined;
@@ -117,13 +120,21 @@ export function openVersion(
 				}
 			}
 			const { state, installed } = await read();
-			if (value === "details")
+			if (value === "details") {
+				const unknown = t("common.unknown");
 				return new VersionDetail(
-					`TUI: ${options.runningVersion ?? RUNNING_VERSION}\nInstalled: ${installed ?? "unknown"}\nGateway: ${state?.runningVersion ?? "unknown"}\nGateway installed: ${state?.installedVersion ?? "unknown"}\nLatest: ${state?.latestVersion ?? "unknown"}`,
+					t("version.detailsBody", {
+						tui: options.runningVersion ?? RUNNING_VERSION,
+						installed: installed ?? unknown,
+						gateway: state?.runningVersion ?? unknown,
+						gatewayInstalled: state?.installedVersion ?? unknown,
+						latest: state?.latestVersion ?? unknown,
+					}),
 				);
+			}
 			const result = failed && state ? { ...state, checkState: "failed" as const } : (checked ?? state);
 			let body = versionOverview(result, installed, options);
-			if (failed && !body.includes("Check failed")) body += "\nCheck failed · Retry";
+			if (failed && !body.includes(t("version.checkFailed"))) body += `\n${t("version.checkFailed")}`;
 			return new VersionDetail(body);
 		},
 	);

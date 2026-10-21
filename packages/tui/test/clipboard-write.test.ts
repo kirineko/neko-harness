@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { copyToClipboard, OSC52_MAX_BASE64_LENGTH } from "../src/clipboard-write.ts";
 

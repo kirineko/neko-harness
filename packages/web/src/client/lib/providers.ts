@@ -1,6 +1,7 @@
 import type { NekoSelectableModel } from "@neko-harness/core";
 import { isModelProvider, MODEL_PROVIDERS } from "@neko-harness/core/credential-providers";
 import type { NekoCredentialState, NekoDefaultModelState } from "./contract.ts";
+import { getT } from "./i18n/index.ts";
 
 export type ProviderIssue = "disabled" | "missing-key";
 
@@ -96,9 +97,10 @@ export function formatContextWindow(tokens: number): string {
 }
 
 export function describeModel(model: NekoSelectableModel): string {
+	const t = getT();
 	return [
-		`${formatContextWindow(model.contextWindow)} 上下文`,
-		model.input.includes("image") ? "支持图片" : "仅文本",
-		model.reasoning ? "支持思考" : "无思考",
+		t("model.context", { size: formatContextWindow(model.contextWindow) }),
+		model.input.includes("image") ? t("model.images") : t("model.textOnly"),
+		model.reasoning ? t("model.reasoning") : t("model.noReasoning"),
 	].join(" · ");
 }

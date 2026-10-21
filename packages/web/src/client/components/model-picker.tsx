@@ -3,6 +3,7 @@ import type { NekoModelRef, NekoSelectableModel } from "@neko-harness/core";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { type Translate, useT } from "../lib/i18n/index.ts";
 import {
 	describeModel,
 	formatContextWindow,
@@ -18,6 +19,7 @@ import { Modal } from "./primitives";
 import { ProviderCombobox } from "./provider-combobox";
 
 export function ModelPicker(props: { current: NekoModelRef | null; fallbackLabel: string }) {
+	const t = useT();
 	const { models, currentSessionId, view, phase, operating, defaultModel } = useNekoState();
 	const [session, setSession] = useState<{ id: string } | null>(null);
 	const current = models.find((m) => m.provider === props.current?.provider && m.modelId === props.current?.modelId);
@@ -31,7 +33,7 @@ export function ModelPicker(props: { current: NekoModelRef | null; fallbackLabel
 				disabled={!props.current || phase !== "ready" || operating}
 				onClick={() => currentSessionId && setSession({ id: currentSessionId })}
 				className="focus-neko min-w-0 truncate rounded-full px-2 py-1 text-left text-xs text-ink-500 hover:bg-sakura-50"
-				aria-label={`模型与思考强度：${label} ${view?.agent.thinkingLevel ?? ""}`}
+				aria-label={t("picker.aria", { label, level: view?.agent.thinkingLevel ?? "" })}
 			>
 				{isDefault ? "★ " : ""}
 				{label} · {view?.agent.thinkingLevel ?? "off"} ▾
@@ -50,11 +52,11 @@ export function ModelPicker(props: { current: NekoModelRef | null; fallbackLabel
 	);
 }
 
-function badges(model: NekoSelectableModel): string {
+function badges(model: NekoSelectableModel, t: Translate): string {
 	return [
 		formatContextWindow(model.contextWindow),
-		model.input.includes("image") ? "图" : "",
-		model.reasoning ? "思" : "",
+		model.input.includes("image") ? t("picker.badgeImage") : "",
+		model.reasoning ? t("picker.badgeReasoning") : "",
 	]
 		.filter(Boolean)
 		.join(" · ");
@@ -67,6 +69,7 @@ function ModelForm(props: {
 	level: string;
 	onClose: () => void;
 }) {
+	const t = useT();
 	const { models, credentials, defaultModel } = useNekoState();
 	const [selected, setSelected] = useState<NekoSelectableModel | null>(props.current);
 	const [level, setLevel] = useState<ModelThinkingLevel>(props.level as ModelThinkingLevel);
@@ -80,7 +83,7 @@ function ModelForm(props: {
 	const providerOptions: ProviderOption[] = allGroups.map((group) => ({
 		id: group.provider,
 		name: group.name,
-		detail: group.available ? `${group.models.length} 个模型` : "未配置 Key",
+		detail: group.available ? t("picker.providerModels", { count: group.models.length }) : t("picker.keyMissing"),
 		tone: group.available ? "on" : "warn",
 	}));
 	const searching = query.trim().length > 0;
@@ -98,7 +101,7 @@ function ModelForm(props: {
 			);
 			props.onClose();
 		} catch {
-			setError("配置失败，请重试。");
+			setError(t("picker.applyFailed"));
 		} finally {
 			pending.current = false;
 			setBusy(false);
@@ -114,26 +117,26 @@ function ModelForm(props: {
 			if (isDefaultModel(defaultModel, model)) await appActions.clearDefaultModel();
 			else await appActions.setDefaultModel({ provider: model.provider, modelId: model.modelId });
 		} catch {
-			setError("默认模型保存失败，请重试。");
+			setError(t("picker.defaultFailed"));
 		} finally {
 			pending.current = false;
 			setBusy(false);
 		}
 	}
 	return (
-		<Modal title="模型与思考强度" onClose={props.onClose}>
+		<Modal title={t("picker.title")} onClose={props.onClose}>
 			<div className="space-y-5 p-5">
 				{issue && (
 					<p role="alert" className="rounded-xl bg-sakura-50 px-3 py-2 text-sm text-sakura-800">
 						{issue === "disabled"
-							? `当前会话的模型服务 ${providerName(props.currentRef.provider)} 已取消启用，请切换到其他模型，或在设置中重新启用。`
-							: `尚未配置 ${providerName(props.currentRef.provider)} 的 API Key，请先配置或切换到其他模型。`}{" "}
+							? t("picker.issueDisabled", { provider: providerName(props.currentRef.provider) })
+							: t("picker.issueKey", { provider: providerName(props.currentRef.provider) })}{" "}
 						<Link
 							to="/settings"
 							hash={`credential-${props.currentRef.provider}`}
 							className="focus-neko rounded underline"
 						>
-							前往设置
+							{t("picker.goSettings")}
 						</Link>
 					</p>
 				)}
@@ -141,7 +144,7 @@ function ModelForm(props: {
 					<div className="flex flex-col gap-2 sm:flex-row">
 						<div className="min-w-0 sm:w-64 sm:shrink-0">
 							<ProviderCombobox
-								label="模型服务商"
+								label={t("picker.providerLabel")}
 								options={providerOptions}
 								value={providerId}
 								onChange={(id) => {
@@ -151,21 +154,21 @@ function ModelForm(props: {
 							/>
 						</div>
 						<label className="sr-only" htmlFor="model-search">
-							搜索模型
+							{t("picker.searchLabel")}
 						</label>
 						<input
 							id="model-search"
 							type="search"
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder="搜索模型名称、ID 或服务商"
+							placeholder={t("picker.searchPlaceholder")}
 							autoComplete="off"
 							spellCheck={false}
 							className="focus-neko w-full min-w-0 rounded-xl border border-sakura-200 bg-base px-3 py-2 text-sm"
 						/>
 					</div>
 					<fieldset
-						aria-label="模型"
+						aria-label={t("picker.models")}
 						className="m-0 min-w-0 max-h-[min(40vh,22rem)] space-y-1 overflow-y-auto border-0 p-0 pr-1"
 					>
 						{visible.map((group) => (
@@ -175,13 +178,13 @@ function ModelForm(props: {
 										{searching && <span className="truncate font-semibold text-ink-700">{group.name}</span>}
 										{!group.available && (
 											<span className="ml-auto shrink-0 text-sakura-800">
-												未配置 Key ·{" "}
+												{t("picker.keyMissingDot")}{" "}
 												<Link
 													to="/settings"
 													hash={`credential-${group.provider}`}
 													className="focus-neko rounded underline"
 												>
-													去配置
+													{t("picker.configure")}
 												</Link>
 											</span>
 										)}
@@ -212,15 +215,15 @@ function ModelForm(props: {
 													<span className="hidden min-w-0 flex-1 truncate text-xs text-ink-400 sm:inline">
 														{model.modelId}
 													</span>
-													<span className="ml-auto shrink-0 text-xs text-ink-500">{badges(model)}</span>
+													<span className="ml-auto shrink-0 text-xs text-ink-500">{badges(model, t)}</span>
 												</button>
 												{group.available && (
 													<button
 														type="button"
 														disabled={busy}
 														aria-pressed={fallback}
-														aria-label={`${fallback ? "取消默认" : "设为默认"} ${model.name}`}
-														title={fallback ? "取消默认模型（只影响新建会话）" : "设为默认模型（只影响新建会话）"}
+														aria-label={`${fallback ? t("picker.unsetDefault") : t("picker.setDefault")} ${model.name}`}
+														title={fallback ? t("picker.unsetDefaultTitle") : t("picker.setDefaultTitle")}
 														onClick={() => void toggleDefault(model)}
 														className="focus-neko shrink-0 rounded-lg border border-sakura-100 px-2 text-sm text-ink-400 hover:bg-sakura-50 disabled:opacity-50"
 													>
@@ -234,16 +237,14 @@ function ModelForm(props: {
 							</section>
 						))}
 						{visible.length === 0 && (
-							<p className="px-1 py-3 text-sm text-ink-500">
-								{searching ? "没有匹配的模型。" : "没有可选模型，请先在设置中启用模型服务。"}
-							</p>
+							<p className="px-1 py-3 text-sm text-ink-500">{searching ? t("picker.noMatch") : t("picker.noModels")}</p>
 						)}
 					</fieldset>
 				</div>
 				{selected && (
 					<div>
-						<p className="mb-2 text-sm text-ink-600">思考强度</p>
-						<fieldset className="flex flex-wrap gap-2" aria-label="思考强度">
+						<p className="mb-2 text-sm text-ink-600">{t("picker.thinking")}</p>
+						<fieldset className="flex flex-wrap gap-2" aria-label={t("picker.thinking")}>
 							{selected.supportedThinkingLevels.map((item) => (
 								<button
 									type="button"
@@ -259,14 +260,8 @@ function ModelForm(props: {
 						</fieldset>
 					</div>
 				)}
-				{defaultModel?.source === "cli" && (
-					<p className="text-xs text-tianyi-800">
-						默认模型当前由 --model 启动参数指定并覆盖保存值；移除该参数后，此处保存的默认才会生效。
-					</p>
-				)}
-				<p className="text-xs text-ink-500">
-					仅当前会话，从下一次请求生效；☆ 设为新建会话的默认模型（不影响当前会话）。
-				</p>
+				{defaultModel?.source === "cli" && <p className="text-xs text-tianyi-800">{t("picker.cliNote")}</p>}
+				<p className="text-xs text-ink-500">{t("picker.scopeNote")}</p>
 				{error && (
 					<p role="alert" className="text-sm text-sakura-800">
 						{error}
@@ -274,7 +269,7 @@ function ModelForm(props: {
 				)}
 				<div className="flex justify-end gap-2">
 					<button type="button" onClick={props.onClose} className="btn-outline rounded-full px-4 py-2 text-sm">
-						取消
+						{t("common.cancel")}
 					</button>
 					<button
 						type="button"
@@ -282,7 +277,7 @@ function ModelForm(props: {
 						onClick={() => void apply()}
 						className="btn-primary rounded-full px-5 py-2 text-sm"
 					>
-						{busy ? "应用中…" : "应用"}
+						{busy ? t("picker.applying") : t("picker.apply")}
 					</button>
 				</div>
 			</div>

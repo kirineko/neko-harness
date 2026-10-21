@@ -1,5 +1,6 @@
 import { autoUpdate, FloatingPortal, flip, offset, shift, size, useFloating } from "@floating-ui/react";
 import { type RefObject, useEffect } from "react";
+import { useT } from "../lib/i18n/index.ts";
 
 export type Suggestion = { key: string; label: string; description: string; badge?: string };
 
@@ -25,6 +26,7 @@ export function ComposerSuggestions({
 	message?: string;
 	onRetry?: () => void;
 }) {
+	const t = useT();
 	const { refs, floatingStyles, isPositioned } = useFloating({
 		elements: { reference: anchor.current },
 		placement: "top-start",
@@ -56,7 +58,7 @@ export function ComposerSuggestions({
 			>
 				<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-xs text-ink-500">
 					<span>{title}</span>
-					<span>↑↓ 选择 · Enter / Tab 确认 · Esc 关闭</span>
+					<span>{t("suggest.hint")}</span>
 				</div>
 				<div id={id} role="listbox" tabIndex={-1} aria-label={title}>
 					{items.map((item, index) => (
@@ -96,7 +98,7 @@ export function ComposerSuggestions({
 						onMouseDown={(event) => event.preventDefault()}
 						onClick={onRetry}
 					>
-						重试文件查询
+						{t("suggest.retryFiles")}
 					</button>
 				)}
 			</div>

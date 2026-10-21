@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -40,7 +41,7 @@ async function inTempDir(run: (dir: string) => Promise<void>) {
 }
 
 it("lists /copy and /export in completion and help", () => {
-	expect(commands.map((c) => c.name)).toEqual(expect.arrayContaining(["copy", "export"]));
+	expect(commands().map((c) => c.name)).toEqual(expect.arrayContaining(["copy", "export"]));
 	const help = helpLines().join("\n");
 	expect(help).toContain("/copy");
 	expect(help).toContain("/export");

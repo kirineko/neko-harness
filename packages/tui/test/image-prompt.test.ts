@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { MouseRegion, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { UserMessageComponent } from "../src/components/user-message.ts";

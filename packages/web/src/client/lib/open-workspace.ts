@@ -1,5 +1,8 @@
 /** 浏览器侧封装：/api/local/session 取 CSRF 与可用目标，/api/open 在本机打开工作区目录。 */
 
+import { getT } from "./i18n/index.ts";
+import { localizeServerText } from "./i18n/server-text.ts";
+
 export type OpenTargetId = "vscode" | "file-manager";
 
 export type OpenTargetInfo = {
@@ -85,10 +88,13 @@ async function errorMessage(response: Response): Promise<string> {
 	} catch {
 		// 使用默认信息。
 	}
-	if (response.status === 403) return "没有权限打开，请刷新页面后重试";
-	if (code === "invalid_path") return "工作区目录不存在或不可访问";
-	if ((code === "unavailable" || code === "launch_failed") && message !== undefined && message !== "") return message;
-	return `请求失败（${response.status}）`;
+	const t = getT();
+	if (response.status === 403) return t("open.forbidden");
+	if (code === "invalid_path") return t("open.invalidPath");
+	if ((code === "unavailable" || code === "launch_failed") && message !== undefined && message !== "") {
+		return localizeServerText(message, t);
+	}
+	return t("open.requestFailedStatus", { status: response.status });
 }
 
 export async function openWorkspace(csrf: string, target: OpenTargetId, path: string): Promise<void> {
@@ -100,7 +106,9 @@ export async function openWorkspace(csrf: string, target: OpenTargetId, path: st
 			body: JSON.stringify({ target, path }),
 		});
 	} catch (error) {
-		throw new OpenWorkspaceError(`请求失败：${error instanceof Error ? error.message : String(error)}`);
+		throw new OpenWorkspaceError(
+			getT()("open.requestFailed", { error: error instanceof Error ? error.message : String(error) }),
+		);
 	}
 	if (!response.ok) throw new OpenWorkspaceError(await errorMessage(response));
 }

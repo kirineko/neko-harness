@@ -15,6 +15,7 @@ import { TopBar } from "../components/top-bar";
 import { WorkspacePanel } from "../components/workspace-panel";
 import { useAwaitingTitle } from "../lib/awaiting-title";
 import { appActions, reportError } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { questionState, todoState } from "../lib/interactions";
 import { MOBILE_QUERY, WORKSPACE_WIDTH } from "../lib/layout";
 import { planState } from "../lib/plan-ui";
@@ -23,6 +24,7 @@ import { storeActions, useNekoState } from "../lib/store";
 const INFO_NOTICE_MS = 8000;
 
 export function ChatPage() {
+	const t = useT();
 	const { view, phase, notice, operating, workspaceRoot, currentSessionId, retained } = useNekoState();
 	const mobile = useMobile();
 	useEffect(() => {
@@ -125,7 +127,7 @@ export function ChatPage() {
 	return (
 		<div className="flex h-dvh">
 			<a href="#main-content" className="skip-link">
-				跳到主内容
+				{t("chat.skip")}
 			</a>
 			<SessionList open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 			<div className="flex min-w-0 flex-1 flex-col">
@@ -157,7 +159,7 @@ export function ChatPage() {
 						role="alert"
 					>
 						<span className="min-w-0 flex-1 text-center">{notice.text}</span>
-						<DismissButton label="关闭提示" onClick={storeActions.clearNotice} />
+						<DismissButton label={t("chat.dismissNotice")} onClick={storeActions.clearNotice} />
 					</div>
 				)}
 				<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col focus:outline-none">
@@ -165,7 +167,7 @@ export function ChatPage() {
 					{!currentSessionId && phase === "ready" && !operating ? (
 						<div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
 							<h1 className="text-xl font-semibold text-ink-900">{folderName(workspaceRoot)}</h1>
-							<p className="text-sm text-ink-600">在这个工作区开始新的会话</p>
+							<p className="text-sm text-ink-600">{t("chat.startHere")}</p>
 							<button
 								type="button"
 								className="btn-primary focus-neko rounded-xl px-4 py-2"
@@ -173,7 +175,7 @@ export function ChatPage() {
 									void appActions.createSession().catch(reportError);
 								}}
 							>
-								新建会话
+								{t("sessions.new")}
 							</button>
 						</div>
 					) : (
@@ -190,12 +192,17 @@ export function ChatPage() {
 											selectIdentity(panels[currentSessionId ?? ""]?.selected ?? agentEntries![0]!.agentId)
 										}
 									>
-										子智能体 · {agentEntries!.length} 个
+										{t("chat.subagents", { count: agentEntries!.length })}
 										{agentEntries!.some((d) => d.approvalCount)
-											? ` · 待审批 ${agentEntries!.reduce((n, d) => n + (d.approvalCount ?? 0), 0)}`
+											? t("chat.subagentsApproval", {
+													count: agentEntries!.reduce((n, d) => n + (d.approvalCount ?? 0), 0),
+												})
 											: ""}
 										{agentEntries!.some((d) => d.historyThrough === undefined && d.status === "running")
-											? ` · ${agentEntries!.filter((d) => d.historyThrough === undefined && d.status === "running").length} 运行中`
+											? t("chat.subagentsRunning", {
+													count: agentEntries!.filter((d) => d.historyThrough === undefined && d.status === "running")
+														.length,
+												})
 											: ""}
 									</button>
 								) : undefined

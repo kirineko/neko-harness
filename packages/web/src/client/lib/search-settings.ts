@@ -1,5 +1,6 @@
 import { SEARCH_PROVIDERS, type SearchProviderId } from "@neko-harness/core/search-providers";
 import type { NekoCredentialState, NekoSearchSettingsState } from "./contract.ts";
+import { getT, type PlainKey } from "./i18n/index.ts";
 
 export const SEARCH_NAMES: Record<SearchProviderId, string> = {
 	tavily: "Tavily",
@@ -13,25 +14,26 @@ export type SearchOptionView = {
 	selected: boolean;
 };
 
-const SOURCES: Record<NekoCredentialState["statuses"][string]["source"], string> = {
-	saved: "已保存密钥",
-	environment: "环境变量",
-	runtime: "运行时配置",
-	keyless: "keyless 限流",
-	none: "未配置密钥",
+const SOURCES: Record<NekoCredentialState["statuses"][string]["source"], PlainKey> = {
+	saved: "search.source.saved",
+	environment: "search.source.environment",
+	runtime: "search.source.runtime",
+	keyless: "search.source.keyless",
+	none: "search.source.none",
 };
 
 export function searchOptions(
 	settings: NekoSearchSettingsState | null,
 	credentials: NekoCredentialState | null,
 ): SearchOptionView[] {
+	const t = getT();
 	const source = (provider: SearchProviderId) => {
 		const status = credentials?.statuses[provider];
-		return status ? SOURCES[status.source] : "读取中…";
+		return status ? t(SOURCES[status.source]) : t("common.loading");
 	};
 	const descriptions: Record<SearchProviderId, string> = {
-		tavily: `使用 Tavily 搜索与抓取（${source("tavily")}），默认选项`,
-		deepseek: `使用 DeepSeek 搜索与抓取，共用 DeepSeek 密钥（${source("deepseek")}）`,
+		tavily: t("search.tavilyDescription", { source: source("tavily") }),
+		deepseek: t("search.deepseekDescription", { source: source("deepseek") }),
 	};
 	return SEARCH_PROVIDERS.map((value) => ({
 		value,
@@ -47,6 +49,6 @@ export function searchWarning(
 	credentials: NekoCredentialState | null,
 ): string | null {
 	if (settings?.selected === "deepseek" && credentials?.statuses.deepseek?.source === "none")
-		return "尚未配置 DeepSeek 密钥，搜索将不可用。请在下方 DeepSeek 卡片配置密钥，或改选 Tavily。";
+		return getT()("search.deepseekWarning");
 	return null;
 }

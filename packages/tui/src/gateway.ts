@@ -52,6 +52,12 @@ const CONNECT_RETRY_MS = 100;
 const CONNECT_RETRIES = 20;
 const CONNECT_TIMEOUT_MS = 5_000;
 
+/** Data directory (`~/.neko` by default): the folder of the resolved storage file, shared by the gateway and `tui.json`. */
+export function resolveDataDir(options: { storagePath?: string; configDir?: string } = {}): string {
+	const storagePath = options.storagePath ?? loadNekoConfig(options.configDir).storagePath ?? DEFAULT_STORAGE_PATH;
+	return dirname(storagePath);
+}
+
 export async function connectToGateway(options: NekoTuiGatewayOptions = {}): Promise<NekoTuiGateway> {
 	// 与 gateway 的解析保持一致（CLI > neko.config.json > 默认）：socket 默认名依赖数据目录与 serverId 文件。
 	const config = loadNekoConfig(options.configDir);

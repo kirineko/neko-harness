@@ -3,6 +3,7 @@ import type { NekoCredentialState, NekoDefaultModelState } from "@neko-harness/g
 import type { PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
 import { formatTokens } from "./format.ts";
+import { t } from "./i18n/index.ts";
 
 export const modelKey = (model: { provider: string; modelId: string }): string => `${model.provider}/${model.modelId}`;
 
@@ -20,13 +21,13 @@ export function providerSendBlock(
 	const status = model ? credentials?.statuses[model.provider] : undefined;
 	if (!model || !status) return undefined;
 	const name = providerName(model.provider);
-	if (status.enabled === false) return `${name} is disabled. Enable it with /login or switch model.`;
-	if (status.source === "none") return `Configure ${name} with /login before sending.`;
+	if (status.enabled === false) return t("provider.disabled", { name });
+	if (status.source === "none") return t("provider.configure", { name });
 	return undefined;
 }
 
 /** Why a model row cannot be picked or set as default; shown when Enter/`d` lands on it. */
-const needsKeyHint = (provider: string): string => `${providerName(provider)} needs a key. Use /login to configure it.`;
+const needsKeyHint = (provider: string): string => t("provider.needsKeyHint", { name: providerName(provider) });
 
 /**
  * Grouped /model rows: current provider first, then catalog order; models without credentials are not confirmable.
@@ -56,25 +57,25 @@ export function modelItems(
 		const available = group.some((model) => model.available);
 		items.push({
 			value: `header:${provider}`,
-			label: `${name}${available ? "" : " · needs key"}`,
+			label: `${name}${available ? "" : ` · ${t("provider.needsKey")}`}`,
 			header: true,
 		});
 		for (const model of group) {
 			const key = modelKey(model);
 			const image = model.input.includes("image");
 			const tags = [
-				...(key === defaultKey ? ["default"] : []),
-				...(model.available ? [] : ["needs key"]),
+				...(key === defaultKey ? [t("provider.default")] : []),
+				...(model.available ? [] : [t("provider.needsKey")]),
 				formatTokens(model.contextWindow),
-				...(model.reasoning ? ["Thinking"] : []),
-				...(image ? ["Images"] : []),
+				...(model.reasoning ? [t("provider.thinking")] : []),
+				...(image ? [t("provider.images")] : []),
 			];
 			items.push({
 				value: key,
-				label: `${key}${key === currentKey ? " (Current)" : ""}${key === defaultKey ? " ★" : ""}`,
+				label: `${key}${key === currentKey ? t("common.currentSuffix") : ""}${key === defaultKey ? " ★" : ""}`,
 				rightLabel: tags.join(" · "),
 				searchText: `${model.name} ${name}`,
-				description: `${model.name} | ${formatTokens(model.contextWindow)} context${model.reasoning ? " | Thinking" : ""} | ${image ? "Images" : "Text only"}`,
+				description: `${model.name} | ${t("provider.context", { tokens: formatTokens(model.contextWindow) })}${model.reasoning ? ` | ${t("provider.thinking")}` : ""} | ${image ? t("provider.images") : t("provider.textOnly")}`,
 				...(model.available ? {} : { blockedHint: needsKeyHint(provider) }),
 			});
 		}
@@ -115,7 +116,12 @@ export function openModelPanel(
 	const items = () => modelItems(models, current, effectiveDefault());
 	const stop = client.defaultModel.state.subscribe(() => panel.update(items()));
 	panel.groupedFilter = true;
-	panel.help = shortcutHints(["↑↓", "Select"], ["Enter", "Open"], ["D", "Toggle default"], ["Esc", "Close"]);
+	panel.help = shortcutHints(
+		["↑↓", t("action.select")],
+		["Enter", t("action.open")],
+		["D", t("action.toggleDefault")],
+		["Esc", t("action.close")],
+	);
 	panel.listKey = (data, value) => {
 		if (data.toLowerCase() !== "d" || panel.search.getValue() !== "" || value === undefined) return false;
 		const model = models.find((m) => modelKey(m) === value);
@@ -133,7 +139,7 @@ export function openModelPanel(
 		return true;
 	};
 	void panel.show(
-		"Models",
+		t("provider.title"),
 		async () => {
 			models = await client.models.list(null);
 			return items();

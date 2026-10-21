@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neko_mobile/features/chat/chat_page.dart';
 import 'package:neko_mobile/features/sessions/session_picker.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 import '../../helpers/chat_harness.dart';
 import '../../helpers/fake_api.dart';
@@ -658,10 +659,13 @@ void main() {
 
   test('相对时间格式', () {
     final now = DateTime(2026, 10, 15, 12);
-    expect(relativeTime(now.millisecondsSinceEpoch - 30 * 1000, now), '刚刚');
-    expect(
-      relativeTime(now.millisecondsSinceEpoch - 3 * 3600 * 1000, now),
-      '3 小时前',
-    );
+    final zh = lookupAppLocalizations(kLocaleZh);
+    final en = lookupAppLocalizations(kLocaleEn);
+    final half = now.millisecondsSinceEpoch - 30 * 1000;
+    final hours = now.millisecondsSinceEpoch - 3 * 3600 * 1000;
+    expect(relativeTime(zh, half, now), '刚刚');
+    expect(relativeTime(zh, hours, now), '3 小时前');
+    expect(relativeTime(en, half, now), 'now');
+    expect(relativeTime(en, hours, now), '3h');
   });
 }

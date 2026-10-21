@@ -1,3 +1,5 @@
+import { t } from "./i18n/index.ts";
+
 /** The Windows command shell status as the gateway publishes it (`neko.application-info`); absent elsewhere. */
 export type ShellStatus =
 	| { readonly status: "ready"; readonly path: string }
@@ -10,8 +12,8 @@ export type ShellStatus =
 export function shellNoticeText(shell: ShellStatus): string | undefined {
 	if (shell.status !== "missing") return undefined;
 	if (shell.reason === "invalid_config")
-		return `${shell.detail ?? "shell.path is invalid."} Bash and background jobs are unavailable. Fix shell.path in neko.config.json.`;
-	return "Git Bash not found: bash and background jobs are unavailable. Install Git for Windows (https://git-scm.com/download/win) or set shell.path in neko.config.json.";
+		return t("shell.invalidConfig", { detail: shell.detail ?? t("shell.invalidDefault") });
+	return t("shell.notFound");
 }
 
 /**

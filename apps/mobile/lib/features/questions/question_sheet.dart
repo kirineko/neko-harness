@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/features/chat/interactions_controller.dart';
 import 'package:neko_mobile/features/questions/question_draft.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
-String questionStatusLabel(QuestionStatus status) => switch (status) {
-  QuestionStatus.pending => '等待回答',
-  QuestionStatus.answered => '已回答',
-  QuestionStatus.skipped => '已跳过',
-  QuestionStatus.cancelled => '已取消',
-};
+String questionStatusLabel(AppLocalizations l10n, QuestionStatus status) =>
+    switch (status) {
+      QuestionStatus.pending => l10n.questionStatusPending,
+      QuestionStatus.answered => l10n.questionStatusAnswered,
+      QuestionStatus.skipped => l10n.questionStatusSkipped,
+      QuestionStatus.cancelled => l10n.questionStatusCancelled,
+    };
 
 /// 输入区上方的“等待回答 · N”条：独立于 Bash 审批（图标、颜色与文案都不同），
 /// 打开问题 sheet；新问题出现不抢焦点、不清草稿。
@@ -30,7 +32,7 @@ class QuestionBar extends StatelessWidget {
       color: tokens.primary.withValues(alpha: 0.1),
       child: Semantics(
         button: true,
-        label: '等待回答 ${pending.length} 个问题',
+        label: context.l10n.questionBarSemantics(pending.length),
         excludeSemantics: true,
         child: InkWell(
           key: const Key('question-bar'),
@@ -48,7 +50,7 @@ class QuestionBar extends StatelessWidget {
                   NekoIcon(NekoIcons.help, color: tokens.primary),
                   const SizedBox(width: NekoSpace.sm),
                   Text(
-                    '等待回答 · ${pending.length}',
+                    context.l10n.questionBarCount(pending.length),
                     key: const Key('question-bar-count'),
                     style: TextStyle(
                       color: tokens.text,
@@ -221,7 +223,7 @@ class _Header extends StatelessWidget {
             child: Semantics(
               header: true,
               child: Text(
-                '助手提问',
+                context.l10n.questionHeader,
                 key: const Key('question-label'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -237,18 +239,18 @@ class _Header extends StatelessWidget {
             TextButton(
               key: const Key('question-previous'),
               onPressed: onPrevious,
-              child: const Text('上一题'),
+              child: Text(context.l10n.questionPrevious),
             ),
             TextButton(
               key: const Key('question-next'),
               onPressed: onNext,
-              child: const Text('下一题'),
+              child: Text(context.l10n.questionNext),
             ),
           ],
           const Spacer(),
           IconButton(
             key: const Key('question-close'),
-            tooltip: '关闭（问题仍在等待回答）',
+            tooltip: context.l10n.questionCloseTooltip,
             constraints: const BoxConstraints(
               minWidth: NekoSpace.touch,
               minHeight: NekoSpace.touch,
@@ -269,7 +271,7 @@ class _Loading extends StatelessWidget {
     required this.onRetry,
   });
 
-  final String? error;
+  final UiText? error;
   final bool loading;
   final VoidCallback onRetry;
 
@@ -287,12 +289,15 @@ class _Loading extends StatelessWidget {
               key: const Key('question-load-error'),
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(error!, style: TextStyle(color: tokens.danger)),
+                Text(
+                  error!(context.l10n),
+                  style: TextStyle(color: tokens.danger),
+                ),
                 const SizedBox(height: NekoSpace.sm),
                 TextButton(
                   key: const Key('question-load-retry'),
                   onPressed: onRetry,
-                  child: const Text('重试'),
+                  child: Text(context.l10n.commonRetry),
                 ),
               ],
             ),
@@ -373,7 +378,7 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                 if (!connected)
                   _Notice(
                     key: const Key('question-offline'),
-                    text: '当前离线：暂时无法提交，恢复连接后会重新读取问题状态，不会自动发送答案。',
+                    text: context.l10n.questionOffline,
                     color: tokens.warning,
                   ),
                 // 问题正文一律按纯文本显示：不解析 Markdown/HTML，不生成链接。
@@ -386,14 +391,18 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                 if (hasOptions)
                   Semantics(
                     container: true,
-                    label: _record.multiple ? '多选，可选择多个选项' : '单选，只能选择一个选项',
+                    label: _record.multiple
+                        ? context.l10n.questionMultipleSemantics
+                        : context.l10n.questionSingleSemantics,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         Padding(
                           padding: const EdgeInsets.only(bottom: NekoSpace.xs),
                           child: Text(
-                            _record.multiple ? '可多选' : '单选',
+                            _record.multiple
+                                ? context.l10n.questionMultipleMode
+                                : context.l10n.questionSingleMode,
                             key: const Key('question-mode'),
                             style: context.meta(tokens.textFaint),
                           ),
@@ -419,7 +428,9 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                   keyboardType: TextInputType.multiline,
                   textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
-                    labelText: hasOptions ? '补充说明（可选）' : '你的回答',
+                    labelText: hasOptions
+                        ? context.l10n.questionNoteOptional
+                        : context.l10n.questionYourAnswer,
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -431,7 +442,7 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                       Expanded(
                         child: response != null && problem != null
                             ? Text(
-                                problem,
+                                problem(context.l10n),
                                 key: const Key('question-problem'),
                                 style: context.small(tokens.danger),
                               )
@@ -450,7 +461,7 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                 if (error != null)
                   _Notice(
                     key: const Key('question-error'),
-                    text: error,
+                    text: error(context.l10n),
                     color: tokens.danger,
                   ),
               ],
@@ -478,7 +489,7 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                       ? () =>
                             interactions.respond(_record, const SkipResponse())
                       : null,
-                  child: const Text('跳过'),
+                  child: Text(context.l10n.questionSkip),
                 ),
                 FilledButton(
                   key: const Key('question-submit'),
@@ -486,18 +497,18 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                       ? () => interactions.respond(_record, response!)
                       : null,
                   child: submitting
-                      ? const Row(
+                      ? Row(
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
-                            SizedBox.square(
+                            const SizedBox.square(
                               dimension: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                            SizedBox(width: NekoSpace.sm),
-                            Text('提交中…'),
+                            const SizedBox(width: NekoSpace.sm),
+                            Text(context.l10n.commonSubmitting),
                           ],
                         )
-                      : const Text('提交回答'),
+                      : Text(context.l10n.questionSubmit),
                 ),
               ],
             ),
@@ -532,9 +543,9 @@ class _OptionTile extends StatelessWidget {
     final description = option.description;
     final label = <String>[
       option.label,
-      if (option.recommended) '推荐',
+      if (option.recommended) context.l10n.questionRecommended,
       if (description != null && description.isNotEmpty) description,
-    ].join('，');
+    ].join(context.l10n.separatorClause);
     return Semantics(
       container: true,
       excludeSemantics: true,
@@ -625,7 +636,10 @@ class _RecommendedBadge extends StatelessWidget {
         border: Border.all(color: tokens.primary, width: 0.8),
         borderRadius: BorderRadius.circular(NekoTokens.radiusControl),
       ),
-      child: Text('推荐', style: context.meta(tokens.primary)),
+      child: Text(
+        context.l10n.questionRecommended,
+        style: context.meta(tokens.primary),
+      ),
     );
   }
 }
@@ -640,19 +654,20 @@ class _QuestionFinal extends StatelessWidget {
   });
 
   final QuestionRecord record;
-  final String? note;
+  final UiText? note;
   final int? nextId;
   final void Function(int id) onNext;
 
   @override
   Widget build(BuildContext context) {
     final tokens = NekoTokens.of(context);
+    final l10n = context.l10n;
     final labels = record.answerLabels;
     final text = record.answer?.text;
     final (Color color, String detail) = switch (record.status) {
       QuestionStatus.answered => (tokens.success, ''),
-      QuestionStatus.skipped => (tokens.textMuted, '已跳过，未提供答案。'),
-      QuestionStatus.cancelled => (tokens.danger, '运行已停止或会话已归档，问题不再需要回答。'),
+      QuestionStatus.skipped => (tokens.textMuted, l10n.questionDetailSkipped),
+      QuestionStatus.cancelled => (tokens.danger, l10n.questionDetailCancelled),
       QuestionStatus.pending => (tokens.textMuted, ''),
     };
     return Column(
@@ -670,7 +685,7 @@ class _QuestionFinal extends StatelessWidget {
                 if (note != null)
                   _Notice(
                     key: const Key('question-note'),
-                    text: note!,
+                    text: note!(l10n),
                     color: tokens.warning,
                   ),
                 Text(
@@ -680,7 +695,7 @@ class _QuestionFinal extends StatelessWidget {
                 ),
                 const SizedBox(height: NekoSpace.md),
                 Text(
-                  questionStatusLabel(record.status),
+                  questionStatusLabel(l10n, record.status),
                   key: const Key('question-final-status'),
                   style: Theme.of(context).textTheme.titleSmall
                       ?.copyWith(color: color),
@@ -695,7 +710,9 @@ class _QuestionFinal extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: NekoSpace.xs),
                     child: Text(
-                      '选择：${labels.join('、')}',
+                      l10n.questionFinalOptions(
+                        labels.join(l10n.separatorList),
+                      ),
                       key: const Key('question-final-options'),
                     ),
                   ),
@@ -703,7 +720,7 @@ class _QuestionFinal extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: NekoSpace.xs),
                     child: Text(
-                      '文字：$text',
+                      l10n.questionFinalText(text),
                       key: const Key('question-final-text'),
                     ),
                   ),
@@ -729,12 +746,12 @@ class _QuestionFinal extends StatelessWidget {
                   TextButton(
                     key: const Key('question-next-pending'),
                     onPressed: () => onNext(nextId!),
-                    child: const Text('下一题'),
+                    child: Text(l10n.questionNext),
                   ),
                 FilledButton(
                   key: const Key('question-done'),
                   onPressed: () => Navigator.of(context).maybePop(),
-                  child: const Text('关闭'),
+                  child: Text(l10n.commonClose),
                 ),
               ],
             ),

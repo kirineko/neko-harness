@@ -1,5 +1,6 @@
 import { type AutocompleteProvider, CombinedAutocompleteProvider, type SlashCommand } from "@earendil-works/pi-tui";
 import { type FileCandidates, mentionAt, mentionValue } from "@neko-harness/core/file-mentions";
+import { t } from "./i18n/index.ts";
 /** Native editor insertion/quoting, with gateway-backed @ enumeration. */
 export function fileCompletion(
 	commands: SlashCommand[],
@@ -25,9 +26,9 @@ export function fileCompletion(
 			try {
 				const value = await search(token.query, options.signal);
 				if (options.signal.aborted) return null;
-				if (value.incomplete) notify("File index incomplete. Specify a subdirectory or retry.");
-				else if (value.limited) notify("Showing up to 100 paths. Type more to narrow results.");
-				else if (!value.entries.length) notify("No matching files.");
+				if (value.incomplete) notify(t("files.incomplete"));
+				else if (value.limited) notify(t("files.limited"));
+				else if (!value.entries.length) notify(t("files.none"));
 				else lastNotice = "";
 				return value.entries.length
 					? {
@@ -41,7 +42,7 @@ export function fileCompletion(
 					: null;
 			} catch (error) {
 				if (!options.signal.aborted)
-					notify(error instanceof Error ? `${error.message} Retry file search.` : "File search failed. Retry.");
+					notify(error instanceof Error ? t("files.retrySearch", { message: error.message }) : t("files.failed"));
 				return null;
 			}
 		},

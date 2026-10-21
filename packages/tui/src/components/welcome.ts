@@ -1,4 +1,5 @@
 import { type Component, truncateToWidth } from "@earendil-works/pi-tui";
+import { t } from "../i18n/index.ts";
 import { style, theme } from "../theme/index.ts";
 
 const CAT = ["|\\___/|", ")     (", "=\\^_^ /=", ")---("] as const;
@@ -30,7 +31,7 @@ export class WelcomeScreen implements Component {
 			side(CAT[2]!, theme.muted(this.#modelLine)),
 			`${MARGIN}${theme.accent(CAT[3]!)}`,
 			"",
-			`${MARGIN}${theme.dim("Type a message · / commands · @ files · Ctrl+S sessions")}`,
+			`${MARGIN}${theme.dim(t("welcome.hint"))}`,
 		];
 		return lines.map((line) => truncateToWidth(line, width));
 	}

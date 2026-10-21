@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { afterEach, expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { JobsClient } from "@neko-harness/gateway/client-session";
@@ -5,7 +6,7 @@ import type { WireJobOutput, WireJobSummary } from "@neko-harness/gateway/contra
 import { StatusFooter } from "../src/components/footer.ts";
 import { JobReportNotice } from "../src/components/job-report.ts";
 import { PickerPanel } from "../src/components/picker.ts";
-import { JOBS_EMPTY, JobDetail, jobItems, sanitizeOutput } from "../src/jobs-ui.ts";
+import { JobDetail, jobItems, jobsEmpty, sanitizeOutput } from "../src/jobs-ui.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
 
 setActiveTheme("light");
@@ -107,14 +108,14 @@ it("lists newest first with status, and shows an empty state instead of an error
 	expect(items[1]?.rightLabel).toBe("exited · exit 0");
 
 	const { panel } = panelOf();
-	panel.emptyText = JOBS_EMPTY;
+	panel.emptyText = jobsEmpty();
 	await panel.show(
 		"Jobs",
 		async () => [],
 		async () => {},
 	);
 	const text = plain(panel.render(80));
-	expect(text).toContain(JOBS_EMPTY);
+	expect(text).toContain(jobsEmpty());
 	expect(text).not.toContain("Error");
 	panel.close();
 	expect(panel.emptyText).toBeUndefined();

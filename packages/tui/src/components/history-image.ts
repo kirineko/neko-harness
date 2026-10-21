@@ -9,6 +9,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { type ChatImage, terminalImage } from "@neko-harness/core";
 import { encodeChunk, type ImageFile } from "@neko-harness/core/image-transfer";
+import { t } from "../i18n/index.ts";
 import { theme } from "../theme/index.ts";
 
 let active = 0;
@@ -33,24 +34,23 @@ export class HistoryImage implements Component {
 	private image: ChatImage;
 	private load: () => Promise<ImageFile>;
 	private changed: () => void;
-	#fallback: Text;
 	constructor(image: ChatImage, load: () => Promise<ImageFile>, changed: () => void) {
 		this.image = image;
 		this.load = load;
 		this.changed = changed;
-		this.#fallback = new Text(
-			`[Image: ${image.name} · ${image.mimeType}${image.width ? ` · ${image.width}x${image.height}` : ""}]`,
+	}
+	get #fallback(): Text {
+		const { name, mimeType, width, height } = this.image;
+		return new Text(
+			width
+				? t("image.fallbackSized", { name, type: mimeType, size: `${width}x${height}` })
+				: t("image.fallback", { name, type: mimeType }),
 			1,
 			0,
 		);
 	}
 	updateInfo(image: ChatImage) {
 		this.image = image;
-		this.#fallback = new Text(
-			`[Image: ${image.name} · ${image.mimeType}${image.width ? ` · ${image.width}x${image.height}` : ""}]`,
-			1,
-			0,
-		);
 	}
 	setVisible(value: boolean) {
 		if (value && !this.#visible) this.#failed = false;

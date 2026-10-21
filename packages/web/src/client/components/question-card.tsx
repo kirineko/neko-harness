@@ -10,6 +10,7 @@ import {
 } from "@neko-harness/core/interactions";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { getT, useT } from "../lib/i18n/index.ts";
 import { isSameDecision, plainText, questionState, settlementText } from "../lib/interactions";
 import { questionKey, questionUi, useQuestionUi } from "../lib/question-ui";
 import { useNekoState } from "../lib/store";
@@ -20,7 +21,7 @@ type Slot = { state: "loading" } | { state: "ready"; record: QuestionRecord } | 
 
 const NONE: readonly QuestionSummary[] = [];
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-const focusComposer = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="消息输入"]')?.focus();
+const focusComposer = () => document.querySelector<HTMLTextAreaElement>("textarea[data-composer-input]")?.focus();
 
 /** Another dialog or a pending Bash approval already holds the user's attention. */
 function otherPanelBusy(view: ChatView | null): boolean {
@@ -32,8 +33,9 @@ function otherPanelBusy(view: ChatView | null): boolean {
 
 function noticeText(record: QuestionRecord, mine: boolean): string {
 	if (mine) return settlementText(record);
-	if (record.status === "cancelled") return "该问题已取消（运行已停止或会话已归档），没有保存新的回答。";
-	return `该问题已由其他端先处理，以已保存的结果为准：${settlementText(record)}`;
+	const t = getT();
+	if (record.status === "cancelled") return t("question.card.cancelledElsewhere");
+	return t("question.card.handledElsewhere", { result: settlementText(record) });
 }
 
 /** Questions the assistant is waiting on, between the approvals and the composer. Not modal and never a chat submit. */
@@ -43,6 +45,7 @@ export function QuestionDock() {
 }
 
 function SessionQuestions({ sessionId }: { sessionId: string }) {
+	const t = useT();
 	const app = useNekoState();
 	const ui = useQuestionUi();
 	const info = questionState(app);
@@ -98,13 +101,11 @@ function SessionQuestions({ sessionId }: { sessionId: string }) {
 				.then((record) => {
 					if (!alive.current) return;
 					setNotice(
-						record !== null && record.status !== "pending"
-							? noticeText(record, false)
-							: "该问题已不在等待列表中，可能已在其他端处理或已取消。",
+						record !== null && record.status !== "pending" ? noticeText(record, false) : getT()("question.card.gone"),
 					);
 				})
 				.catch(() => {
-					if (alive.current) setNotice("该问题已不在等待列表中，可能已在其他端处理或已取消。");
+					if (alive.current) setNotice(getT()("question.card.gone"));
 				});
 		}
 		seen.current = current;
@@ -128,7 +129,7 @@ function SessionQuestions({ sessionId }: { sessionId: string }) {
 				if (record === null)
 					setSlots((previous) => ({
 						...previous,
-						[key]: { state: "error", message: "找不到这个问题，它可能已结算。" },
+						[key]: { state: "error", message: t("question.card.notFound") },
 					}));
 				else if (record.status !== "pending") settle(key, record, false);
 				else setSlots((previous) => ({ ...previous, [key]: { state: "ready", record } }));
@@ -137,12 +138,16 @@ function SessionQuestions({ sessionId }: { sessionId: string }) {
 				if (alive.current)
 					setSlots((previous) => ({ ...previous, [key]: { state: "error", message: errorText(error) } }));
 			});
-	}, [activeKey, activeSummary, activeOpen, online, needsLoad, sessionId, settle]);
+	}, [activeKey, activeSummary, activeOpen, online, needsLoad, sessionId, settle, t]);
 
 	if (active === undefined && notice === null) return null;
 	const index = active === undefined ? 0 : visible.indexOf(active);
 	return (
-		<section aria-label="待回答问题" data-question-dock className="flex shrink-0 flex-col px-3 pt-0.5 pb-1 sm:px-4">
+		<section
+			aria-label={t("question.card.dock")}
+			data-question-dock
+			className="flex shrink-0 flex-col px-3 pt-0.5 pb-1 sm:px-4"
+		>
 			<div className="chat-column flex flex-col gap-1.5">
 				{notice !== null && (
 					<output
@@ -152,21 +157,19 @@ function SessionQuestions({ sessionId }: { sessionId: string }) {
 						<span className="max-h-24 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words">
 							{plainText(notice)}
 						</span>
-						<DismissButton label="关闭结果提示" onClick={() => setNotice(null)} />
+						<DismissButton label={t("question.card.dismiss")} onClick={() => setNotice(null)} />
 					</output>
 				)}
 				{visible.length > 1 && (
 					<div className="flex items-center gap-2 text-xs text-ink-700">
-						<span>
-							共 {visible.length} 个待回答问题，当前第 {index + 1} 个
-						</span>
+						<span>{t("question.card.count", { total: visible.length, index: index + 1 })}</span>
 						<button
 							type="button"
 							className="focus-neko rounded-full border border-tianyi-300 px-2.5 py-0.5 disabled:opacity-50"
 							disabled={index === 0}
 							onClick={() => questionUi.setActive(sessionId, visible[index - 1]!.summary.id)}
 						>
-							上一个
+							{t("question.card.prev")}
 						</button>
 						<button
 							type="button"
@@ -174,7 +177,7 @@ function SessionQuestions({ sessionId }: { sessionId: string }) {
 							disabled={index === visible.length - 1}
 							onClick={() => questionUi.setActive(sessionId, visible[index + 1]!.summary.id)}
 						>
-							下一个
+							{t("question.card.next")}
 						</button>
 					</div>
 				)}
@@ -211,6 +214,7 @@ function QuestionCard(props: {
 	onRetry: () => void;
 	onSettled: (record: QuestionRecord, mine: boolean) => void;
 }) {
+	const t = useT();
 	const { summary, questionKey: key, open, online } = props;
 	const ui = useQuestionUi();
 	const draft = questionUi.draft(key);
@@ -265,10 +269,10 @@ function QuestionCard(props: {
 				version: summary.version,
 				response,
 			});
-			if (saved.status === "pending") throw new Error("回答尚未保存，请重试");
+			if (saved.status === "pending") throw new Error(t("question.card.notSaved"));
 			props.onSettled(saved, isSameDecision(saved, response));
 		} catch (e) {
-			setError(`提交失败：${errorText(e)}（答案草稿已保留，请手动重试）`);
+			setError(t("question.card.submitFailed", { error: errorText(e) }));
 		} finally {
 			sending.current = false;
 			setBusy(null);
@@ -284,7 +288,7 @@ function QuestionCard(props: {
 	return (
 		<section
 			ref={card}
-			aria-label="助手提问"
+			aria-label={t("question.card.section")}
 			data-question-card
 			data-open={open}
 			className="flex max-h-[min(42dvh,28rem)] flex-col rounded-xl border border-tianyi-300 bg-tianyi-50 text-sm shadow-soft"
@@ -292,9 +296,12 @@ function QuestionCard(props: {
 			<div className="flex shrink-0 items-center gap-2 px-3 py-1.5">
 				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-on-accent">
 					<Icon name="sparkles" size={12} />
-					助手提问
+					{t("question.card.section")}
 				</span>
-				<span className="shrink-0 text-xs font-medium text-tianyi-900">等待回答{online ? "" : " · 离线"}</span>
+				<span className="shrink-0 text-xs font-medium text-tianyi-900">
+					{t("question.card.awaiting")}
+					{online ? "" : t("question.card.offline")}
+				</span>
 				{open ? (
 					<span className="min-w-0 flex-1" />
 				) : (
@@ -304,7 +311,7 @@ function QuestionCard(props: {
 					</span>
 				)}
 				{!open && (draft.optionIds.length > 0 || draft.text !== "") && (
-					<span className="shrink-0 text-xs text-ink-500">草稿已保留</span>
+					<span className="shrink-0 text-xs text-ink-500">{t("question.card.draftKept")}</span>
 				)}
 				<button
 					ref={toggle}
@@ -312,10 +319,10 @@ function QuestionCard(props: {
 					className="focus-neko h-9 shrink-0 rounded-full border border-tianyi-300 bg-surface px-3 text-xs text-tianyi-900 hover:bg-tianyi-100"
 					aria-expanded={open}
 					aria-controls={bodyId}
-					aria-label={open ? "折叠提问（不会跳过）" : "展开提问"}
+					aria-label={open ? t("question.card.foldTitle") : t("question.card.unfoldTitle")}
 					onClick={() => questionUi.setFold(key, open ? "folded" : "open")}
 				>
-					{open ? "折叠" : "展开"}
+					{open ? t("question.card.fold") : t("question.card.unfold")}
 				</button>
 			</div>
 			{open && (
@@ -332,7 +339,7 @@ function QuestionCard(props: {
 								{props.slot?.state === "error" ? (
 									<div className="flex flex-wrap items-center gap-2">
 										<p role="alert" className="min-w-0 break-words text-sm text-sakura-800">
-											无法读取完整问题：{props.slot.message}
+											{t("question.card.loadFailed", { message: props.slot.message })}
 										</p>
 										{online && (
 											<button
@@ -340,13 +347,13 @@ function QuestionCard(props: {
 												className="focus-neko rounded-full border border-tianyi-300 px-3 py-1 text-xs"
 												onClick={props.onRetry}
 											>
-												重试
+												{t("common.retry")}
 											</button>
 										)}
 									</div>
 								) : (
 									<output className="block text-xs text-ink-600">
-										{online ? "正在读取完整问题…" : "离线，暂时无法读取完整问题。"}
+										{online ? t("question.card.loading") : t("question.card.loadOffline")}
 									</output>
 								)}
 							</>
@@ -358,7 +365,7 @@ function QuestionCard(props: {
 								{record.options.length > 0 && (
 									<fieldset className="min-w-0 space-y-1.5" data-question-options>
 										<legend className="mb-1 text-xs font-medium text-ink-600">
-											{record.multiple ? "选择一个或多个选项" : "选择一个选项"}
+											{record.multiple ? t("question.card.chooseMany") : t("question.card.chooseOne")}
 										</legend>
 										{record.options.map((option, i) => {
 											const id = `${base}-option-${i}`;
@@ -388,7 +395,7 @@ function QuestionCard(props: {
 																<>
 																	{" "}
 																	<span className="rounded-full border border-sakura-300 bg-sakura-50 px-1.5 py-0.5 text-xs text-sakura-800">
-																		推荐
+																		{t("question.card.recommended")}
 																	</span>
 																</>
 															)}
@@ -409,14 +416,14 @@ function QuestionCard(props: {
 												className="focus-neko rounded-full px-2 py-0.5 text-xs text-tianyi-800 underline disabled:opacity-50"
 												onClick={() => questionUi.setDraft(key, { ...draft, optionIds: [] })}
 											>
-												清除选择
+												{t("question.card.clear")}
 											</button>
 										)}
 									</fieldset>
 								)}
 								<div>
 									<label htmlFor={`${base}-text`} className="mb-1 block text-xs font-medium text-ink-600">
-										{hasOptions ? "补充说明（可选）" : "你的回答"}
+										{hasOptions ? t("question.card.extra") : t("question.card.yourAnswer")}
 									</label>
 									<textarea
 										id={`${base}-text`}
@@ -432,11 +439,7 @@ function QuestionCard(props: {
 						)}
 					</div>
 					<div className="shrink-0 space-y-1 border-t border-tianyi-200 px-3 py-2">
-						{!online && (
-							<output className="block text-xs text-sakura-800">
-								离线：回答与跳过已停用，草稿已保留；重新连接后需要手动提交，不会自动发送。
-							</output>
-						)}
+						{!online && <output className="block text-xs text-sakura-800">{t("question.card.offlineNote")}</output>}
 						{error && (
 							<p role="alert" className="break-words text-xs text-sakura-800">
 								{error}
@@ -449,21 +452,19 @@ function QuestionCard(props: {
 								className="btn-primary focus-neko h-9 rounded-full px-4 text-sm disabled:opacity-50"
 								onClick={submit}
 							>
-								{busy === "answer" ? "提交中…" : "提交回答"}
+								{busy === "answer" ? t("question.card.submitting") : t("question.card.submit")}
 							</button>
 							<button
 								type="button"
 								disabled={disabled}
-								title="跳过：不提供答案，助手会自行判断并继续；不会停止运行"
+								title={t("question.card.skipTitle")}
 								className="focus-neko h-9 rounded-full border border-ink-300 bg-surface px-3 text-sm text-ink-700 hover:bg-ink-50 disabled:opacity-50"
 								onClick={() => void decide({ kind: "skip" })}
 							>
-								{busy === "skip" ? "跳过中…" : "跳过"}
+								{busy === "skip" ? t("question.card.skipping") : t("question.card.skip")}
 							</button>
 							<span className="min-w-0 text-xs text-ink-500">
-								{incomplete && busy === null
-									? "选择选项或填写文字后才能提交；选择只保存为草稿。"
-									: "折叠或关闭不会跳过，运行仍可随时停止。"}
+								{incomplete && busy === null ? t("question.card.needInput") : t("question.card.foldHint")}
 							</span>
 						</div>
 					</div>

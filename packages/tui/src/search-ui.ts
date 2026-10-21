@@ -2,17 +2,25 @@ import { SEARCH_PROVIDERS, type SearchProviderId } from "@neko-harness/core/sear
 import type { NekoCredentialState, NekoSearchSettingsState } from "@neko-harness/gateway";
 import type { PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { t } from "./i18n/index.ts";
 
-export const SEARCH_EMPTY = "Search settings are unavailable.";
+export const searchEmpty = (): string => t("search.empty");
 
 const NAMES: Record<SearchProviderId, string> = { tavily: "Tavily", deepseek: "DeepSeek" };
 
-const SOURCES: Record<NekoCredentialState["statuses"][string]["source"], string> = {
-	saved: "saved key",
-	environment: "environment variable",
-	runtime: "runtime key",
-	keyless: "keyless, rate-limited",
-	none: "no key",
+const sourceLabel = (source: NekoCredentialState["statuses"][string]["source"]): string => {
+	switch (source) {
+		case "saved":
+			return t("search.source.saved");
+		case "environment":
+			return t("search.source.environment");
+		case "runtime":
+			return t("search.source.runtime");
+		case "keyless":
+			return t("search.source.keyless");
+		default:
+			return t("search.source.none");
+	}
 };
 
 /** One row per provider; the current choice is marked and the key status explains what it needs. */
@@ -23,18 +31,16 @@ export function searchItems(
 	if (!settings) return [];
 	const source = (provider: SearchProviderId) => {
 		const status = credentials?.statuses[provider];
-		return status ? SOURCES[status.source] : "loading";
+		return status ? sourceLabel(status.source) : t("search.source.loading");
 	};
 	const deepseekMissing = credentials?.statuses.deepseek?.source === "none";
 	const descriptions: Record<SearchProviderId, string> = {
-		tavily: `Tavily search (${source("tavily")}). Default`,
-		deepseek: deepseekMissing
-			? "No DeepSeek key. Press k (or use /login) to set one before choosing it"
-			: `DeepSeek search and fetch with your DeepSeek API key (${source("deepseek")})`,
+		tavily: t("search.tavily", { source: source("tavily") }),
+		deepseek: deepseekMissing ? t("search.deepseekMissing") : t("search.deepseek", { source: source("deepseek") }),
 	};
 	return SEARCH_PROVIDERS.map((value) => ({
 		value,
-		label: `${NAMES[value]}${settings.selected === value ? " (Current)" : ""}`,
+		label: `${NAMES[value]}${settings.selected === value ? t("common.currentSuffix") : ""}`,
 		description: descriptions[value],
 	}));
 }
@@ -69,9 +75,14 @@ export function openSearchPanel(
 	const items = () => searchItems(client.searchSettings.state.value, client.credentials.state.value);
 	const refresh = () => panel.update(items());
 	const stops = [client.searchSettings.state.subscribe(refresh), client.credentials.state.subscribe(refresh)];
-	panel.emptyText = SEARCH_EMPTY;
+	panel.emptyText = searchEmpty();
 	if (openKey) {
-		panel.help = shortcutHints(["↑↓", "Select"], ["Enter", "Choose"], ["K", "Set key"], ["Esc", "Close"]);
+		panel.help = shortcutHints(
+			["↑↓", t("action.select")],
+			["Enter", t("action.choose")],
+			["K", t("action.setKey")],
+			["Esc", t("action.close")],
+		);
 		panel.listKey = (data, value) => {
 			if (data.toLowerCase() !== "k" || panel.search.getValue() !== "" || value === undefined) return false;
 			if (!(SEARCH_PROVIDERS as readonly string[]).includes(value)) return false;
@@ -81,11 +92,11 @@ export function openSearchPanel(
 		};
 	}
 	void panel.show(
-		"Web search",
+		t("search.title"),
 		async () => items(),
 		async (value) => {
 			await client.searchSettings.set({ provider: value as SearchProviderId });
-			notify(`Web search provider set to ${NAMES[value as SearchProviderId]}.`);
+			notify(t("search.set", { name: NAMES[value as SearchProviderId] }));
 		},
 	);
 	return () => {

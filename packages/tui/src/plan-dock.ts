@@ -16,6 +16,8 @@ import type { PlanClient } from "@neko-harness/gateway/client-session";
 import type { WirePlanDecision, WirePlanRecord, WirePlanView } from "@neko-harness/gateway/contract";
 import type { NoticeLevel } from "./components/notice.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { localizeError } from "./i18n/core-text.ts";
+import { getLanguage, type Language, t } from "./i18n/index.ts";
 import { plainLine, plainText } from "./plain-text.ts";
 import { getActiveThemeMode, getMarkdownTheme, style, theme } from "./theme/index.ts";
 
@@ -25,21 +27,33 @@ export const PLAN_MAX_ROWS = 16;
 export const PLAN_MIN_ROWS = 8;
 
 type Zone = "list" | "text";
-type State = { cursor: number; zone: Zone; input: Input; scroll: number };
+type State = { cursor: number; zone: Zone; input: Input; scroll: number; language: Language };
 type Note = { text: string; tone: "error" | "warn" };
 type Found = { record: WirePlanRecord; checking: boolean };
 type Info = { text: string; tone: "ok" | "warn" | "dim" };
 
-const STATUS_LABELS: Partial<Record<WirePlanRecord["status"], string>> = {
-	approved: "Approved",
-	revision_requested: "Changes requested",
-	superseded: "Superseded",
-	cancelled: "Cancelled",
+const statusLabel = (status: WirePlanRecord["status"]): string => {
+	switch (status) {
+		case "approved":
+			return t("plan.status.approved");
+		case "revision_requested":
+			return t("plan.status.changes");
+		case "superseded":
+			return t("plan.status.superseded");
+		case "cancelled":
+			return t("plan.status.cancelled");
+		default:
+			return "";
+	}
 };
 const APPROVE_ROW = 0;
 const REVISE_ROW = 1;
 const EXIT_ROW = 2;
-const ACTION_LABELS = ["Approve and execute", "Request changes", "Cancel and exit plan mode"] as const;
+const actionLabels = (): readonly string[] => [
+	t("plan.action.approve"),
+	t("plan.action.revise"),
+	t("plan.action.exit"),
+];
 
 export type PlanDockOptions = {
 	changed: () => void;
@@ -52,24 +66,27 @@ export type PlanDockOptions = {
 };
 
 const keyOf = (session: string, version: string) => `${session}\u0000${version}`;
+const newInput = () => new Input({ prompt: "✎ ", placeholder: t("plan.placeholder"), placeholderStyle: theme.dim });
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** What the saved record says happened to a plan, whoever decided. */
 export function planSettlementText(record: WirePlanRecord): Info {
 	switch (record.status) {
 		case "approved":
-			return { text: "Already approved: the assistant is executing the plan.", tone: "ok" };
+			return { text: t("plan.settled.approved"), tone: "ok" };
 		case "revision_requested":
 			return {
-				text: `Changes were already requested${record.feedback ? `: ${plainLine(record.feedback, 300)}` : "."}`,
+				text: record.feedback
+					? t("plan.settled.changesWith", { feedback: plainLine(record.feedback, 300) })
+					: t("plan.settled.changes"),
 				tone: "dim",
 			};
 		case "superseded":
-			return { text: "This plan was replaced by a newer one.", tone: "dim" };
+			return { text: t("plan.settled.superseded"), tone: "dim" };
 		case "cancelled":
-			return { text: "Cancelled: the run was stopped or the session closed.", tone: "warn" };
+			return { text: t("plan.settled.cancelled"), tone: "warn" };
 		default:
-			return { text: "Waiting for your decision", tone: "dim" };
+			return { text: t("plan.settled.waiting"), tone: "dim" };
 	}
 }
 
@@ -260,11 +277,23 @@ export class PlanDock implements Component, Focusable {
 		const state: State = {
 			cursor: APPROVE_ROW,
 			zone: "list",
-			input: new Input({ prompt: "✎ ", placeholder: "What should change?", placeholderStyle: theme.dim }),
+			input: newInput(),
 			scroll: 0,
+			language: getLanguage(),
 		};
 		this.#states.set(key, state);
 		return state;
+	}
+
+	/** The placeholder follows the interface language; the typed text is kept. */
+	#refreshInput(state: State): void {
+		if (state.language === getLanguage()) return;
+		const text = state.input.getValue();
+		const focused = state.input.focused;
+		state.input = newInput();
+		state.input.setValue(text);
+		state.input.focused = focused;
+		state.language = getLanguage();
 	}
 
 	#syncFocus(): void {
@@ -294,7 +323,7 @@ export class PlanDock implements Component, Focusable {
 		const { record, key, state } = form;
 		const client = this.#client;
 		if (!this.#online || !client) {
-			this.#note(key, "Gateway unavailable. Restart to reconnect; nothing is sent automatically.", "error");
+			this.#note(key, t("gateway.unavailableNoSend"), "error");
 			return;
 		}
 		const session = this.#session;
@@ -306,12 +335,7 @@ export class PlanDock implements Component, Focusable {
 			if (session !== this.#session) return;
 			if (sameDecision(decision, saved)) {
 				this.#states.delete(key);
-				this.#opts.notify(
-					decision.kind === "approve"
-						? "Plan approved. Executing."
-						: "Changes requested. The assistant will revise the plan.",
-					"info",
-				);
+				this.#opts.notify(decision.kind === "approve" ? t("plan.approved") : t("plan.changesRequested"), "info");
 				this.#shown = undefined;
 				this.closePanel();
 			} else {
@@ -334,7 +358,7 @@ export class PlanDock implements Component, Focusable {
 		const { key } = form;
 		const client = this.#client;
 		if (!this.#online || !client) {
-			this.#note(key, "Gateway unavailable. Restart to reconnect; nothing is sent automatically.", "error");
+			this.#note(key, t("gateway.unavailableNoSend"), "error");
 			return;
 		}
 		const session = this.#session;
@@ -345,7 +369,7 @@ export class PlanDock implements Component, Focusable {
 			await client.setMode("normal");
 			if (session !== this.#session) return;
 			this.#states.delete(key);
-			this.#opts.notify("Plan cancelled. Plan mode off.", "info");
+			this.#opts.notify(t("plan.cancelledExit"), "info");
 			this.#shown = undefined;
 			this.closePanel();
 		} catch (error) {
@@ -359,11 +383,15 @@ export class PlanDock implements Component, Focusable {
 	#revise(form: { key: string; state: State }): void {
 		const feedback = form.state.input.getValue();
 		if (feedback.trim() === "") {
-			this.#note(form.key, "Type what should change, then press Enter.", "warn");
+			this.#note(form.key, t("plan.typeChange"), "warn");
 			return;
 		}
 		if (feedback.length > PLAN_LIMITS.feedbackChars) {
-			this.#note(form.key, `Feedback is too long (${feedback.length}/${PLAN_LIMITS.feedbackChars}).`, "warn");
+			this.#note(
+				form.key,
+				t("plan.feedbackTooLong", { count: feedback.length, limit: PLAN_LIMITS.feedbackChars }),
+				"warn",
+			);
 			return;
 		}
 		void this.#decide({ kind: "revise", feedback });
@@ -470,7 +498,7 @@ export class PlanDock implements Component, Focusable {
 
 	/** Title in bold, steps and note as Markdown (control characters stripped first; nothing else is trusted more). */
 	#bodyLines(record: WirePlanRecord, width: number): string[] {
-		const cacheKey = `${keyOf(this.#session, record.version)}\u0000${width}\u0000${getActiveThemeMode()}`;
+		const cacheKey = `${keyOf(this.#session, record.version)}\u0000${width}\u0000${getActiveThemeMode()}\u0000${getLanguage()}`;
 		const cached = this.#bodyCache.get(cacheKey);
 		if (cached) return cached;
 		const lines: string[] = [];
@@ -489,7 +517,7 @@ export class PlanDock implements Component, Focusable {
 			});
 		});
 		if (record.note.trim() !== "") {
-			lines.push("", theme.dim("Note"));
+			lines.push("", theme.dim(t("plan.noteLabel")));
 			lines.push(...markdown(record.note, 0));
 		}
 		if (this.#bodyCache.size > 24) this.#bodyCache.clear();
@@ -503,32 +531,32 @@ export class PlanDock implements Component, Focusable {
 		const { record, checking } = found;
 		const total = Math.max(1, Math.floor(this.height) - 1);
 		if (this.height < PLAN_MIN_ROWS)
-			return [
-				theme.warning(` 📋 Assistant plan · enlarge the terminal to decide · ${shortcutHints(["Esc", "Close"])}`),
-			];
+			return [theme.warning(` 📋 ${t("plan.tooSmall", { hint: shortcutHints(["Esc", t("action.close")]) })}`)];
 		const key = keyOf(this.#session, record.version);
 		const state = this.#ensureState(record);
+		this.#refreshInput(state);
 		const form = !checking && record.status === "awaiting_approval";
 		const busy = this.#busy.has(key);
 		const note = this.#notes.get(key);
 		const aside = this.#opts.aside?.();
 		const statusText = busy
-			? theme.dim("Submitting…")
+			? theme.dim(t("common.submitting"))
 			: note
-				? (note.tone === "error" ? theme.error : theme.warning)(plainLine(note.text, 400))
+				? (note.tone === "error" ? theme.error : theme.warning)(plainLine(localizeError(note.text), 400))
 				: form && !this.#online
-					? theme.warning("Offline: decisions cannot be sent until the gateway is back.")
+					? theme.warning(t("plan.offline"))
 					: aside !== undefined
 						? theme.warning(plainLine(aside, 400))
 						: undefined;
 		const settled = checking
-			? ({ text: "Checking the result…", tone: "dim" } as Info)
+			? ({ text: t("question.checking"), tone: "dim" } as Info)
 			: form
 				? undefined
 				: planSettlementText(record);
 		const infoLines = settled ? wrapTextWithAnsi(plainText(settled.text), Math.max(1, width - 2)) : [];
 		const inputRow = form && (state.zone === "text" || state.input.getValue() !== "");
-		const actionRows = form ? ACTION_LABELS.length + (inputRow ? 1 : 0) : Math.min(2, infoLines.length);
+		const actions = actionLabels();
+		const actionRows = form ? actions.length + (inputRow ? 1 : 0) : Math.min(2, infoLines.length);
 		const fixed = 2 + (statusText !== undefined ? 1 : 0);
 		const bodyRows = Math.max(1, total - fixed - actionRows);
 
@@ -538,10 +566,10 @@ export class PlanDock implements Component, Focusable {
 		state.scroll = Math.min(state.scroll, maxScroll);
 		this.#bodyPage = Math.max(1, shownRows - 1);
 		const range = `${state.scroll + 1}-${state.scroll + shownRows}/${bodyLines.length}`;
-		const label = form || checking ? "Awaiting approval" : (STATUS_LABELS[record.status] ?? "");
-		const title = theme.warning(style.bold("📋 Assistant plan"));
+		const label = form || checking ? t("plan.status.awaiting") : statusLabel(record.status);
+		const title = theme.warning(style.bold(t("plan.title")));
 		const headers = [
-			[label, maxScroll > 0 ? `lines ${range}` : ""],
+			[label, maxScroll > 0 ? t("question.lines", { range }) : ""],
 			[label, maxScroll > 0 ? range : ""],
 			["", maxScroll > 0 ? range : ""],
 			["", ""],
@@ -559,7 +587,7 @@ export class PlanDock implements Component, Focusable {
 		for (const line of bodyLines.slice(state.scroll, state.scroll + shownRows)) rows.push(`${theme.dim("│ ")}${line}`);
 
 		if (form) {
-			for (const [index, text] of ACTION_LABELS.entries()) {
+			for (const [index, text] of actions.entries()) {
 				this.#rows.set(rows.length, index);
 				rows.push(this.#actionRow(state, index, text, width));
 			}
@@ -585,35 +613,31 @@ export class PlanDock implements Component, Focusable {
 
 	#hints(state: State | undefined, scrollable: boolean, width: number): string {
 		type Hint = readonly [string, string];
-		const close: Hint = ["Esc", "Close"];
-		const scrollHint: Hint[] = scrollable ? [["PgUp/PgDn", "Scroll"]] : [];
+		const close: Hint = ["Esc", t("action.close")];
+		const scrollHint: Hint[] = scrollable ? [["PgUp/PgDn", t("action.scroll")]] : [];
 		const newer = this.#view?.current;
 		let candidates: Hint[][];
 		if (state) {
+			const choose: Hint = ["Enter", t("action.choose")];
+			const approve: Hint = ["A", t("action.approve")];
+			const changes: Hint = ["R", t("action.changes")];
+			const exit = (label: string): Hint => ["X", label];
 			candidates =
 				state.zone === "text"
 					? [
-							[["Enter", "Send"], ["Tab", "Options"], ...scrollHint, close],
-							[["Enter", "Send"], close],
+							[["Enter", t("action.send")], ["Tab", t("action.options")], ...scrollHint, close],
+							[["Enter", t("action.send")], close],
 						]
 					: [
-							[
-								["↑↓", "Move"],
-								["Enter", "Choose"],
-								["A", "Approve"],
-								["R", "Changes"],
-								["X", "Exit plan"],
-								...scrollHint,
-								close,
-							],
-							[["Enter", "Choose"], ["A", "Approve"], ["R", "Changes"], ["X", "Exit plan"], close],
-							[["Enter", "Choose"], ["A", "Approve"], ["R", "Changes"], ["X", "Exit"], close],
-							[["Enter", "Choose"], close],
+							[["↑↓", t("action.move")], choose, approve, changes, exit(t("action.exitPlan")), ...scrollHint, close],
+							[choose, approve, changes, exit(t("action.exitPlan")), close],
+							[choose, approve, changes, exit(t("action.exit")), close],
+							[choose, close],
 						];
 		} else {
 			const enter: Hint[] =
 				newer?.status === "awaiting_approval" && newer.version !== this.#shown?.version
-					? [["Enter", "Newest plan"]]
+					? [["Enter", t("action.newestPlan")]]
 					: [];
 			candidates = [[...enter, ...scrollHint, close], [close]];
 		}

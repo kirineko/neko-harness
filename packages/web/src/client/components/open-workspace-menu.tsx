@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../lib/i18n/index.ts";
+import { localizeServerText } from "../lib/i18n/server-text.ts";
 import {
 	chooseTarget,
 	fetchOpenSession,
@@ -17,6 +19,7 @@ import { Icon, Popover } from "./primitives";
  * 入口只在本机访问时出现（/api/local/session 非 2xx 即隐藏）；失败只出页内提示，不影响聊天与草稿。
  */
 export function OpenWorkspaceMenu({ ready }: { ready: boolean }) {
+	const t = useT();
 	const { workspaceRoot, currentSessionId, sessions, view } = useNekoState();
 	const [session, setSession] = useState<OpenSession | null>(null);
 	const [stored, setStored] = useState(() => readStoredTarget());
@@ -40,14 +43,15 @@ export function OpenWorkspaceMenu({ ready }: { ready: boolean }) {
 	const path = view?.cwd ?? current?.workspaceRoot ?? workspaceRoot;
 	const target = chooseTarget(session.targets, stored);
 	const enabled = ready && currentSessionId !== null && path !== "" && target !== undefined && !busy;
-	const mainLabel = target === undefined ? "打开工作区" : `用 ${target.label} 打开`;
+	const mainLabel =
+		target === undefined ? t("open.title") : t("open.withTarget", { target: localizeServerText(target.label, t) });
 	const disabledReason =
 		target === undefined
-			? "本机没有可用的打开方式"
+			? t("open.noTargets")
 			: currentSessionId === null
-				? "请先选择会话"
+				? t("open.pickSession")
 				: !ready
-					? "连接未就绪"
+					? t("open.notReady")
 					: undefined;
 
 	const run = async (id: OpenTargetId): Promise<void> => {
@@ -62,7 +66,7 @@ export function OpenWorkspaceMenu({ ready }: { ready: boolean }) {
 		} catch (error) {
 			storeActions.notice({
 				level: "error",
-				text: `打开失败：${error instanceof Error ? error.message : String(error)}`,
+				text: t("open.failed", { error: error instanceof Error ? error.message : String(error) }),
 			});
 			// 本机环境可能已变（如 VS Code 被卸载）：刷新可用目标。
 			void fetchOpenSession().then((next) => {
@@ -92,7 +96,11 @@ export function OpenWorkspaceMenu({ ready }: { ready: boolean }) {
 					type="button"
 					className="icon-btn open-main"
 					aria-label={mainLabel}
-					title={enabled || busy ? mainLabel : `${mainLabel}（${disabledReason ?? "不可用"}）`}
+					title={
+						enabled || busy
+							? mainLabel
+							: t("open.disabledTitle", { label: mainLabel, reason: disabledReason ?? t("open.unavailable") })
+					}
 					disabled={!enabled}
 					onClick={() => target !== undefined && void run(target.id)}
 				>
@@ -101,8 +109,8 @@ export function OpenWorkspaceMenu({ ready }: { ready: boolean }) {
 				<button
 					type="button"
 					className="icon-btn open-more"
-					aria-label="选择打开方式"
-					title="选择打开方式"
+					aria-label={t("open.choose")}
+					title={t("open.choose")}
 					aria-haspopup="dialog"
 					aria-expanded={anchor !== null}
 					disabled={!ready || currentSessionId === null || busy}
@@ -112,22 +120,22 @@ export function OpenWorkspaceMenu({ ready }: { ready: boolean }) {
 				</button>
 			</span>
 			{anchor && (
-				<Popover anchor={anchor} label="打开工作区" onClose={() => setAnchor(null)}>
-					<div className="section-label">打开工作区</div>
+				<Popover anchor={anchor} label={t("open.title")} onClose={() => setAnchor(null)}>
+					<div className="section-label">{t("open.title")}</div>
 					{session.targets.map((item) => (
 						<button
 							type="button"
 							key={item.id}
 							className="chrome-row"
 							disabled={!item.available}
-							title={item.available ? undefined : item.reason}
+							title={item.available || item.reason === undefined ? undefined : localizeServerText(item.reason, t)}
 							onClick={() => void run(item.id)}
 						>
 							<OpenTargetIcon id={item.id} label={item.label} />
 							<span className="min-w-0 flex-1">
-								<span className="block truncate">{item.label}</span>
+								<span className="block truncate">{localizeServerText(item.label, t)}</span>
 								{!item.available && item.reason !== undefined && (
-									<span className="block truncate text-xs text-ink-500">{item.reason}</span>
+									<span className="block truncate text-xs text-ink-500">{localizeServerText(item.reason, t)}</span>
 								)}
 							</span>
 						</button>

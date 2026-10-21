@@ -1,4 +1,5 @@
 import 'package:neko_mobile/features/questions/question_draft.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 与网关 `PLAN_LIMITS` 一致；字符数按 UTF-16 码元，即 Dart 的 [String.length]。
 class PlanLimits {
@@ -35,10 +36,11 @@ class RevisePlan extends PlanDecision {
 }
 
 /// 修改反馈的校验；通过返回 null。规则与网关一致：1..2000 个码元，且不能全空白。
-String? feedbackProblem(String feedback) {
-  if (isBlankText(feedback)) return '请填写修改意见。';
+UiText? feedbackProblem(String feedback) {
+  if (isBlankText(feedback)) return (l10n) => l10n.planProblemEmpty;
   if (feedback.length > PlanLimits.feedbackChars) {
-    return '修改意见过长（${feedback.length}/${PlanLimits.feedbackChars}，按 UTF-16 码元计）。';
+    final length = feedback.length;
+    return (l10n) => l10n.planProblemTooLong(length, PlanLimits.feedbackChars);
   }
   return null;
 }

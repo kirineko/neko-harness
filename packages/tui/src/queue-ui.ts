@@ -1,16 +1,18 @@
 import { type Component, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { WireQueuedInput, WireSteerResult, WireWithdrawResult } from "@neko-harness/gateway/contract";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { t } from "./i18n/index.ts";
 import { theme } from "./theme/index.ts";
 
 /** Item rows above the editor; one more row carries the key hint, so the block is at most `QUEUE_ROWS + 1` lines. */
 export const QUEUE_ROWS = 2;
 export const QUEUE_BLOCK_LINES = QUEUE_ROWS + 1;
 
-const modeLabel = (mode: WireQueuedInput["mode"]) => (mode === "steer" ? "Steer" : "Queued");
+const modeLabel = (mode: WireQueuedInput["mode"]) => (mode === "steer" ? t("queue.steer") : t("queue.queued"));
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 const content = (item: WireQueuedInput) =>
-	oneLine(item.preview) || (item.images > 0 ? `[${item.images} image${item.images > 1 ? "s" : ""}]` : "");
+	oneLine(item.preview) ||
+	(item.images > 0 ? t(item.images > 1 ? "queue.imagesMany" : "queue.imagesOne", { count: item.images }) : "");
 
 /**
  * Messages accepted while the run is busy and not yet in the transcript. The newest ones sit next to the editor;
@@ -61,12 +63,12 @@ export class QueueRow implements Component {
 			const text = `${modeLabel(item.mode)} · ${content(item)}`;
 			return truncateToWidth(picked ? ` ${theme.accent(`› ${text}`)}` : `   ${theme.muted(text)}`, width);
 		});
-		const earlier = start > 0 ? `${start} earlier · ` : "";
-		const later = end < total ? `${total - end} newer · ` : "";
+		const earlier = start > 0 ? t("queue.earlier", { count: start }) : "";
+		const later = end < total ? t("queue.newer", { count: total - end }) : "";
 		const hint =
 			this.#selected === undefined
-				? shortcutHints(["Alt+↑", "Select queued"])
-				: shortcutHints(["Enter", "Steer"], ["Esc", "Withdraw"], ["↑/↓", "Move"]);
+				? shortcutHints(["Alt+↑", t("action.selectQueued")])
+				: shortcutHints(["Enter", t("queue.steer")], ["Esc", t("action.withdraw")], ["↑/↓", t("action.move")]);
 		rows.push(truncateToWidth(theme.dim(` ${earlier}${later}${hint}`), width));
 		return rows;
 	}
@@ -98,11 +100,10 @@ export function steerNotice(outcome: { result: WireSteerResult["result"] }): {
 	message: string;
 	level: "info" | "warning";
 } {
-	if (outcome.result === "steered") return { message: "Message will steer the current run.", level: "info" };
-	if (outcome.result === "withdrawn")
-		return { message: "Could not steer; the message was withdrawn into the editor.", level: "warning" };
-	if (outcome.result === "unknown") return { message: "That message is no longer queued.", level: "warning" };
-	return { message: "That message was already sent and cannot be steered.", level: "warning" };
+	if (outcome.result === "steered") return { message: t("queue.steered"), level: "info" };
+	if (outcome.result === "withdrawn") return { message: t("queue.steerWithdrawn"), level: "warning" };
+	if (outcome.result === "unknown") return { message: t("queue.gone"), level: "warning" };
+	return { message: t("queue.steerSettled"), level: "warning" };
 }
 
 export function withdrawNotice(outcome: { result: WireWithdrawResult["result"]; images?: number | undefined }): {
@@ -111,8 +112,8 @@ export function withdrawNotice(outcome: { result: WireWithdrawResult["result"]; 
 } {
 	if (outcome.result === "withdrawn")
 		return outcome.images
-			? { message: "Message withdrawn into the editor. Images are not restored; attach them again.", level: "warning" }
-			: { message: "Message withdrawn into the editor.", level: "info" };
-	if (outcome.result === "unknown") return { message: "That message is no longer queued.", level: "warning" };
-	return { message: "That message was already sent and cannot be withdrawn.", level: "warning" };
+			? { message: t("queue.withdrawnImages"), level: "warning" }
+			: { message: t("queue.withdrawn"), level: "info" };
+	if (outcome.result === "unknown") return { message: t("queue.gone"), level: "warning" };
+	return { message: t("queue.withdrawSettled"), level: "warning" };
 }

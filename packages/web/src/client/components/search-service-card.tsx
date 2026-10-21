@@ -1,6 +1,7 @@
 import type { SearchProviderId } from "@neko-harness/core/search-providers";
 import { useRef, useState } from "react";
 import type { NekoCredentialState, NekoSearchSettingsState } from "../lib/contract";
+import { useT } from "../lib/i18n/index.ts";
 import { SEARCH_NAMES, searchOptions, searchWarning } from "../lib/search-settings";
 
 export function SearchServiceCard(props: {
@@ -10,6 +11,7 @@ export function SearchServiceCard(props: {
 	onSelect: (provider: SearchProviderId) => Promise<void>;
 }) {
 	const { settings, credentials, ready, onSelect } = props;
+	const t = useT();
 	const [busy, setBusy] = useState(false);
 	const pending = useRef(false);
 	const [message, setMessage] = useState("");
@@ -21,9 +23,9 @@ export function SearchServiceCard(props: {
 		setMessage("");
 		try {
 			await onSelect(provider);
-			setMessage(`已切换为${SEARCH_NAMES[provider]}，下次搜索生效`);
+			setMessage(t("search.switched", { name: SEARCH_NAMES[provider] }));
 		} catch {
-			setMessage("保存失败，请检查连接后重试。");
+			setMessage(t("search.saveFailed"));
 		} finally {
 			pending.current = false;
 			setBusy(false);
@@ -37,15 +39,15 @@ export function SearchServiceCard(props: {
 		>
 			<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
 				<h2 id="search-service" className="text-base font-bold text-ink-900">
-					搜索服务
+					{t("search.service")}
 				</h2>
 				<span className="rounded-full bg-tianyi-50 px-3 py-1 text-xs text-tianyi-800">
-					{settings ? `当前使用：${SEARCH_NAMES[settings.selected]}` : "读取中…"}
+					{settings ? t("search.current", { name: SEARCH_NAMES[settings.selected] }) : t("common.loading")}
 				</span>
 			</div>
-			<p className="mb-3 text-xs text-ink-500">选择助手联网搜索与读取网页使用的服务；保存后下一次调用生效。</p>
+			<p className="mb-3 text-xs text-ink-500">{t("search.intro")}</p>
 			<fieldset className="flex flex-col gap-2" disabled={disabled}>
-				<legend className="sr-only">搜索服务</legend>
+				<legend className="sr-only">{t("search.service")}</legend>
 				{searchOptions(settings, credentials).map((option) => (
 					<label
 						key={option.value}

@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { afterEach, expect, it } from "bun:test";
 import { getActiveThemeMode, setActiveTheme, theme } from "../src/theme/slots.ts";
 import { highlightCodeToAnsiLines, loadAllHighlightLanguages } from "../src/theme/syntax.ts";

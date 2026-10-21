@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:neko_mobile/core/api/models.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
@@ -45,7 +46,7 @@ class ApprovalBar extends StatelessWidget {
                 const SizedBox(width: NekoSpace.sm),
                 Expanded(
                   child: Text(
-                    '${approvals.length} 个命令等待审批',
+                    context.l10n.approvalBarCount(approvals.length),
                     style: TextStyle(color: tokens.text),
                   ),
                 ),
@@ -141,7 +142,8 @@ class _ApprovalListState extends State<_ApprovalList> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  approval.title ?? '子 agent #${approval.taskId}',
+                  approval.title ??
+                      context.l10n.approvalSubagentTitle(approval.taskId),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: NekoSpace.sm),
@@ -162,22 +164,24 @@ class _ApprovalListState extends State<_ApprovalList> {
                 ),
                 const SizedBox(height: NekoSpace.xs),
                 Text(
-                  '目录：${approval.cwd}',
+                  context.l10n.approvalCwd(approval.cwd),
                   style: context.small(tokens.textMuted),
                 ),
                 if (approval.timeoutSeconds != null)
                   Text(
-                    '超时：${approval.timeoutSeconds!.round()} 秒',
+                    context.l10n.approvalTimeout(
+                      approval.timeoutSeconds!.round(),
+                    ),
                     style: context.small(tokens.textMuted),
                   ),
                 const SizedBox(height: NekoSpace.sm),
                 if (result != null)
                   Text(
                     switch (result) {
-                      'allowed' => '已允许',
-                      'denied' => '已拒绝',
-                      'cancelled' => '任务已停止，命令未执行',
-                      _ => '仍在等待（可能已被其他端处理，请刷新）',
+                      'allowed' => context.l10n.approvalAllowed,
+                      'denied' => context.l10n.approvalDenied,
+                      'cancelled' => context.l10n.approvalCancelled,
+                      _ => context.l10n.approvalStillWaiting,
                     },
                     key: Key('approval-result-${approval.id}'),
                     style: TextStyle(color: tokens.textMuted),
@@ -192,7 +196,7 @@ class _ApprovalListState extends State<_ApprovalList> {
                             !widget.enabled || _busy.contains(approval.id)
                             ? null
                             : () => _decide(approval, false),
-                        child: const Text('拒绝'),
+                        child: Text(context.l10n.approvalDeny),
                       ),
                       const SizedBox(width: NekoSpace.sm),
                       FilledButton(
@@ -201,7 +205,7 @@ class _ApprovalListState extends State<_ApprovalList> {
                             !widget.enabled || _busy.contains(approval.id)
                             ? null
                             : () => _decide(approval, true),
-                        child: const Text('允许本次'),
+                        child: Text(context.l10n.approvalAllowOnce),
                       ),
                     ],
                   ),

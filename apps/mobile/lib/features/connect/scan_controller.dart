@@ -1,6 +1,8 @@
 import 'package:neko_mobile/core/pairing/pairing_models.dart';
 import 'package:neko_mobile/core/pairing/pairing_service.dart';
 import 'package:neko_mobile/core/pairing/pairing_text.dart';
+import 'package:neko_mobile/l10n/error_text.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 页面可展示的错误类别，用于区分提示文案。
 enum ScanFailureKind {
@@ -19,7 +21,9 @@ class ScanFailure {
   const ScanFailure(this.kind, this.message);
 
   final ScanFailureKind kind;
-  final String message;
+
+  /// 用户可见说明；显示时才按当前语言解析。
+  final UiText message;
 }
 
 sealed class ScanState {
@@ -110,7 +114,7 @@ class ScanController {
     switch (result) {
       case PairingTextOk():
         _set(ScanConfirm(result.target));
-      case PairingTextError(:final kind, :final message):
+      case PairingTextError(:final kind):
         final failureKind = switch (kind) {
           PairingTextErrorKind.invalid => ScanFailureKind.invalid,
           PairingTextErrorKind.expired => ScanFailureKind.expired,
@@ -120,7 +124,10 @@ class ScanController {
         _set(
           ScanCamera(
             cameraActive: current.cameraActive,
-            lastError: ScanFailure(failureKind, message),
+            lastError: ScanFailure(
+              failureKind,
+              (l10n) => pairingTextErrorText(l10n, result),
+            ),
           ),
         );
     }
@@ -165,7 +172,7 @@ class ScanController {
       // 存储、TLS 等非配对类异常：给出可重试的失败页，避免界面停在转圈。
       _set(
         ScanFailed(
-          const ScanFailure(ScanFailureKind.serverError, '配对失败，请重试'),
+          ScanFailure(ScanFailureKind.serverError, (l10n) => l10n.pairFailed),
           target,
         ),
       );
@@ -173,43 +180,17 @@ class ScanController {
   }
 
   ScanFailure _mapPairingError(PairingException e) {
-    return switch (e) {
-      InvalidPairingException() => ScanFailure(
-        ScanFailureKind.invalid,
-        e.message,
-      ),
-      WrongServerException() => ScanFailure(
-        ScanFailureKind.wrongServer,
-        '电脑标识不一致，请确认二维码来自目标电脑',
-      ),
-      CodeUsedException() => ScanFailure(
-        ScanFailureKind.codeUsed,
-        '配对码已被使用，请重新扫码',
-      ),
-      CodeExpiredException() => ScanFailure(
-        ScanFailureKind.expired,
-        '配对码已过期，请重新扫码',
-      ),
-      PayloadTooLargeException() => ScanFailure(
-        ScanFailureKind.serverError,
-        '电脑无法处理该请求',
-      ),
-      RateLimitedException() => ScanFailure(
-        ScanFailureKind.rateLimited,
-        '尝试过于频繁，请稍后再试',
-      ),
-      PairingResponseException() => ScanFailure(
-        ScanFailureKind.serverError,
-        e.message,
-      ),
-      PairingNetworkException() => ScanFailure(
-        ScanFailureKind.network,
-        e.message,
-      ),
-      PairingCertificateException() => const ScanFailure(
-        ScanFailureKind.certificate,
-        '电脑证书与配对指纹不符',
-      ),
+    final kind = switch (e) {
+      InvalidPairingException() => ScanFailureKind.invalid,
+      WrongServerException() => ScanFailureKind.wrongServer,
+      CodeUsedException() => ScanFailureKind.codeUsed,
+      CodeExpiredException() => ScanFailureKind.expired,
+      PayloadTooLargeException() => ScanFailureKind.serverError,
+      RateLimitedException() => ScanFailureKind.rateLimited,
+      PairingResponseException() => ScanFailureKind.serverError,
+      PairingNetworkException() => ScanFailureKind.network,
+      PairingCertificateException() => ScanFailureKind.certificate,
     };
+    return ScanFailure(kind, (l10n) => pairingErrorText(l10n, e));
   }
 }

@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { createShellNotifier, shellNoticeText } from "../src/shell-notice.ts";
 

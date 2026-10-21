@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { APPLICATION_PROTOCOL, type UpdateState } from "../../core/src/application-version.ts";

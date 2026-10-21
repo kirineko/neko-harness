@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it, spyOn } from "bun:test";
 import * as childProcess from "node:child_process";
 import { randomUUID } from "node:crypto";

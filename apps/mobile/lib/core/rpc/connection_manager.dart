@@ -361,5 +361,6 @@ class ConnectionManager {
 
 /// 必须在根部或测试中覆盖。
 final connectionManagerProvider = Provider<ConnectionManager>(
-  (ref) => throw UnimplementedError('connectionManagerProvider 未覆盖'),
+  (ref) =>
+      throw UnimplementedError('connectionManagerProvider is not overridden'),
 );

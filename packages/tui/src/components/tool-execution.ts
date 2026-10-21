@@ -1,6 +1,8 @@
 import { Box, Container, MouseRegion, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { ToolInteraction } from "@neko-harness/core";
 import type { PlanStatus } from "@neko-harness/core/interactions";
+import { localizeCoreText } from "../i18n/core-text.ts";
+import { getLanguage, t } from "../i18n/index.ts";
 import { plainLine, plainText } from "../plain-text.ts";
 import { getActiveThemeMode, theme } from "../theme/index.ts";
 import { languageForPath } from "../theme/syntax.ts";
@@ -101,6 +103,7 @@ function clipLines(text: string, maxLines: number): { visible: string; rest: num
  */
 export class ToolExecutionComponent extends Container {
 	#renderTheme = getActiveThemeMode();
+	#renderLanguage = getLanguage();
 	#state: ToolCardState;
 	#expanded = false;
 	#waiting = false;
@@ -120,8 +123,9 @@ export class ToolExecutionComponent extends Container {
 	}
 
 	override render(width: number): string[] {
-		if (this.#renderTheme !== getActiveThemeMode()) {
+		if (this.#renderTheme !== getActiveThemeMode() || this.#renderLanguage !== getLanguage()) {
 			this.#renderTheme = getActiveThemeMode();
+			this.#renderLanguage = getLanguage();
 			this.rebuild();
 		}
 
@@ -175,27 +179,30 @@ export class ToolExecutionComponent extends Container {
 	#statusLine(phase: Phase): string {
 		const interaction = this.#state.interaction;
 		if (interaction?.kind === "ask_user") {
-			if (interaction.status === "pending") return theme.warning("? Waiting for your answer");
+			if (interaction.status === "pending") return theme.warning(`? ${t("tool.waitingAnswer")}`);
 			if (interaction.status === "answered") {
 				const answer = answerSummary(interaction);
-				return theme.ok(`✓ Answered${answer ? `: ${answer}` : ""}`);
+				return theme.ok(`✓ ${answer ? t("tool.answeredWith", { answer }) : t("tool.answered")}`);
 			}
-			return interaction.status === "skipped" ? theme.muted("↷ Skipped") : theme.dim("✗ Cancelled");
+			return interaction.status === "skipped"
+				? theme.muted(`↷ ${t("tool.skipped")}`)
+				: theme.dim(`✗ ${t("tool.cancelled")}`);
 		}
 		if (interaction?.kind === "submit_plan") {
 			const status = this.#plan?.version === interaction.version ? this.#plan.status : undefined;
-			if (status === "awaiting_approval") return theme.warning("? Awaiting approval · /plan");
-			if (status === "approved") return theme.ok("✓ Approved");
-			if (status === "revision_requested") return theme.muted("↷ Changes requested");
-			if (status === "cancelled") return theme.dim("✗ Cancelled");
-			return theme.dim(status === "superseded" ? "Superseded" : "Plan submitted");
+			if (status === "awaiting_approval") return theme.warning(`? ${t("tool.planAwaiting")}`);
+			if (status === "approved") return theme.ok(`✓ ${t("tool.planApproved")}`);
+			if (status === "revision_requested") return theme.muted(`↷ ${t("tool.planChanges")}`);
+			if (status === "cancelled") return theme.dim(`✗ ${t("tool.cancelled")}`);
+			return theme.dim(status === "superseded" ? t("tool.planSuperseded") : t("tool.planSubmitted"));
 		}
-		if (interaction?.kind === "todo") return theme.ok(`✓ Todos ${interaction.completed}/${interaction.total}`);
-		if (this.#waiting && phase !== "done") return theme.warning("? Waiting for your answer");
+		if (interaction?.kind === "todo")
+			return theme.ok(`✓ ${t("tool.todos", { completed: interaction.completed, total: interaction.total })}`);
+		if (this.#waiting && phase !== "done") return theme.warning(`? ${t("tool.waitingAnswer")}`);
 		if (phase === "pending") return theme.dim("…");
-		if (phase === "running") return theme.accent(`${currentToolFrame()} Running...`);
+		if (phase === "running") return theme.accent(`${currentToolFrame()} ${t("tool.running")}`);
 		return this.#state.isError
-			? theme.error("✗ Failed")
+			? theme.error(`✗ ${t("tool.failed")}`)
 			: theme.ok(`✓${this.#state.durationMs !== null ? ` ${(this.#state.durationMs / 1000).toFixed(1)}s` : ""}`);
 	}
 
@@ -215,16 +222,16 @@ export class ToolExecutionComponent extends Container {
 			const detail = state.detail !== null && plain ? plainText(state.detail) : state.detail;
 			if (detail !== null && !(state.diff !== null && state.name === "write" && !state.diffTruncated)) {
 				const clipped = clipLines(detail, 20);
-				text += `\n${theme.dim("---- Arguments ----")}\n${clipped.visible}`;
-				if (clipped.rest > 0) text += `\n${theme.dim(`... ${clipped.rest} more lines`)}`;
+				text += `\n${theme.dim(t("tool.argumentsHeader"))}\n${clipped.visible}`;
+				if (clipped.rest > 0) text += `\n${theme.dim(t("tool.moreLines", { count: clipped.rest }))}`;
 			}
 			if (state.diff !== null) {
 				const clipped = clipLines(state.diff, DIFF_MAX_LINES);
 				const lang = languageForPath(diffTargetPath(state.name, state.summary, state.detail));
 				const format = state.name === "write" ? "write" : "edit";
-				text += `\n${theme.dim("---- Diff ----")}\n${highlightDiffLines(clipped.visible, lang, format).join("\n")}`;
-				if (state.diffTruncated) text += `\n${theme.dim("… Diff preview truncated (line or byte limit)")}`;
-				if (clipped.rest > 0) text += `\n${theme.dim(`… +${clipped.rest} more lines`)}`;
+				text += `\n${theme.dim(t("tool.diffHeader"))}\n${highlightDiffLines(clipped.visible, lang, format).join("\n")}`;
+				if (state.diffTruncated) text += `\n${theme.dim(t("tool.diffTruncated"))}`;
+				if (clipped.rest > 0) text += `\n${theme.dim(t("tool.diffMore", { count: clipped.rest }))}`;
 			}
 		}
 
@@ -232,13 +239,13 @@ export class ToolExecutionComponent extends Container {
 		const rawBody = state.phase === "running" ? state.output : state.result;
 		const body = rawBody !== null && plain ? plainText(rawBody) : rawBody;
 		if (!this.#expanded && body !== null && body !== "") {
-			text += theme.dim(`  +${body.split("\n").length} lines`);
+			text += theme.dim(`  ${t("tool.lines", { count: body.split("\n").length })}`);
 		}
 		if (this.#expanded && body !== null && body !== "") {
 			text += `\n${theme.toolOutput(body)}`;
 		}
 		if (state.note !== null) {
-			text += `\n${theme.error(state.note)}`;
+			text += `\n${theme.error(localizeCoreText(state.note))}`;
 		}
 
 		this.#text.setText(text);

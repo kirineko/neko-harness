@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import {
 	Container,
@@ -792,7 +793,7 @@ it("toggles plan mode with Shift+Tab, but not while the panel is open or complet
 });
 
 it("lists /plan in the completion commands and documents it in the help", () => {
-	const command = commands.find((c) => c.name === "plan");
+	const command = commands().find((c) => c.name === "plan");
 	expect(command?.description).toContain("plan mode");
 	const help = plain(helpLines("darwin"));
 	for (const expected of ["/plan", "Shift+Tab", "Approve", "Request changes", "replaces that plan"])
@@ -980,9 +981,9 @@ it("marks a session waiting for plan approval in the picker", () => {
 	];
 	const items = sessionPickerItems(sessions, "/w", "b", 10_000);
 	const byId = (id: string) => items.find((item) => item.value === id)!;
-	expect(byId("a").description).toContain("等待批准");
+	expect(byId("a").description).toContain("Awaiting approval");
 	expect(byId("a").description).not.toContain("Idle");
-	expect(byId("a").rightLabel).toContain("等待批准");
+	expect(byId("a").rightLabel).toContain("Awaiting approval");
 	expect(byId("b").description).toContain("Idle");
 	expect(byId("c").description).toContain("Idle");
 });

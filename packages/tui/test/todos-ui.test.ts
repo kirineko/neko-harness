@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { TODOS_UNSUPPORTED } from "@neko-harness/gateway/client-session";
@@ -7,7 +8,7 @@ import { PickerPanel } from "../src/components/picker.ts";
 import { helpLines } from "../src/help-ui.ts";
 import { commands } from "../src/labels.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
-import { showTodos, TODO_GLYPHS, TODOS_EMPTY, TodosDetail, todoProgressText } from "../src/todos-ui.ts";
+import { showTodos, TODO_GLYPHS, TodosDetail, todoProgressText, todosEmpty } from "../src/todos-ui.ts";
 
 setActiveTheme("light");
 
@@ -87,7 +88,7 @@ it("wraps a long item completely so every word can be reached by scrolling", () 
 });
 
 it("has an empty state, an unsupported notice and an offline marker", async () => {
-	expect(plain(new TodosDetail(() => list([])).lines(60, 10))).toBe(TODOS_EMPTY);
+	expect(plain(new TodosDetail(() => list([])).lines(60, 10))).toBe(todosEmpty());
 	expect(plain(new TodosDetail(() => undefined).lines(60, 10))).toContain("does not support todos");
 	const offline = plain(
 		new TodosDetail(
@@ -111,7 +112,7 @@ it("has an empty state, an unsupported notice and an offline marker", async () =
 
 	expect(showTodos(panel, () => list([]), { notify: (message) => notices.push(message) })).toBe(true);
 	expect(panel.open).toBe(true);
-	expect(plain(panel.render(60))).toContain(TODOS_EMPTY);
+	expect(plain(panel.render(60))).toContain(todosEmpty());
 	expect(notices).toHaveLength(1);
 });
 
@@ -168,7 +169,7 @@ it("offers a compact progress entry only for a non-empty list", () => {
 });
 
 it("is a documented command with its keys in the help", () => {
-	expect(commands.map((command) => command.name)).toContain("todos");
+	expect(commands().map((command) => command.name)).toContain("todos");
 	const text = plain(helpLines("darwin"));
 	expect(text).toContain("/todos");
 	expect(text).toContain("read-only");

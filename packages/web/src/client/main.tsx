@@ -3,10 +3,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { appearanceStore } from "./lib/appearance";
 import { startNekoApp } from "./lib/bootstrap";
+import { languageStore } from "./lib/language.ts";
 import { AboutPage } from "./pages/about-page";
 import { ChatPage } from "./pages/chat-page";
 import { SettingsAppearancePage } from "./pages/settings-appearance-page";
 import { SettingsContextPage } from "./pages/settings-context-page";
+import { SettingsLanguagePage } from "./pages/settings-language-page";
 import { SettingsMobilePage } from "./pages/settings-mobile-page";
 import { SettingsPage } from "./pages/settings-page";
 import { SettingsSearchPage } from "./pages/settings-search-page";
@@ -31,6 +33,11 @@ const settingsAppearanceRoute = createRoute({
 	path: "/settings/appearance",
 	component: SettingsAppearancePage,
 });
+const settingsLanguageRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/settings/language",
+	component: SettingsLanguagePage,
+});
 const settingsMobileRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/settings/mobile",
@@ -44,6 +51,7 @@ const routeTree = rootRoute.addChildren([
 	settingsSearchRoute,
 	settingsContextRoute,
 	settingsAppearanceRoute,
+	settingsLanguageRoute,
 	settingsMobileRoute,
 	skillsRoute,
 	aboutRoute,
@@ -58,6 +66,7 @@ declare module "@tanstack/react-router" {
 }
 
 appearanceStore().start();
+languageStore().start();
 startNekoApp();
 
 const container = document.getElementById("root");

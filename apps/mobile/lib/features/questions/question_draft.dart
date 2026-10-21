@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:neko_mobile/core/api/models.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 问答上限（与 `packages/core/src/interactions.ts` 的 `QUESTION_LIMITS` 一致）。
 /// 字符数一律按 UTF-16 码元，即 Dart 的 [String.length]，不用 rune 数。
@@ -102,26 +103,37 @@ AnswerResponse? draftResponse(QuestionRecord question, QuestionDraft draft) {
 }
 
 /// 草稿为何不能提交；可提交时为 null。规则与服务端 `draftProblem` 一致。
-String? draftProblem(QuestionRecord question, QuestionDraft draft) {
+UiText? draftProblem(QuestionRecord question, QuestionDraft draft) {
   final response = draftResponse(question, draft);
-  if (response == null) return '请选择选项，或填写文字。';
+  if (response == null) return (l10n) => l10n.questionProblemEmpty;
   final ids = draft.optionIds;
   if (ids.length > QuestionLimits.maxOptions) {
-    return '最多选择 ${QuestionLimits.maxOptions} 项。';
+    return (l10n) =>
+        l10n.questionProblemTooManyOptions(QuestionLimits.maxOptions);
   }
-  if (ids.toSet().length != ids.length) return '选项被重复选择。';
+  if (ids.toSet().length != ids.length) {
+    return (l10n) => l10n.questionProblemDuplicate;
+  }
   for (final id in ids) {
-    if (question.option(id) == null) return '选项已失效，请重新打开问题。';
+    if (question.option(id) == null) {
+      return (l10n) => l10n.questionProblemOptionGone;
+    }
   }
-  if (question.options.isEmpty && ids.isNotEmpty) return '此问题没有选项。';
-  if (!question.multiple && ids.length > 1) return '此问题只能选择一项。';
+  if (question.options.isEmpty && ids.isNotEmpty) {
+    return (l10n) => l10n.questionProblemNoOptions;
+  }
+  if (!question.multiple && ids.length > 1) {
+    return (l10n) => l10n.questionProblemSingleOnly;
+  }
   final text = response.text;
   if (text != null && text.length > QuestionLimits.textChars) {
-    return '文字过长（${text.length}/${QuestionLimits.textChars}，按 UTF-16 码元计）。';
+    final length = text.length;
+    return (l10n) =>
+        l10n.questionProblemTextTooLong(length, QuestionLimits.textChars);
   }
   if (utf8.encode(jsonEncode(response.toJson())).length >
       QuestionLimits.responseBytes) {
-    return '回答内容过大（上限 ${QuestionLimits.responseBytes} 字节），请精简文字。';
+    return (l10n) => l10n.questionProblemTooLarge(QuestionLimits.responseBytes);
   }
   return null;
 }

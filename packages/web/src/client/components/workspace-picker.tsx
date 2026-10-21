@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
 import type { NekoDirectoryPage } from "../lib/contract";
+import { useT } from "../lib/i18n/index.ts";
 import { pathCrumbs } from "../lib/path-crumbs";
 import { folderName, Icon, Modal } from "./primitives";
 
 export function WorkspacePicker({ initialPath, onClose }: { initialPath: string; onClose: () => void }) {
+	const t = useT();
 	const [path, setPath] = useState(initialPath);
 	const [input, setInput] = useState(initialPath);
 	const [query, setQuery] = useState("");
@@ -79,10 +81,10 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 	};
 	const { root, rootLabel, crumbs } = pathCrumbs(page?.path ?? path);
 	return (
-		<Modal title="添加工作区" onClose={onClose} locked={adding}>
+		<Modal title={t("sessions.addWorkspace")} onClose={onClose} locked={adding}>
 			<div className="picker-controls">
-				<p className="text-ink-500">选择 Harness 所在电脑上的文件夹</p>
-				<nav className="breadcrumbs" aria-label="目录路径">
+				<p className="text-ink-500">{t("picker2.hint")}</p>
+				<nav className="breadcrumbs" aria-label={t("picker2.pathNav")}>
 					<button type="button" disabled={adding} onClick={() => navigate(root)}>
 						{rootLabel}
 					</button>
@@ -101,32 +103,32 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 				>
 					<input
 						ref={pathInput}
-						aria-label="完整目录路径"
+						aria-label={t("picker2.fullPath")}
 						value={input}
 						disabled={adding}
 						onChange={(e) => setInput(e.target.value)}
 					/>
 					<button className="btn-outline" type="submit" disabled={adding}>
-						前往
+						{t("picker2.go")}
 					</button>
 				</form>
 				<div className="filter-row">
 					<input
-						aria-label="筛选文件夹"
-						placeholder="筛选文件夹…"
+						aria-label={t("picker2.filter")}
+						placeholder={t("picker2.filterPlaceholder")}
 						value={query}
 						disabled={adding}
 						onChange={(e) => setQuery(e.target.value)}
 					/>
 					<label>
 						<input type="checkbox" checked={hidden} disabled={adding} onChange={(e) => setHidden(e.target.checked)} />
-						隐藏目录
+						{t("picker2.hidden")}
 					</label>
 				</div>
 			</div>
 			<fieldset
 				className="folder-list"
-				aria-label="文件夹列表"
+				aria-label={t("picker2.list")}
 				aria-busy={loading}
 				onKeyDown={(event) => {
 					if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -140,7 +142,7 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 					<div role="alert" className="error-text">
 						{error}
 						<button type="button" className="btn-outline" disabled={adding} onClick={() => setRetry((r) => r + 1)}>
-							重试
+							{t("common.retry")}
 						</button>
 					</div>
 				)}
@@ -152,7 +154,7 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 						onClick={() => navigate(page.parent!)}
 					>
 						<Icon name="up" />
-						上级目录
+						{t("picker2.parent")}
 					</button>
 				)}
 				{page?.entries.map((entry) => (
@@ -166,14 +168,14 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 					>
 						<Icon name="folder" />
 						<span className="truncate min-w-0">{entry.name}</span>
-						{entry.error && <span className="text-ink-500">不可访问</span>}
+						{entry.error && <span className="text-ink-500">{t("picker2.inaccessible")}</span>}
 					</button>
 				))}
-				{loading && <output className="empty-text">正在读取目录…</output>}
-				{!loading && page?.entries.length === 0 && <p className="empty-text">没有匹配的子文件夹，可选择当前目录</p>}
+				{loading && <output className="empty-text">{t("picker2.loading")}</output>}
+				{!loading && page?.entries.length === 0 && <p className="empty-text">{t("picker2.noMatch")}</p>}
 				{page?.next && (
 					<button type="button" className="btn-outline" disabled={loading || adding} onClick={() => void more()}>
-						加载更多
+						{t("picker2.more")}
 					</button>
 				)}
 			</fieldset>
@@ -184,7 +186,7 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 				</div>
 				<div className="actions">
 					<button type="button" className="btn-outline" disabled={adding} onClick={onClose}>
-						取消
+						{t("common.cancel")}
 					</button>
 					<button
 						type="button"
@@ -192,7 +194,7 @@ export function WorkspacePicker({ initialPath, onClose }: { initialPath: string;
 						disabled={!page || loading || adding || !!error}
 						onClick={() => void add()}
 					>
-						{adding ? "正在添加…" : "选择文件夹"}
+						{adding ? t("picker2.adding") : t("picker2.choose")}
 					</button>
 				</div>
 			</div>

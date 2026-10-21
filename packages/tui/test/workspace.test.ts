@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import type { NekoTuiGateway } from "../src/gateway.ts";
 import { initialSessionId } from "../src/tui.ts";

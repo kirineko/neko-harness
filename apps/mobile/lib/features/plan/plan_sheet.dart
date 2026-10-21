@@ -2,17 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/features/chat/interactions_controller.dart';
 import 'package:neko_mobile/features/plan/plan_decision.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 import 'package:neko_mobile/ui/widgets/markdown_view.dart';
 
-String planStatusLabel(PlanStatus status) => switch (status) {
-  PlanStatus.awaitingApproval => '等待批准',
-  PlanStatus.approved => '已批准',
-  PlanStatus.revisionRequested => '已要求修改',
-  PlanStatus.superseded => '已被取代',
-  PlanStatus.cancelled => '已取消',
-};
+String planStatusLabel(AppLocalizations l10n, PlanStatus status) =>
+    switch (status) {
+      PlanStatus.awaitingApproval => l10n.planStatusAwaiting,
+      PlanStatus.approved => l10n.planStatusApproved,
+      PlanStatus.revisionRequested => l10n.planStatusRevisionRequested,
+      PlanStatus.superseded => l10n.planStatusSuperseded,
+      PlanStatus.cancelled => l10n.planStatusCancelled,
+    };
 
 /// 输入区上方的“等待批准”条：有待批准计划（或本端刚做出的决定）时出现，打开计划 sheet。
 /// 电脑不声明 `plan` 能力、或没有待批准计划时不占位。
@@ -26,12 +28,14 @@ class PlanBar extends StatelessWidget {
     final plan = interactions.planShown;
     if (plan == null) return const SizedBox.shrink();
     final tokens = NekoTokens.of(context);
-    final label = plan.awaiting ? '等待批准' : planStatusLabel(plan.status);
+    final label = plan.awaiting
+        ? context.l10n.planStatusAwaiting
+        : planStatusLabel(context.l10n, plan.status);
     return Material(
       color: tokens.primary.withValues(alpha: 0.1),
       child: Semantics(
         button: true,
-        label: '$label：${plan.title}',
+        label: context.l10n.planBarSemantics(label, plan.title),
         excludeSemantics: true,
         child: InkWell(
           key: const Key('plan-bar'),
@@ -151,7 +155,7 @@ class _Header extends StatelessWidget {
             child: Semantics(
               header: true,
               child: Text(
-                '助手提交的计划',
+                context.l10n.planHeader,
                 key: const Key('plan-label'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -160,7 +164,7 @@ class _Header extends StatelessWidget {
           const Spacer(),
           IconButton(
             key: const Key('plan-close'),
-            tooltip: '关闭（计划仍在等待批准）',
+            tooltip: context.l10n.planCloseTooltip,
             constraints: const BoxConstraints(
               minWidth: NekoSpace.touch,
               minHeight: NekoSpace.touch,
@@ -186,12 +190,12 @@ class _Gone extends StatelessWidget {
         key: const Key('plan-gone'),
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text('没有待批准的计划。', style: context.small(tokens.textMuted)),
+          Text(context.l10n.planGone, style: context.small(tokens.textMuted)),
           const SizedBox(height: NekoSpace.sm),
           FilledButton(
             key: const Key('plan-done'),
             onPressed: () => Navigator.of(context).maybePop(),
-            child: const Text('关闭'),
+            child: Text(context.l10n.commonClose),
           ),
         ],
       ),
@@ -307,7 +311,7 @@ class _PlanEditorState extends State<_PlanEditor> {
                 if (!connected)
                   _Notice(
                     key: const Key('plan-offline'),
-                    text: '当前离线：暂时无法提交，恢复连接后会重新读取计划状态，不会自动发送决定。',
+                    text: context.l10n.planOffline,
                     color: tokens.warning,
                   ),
                 _PlanBody(plan: widget.plan),
@@ -321,8 +325,8 @@ class _PlanEditorState extends State<_PlanEditor> {
                     maxLines: 6,
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(
-                      labelText: '修改意见',
+                    decoration: InputDecoration(
+                      labelText: context.l10n.planFeedbackLabel,
                       alignLabelWithHint: true,
                     ),
                   ),
@@ -334,7 +338,7 @@ class _PlanEditorState extends State<_PlanEditor> {
                         Expanded(
                           child: overLimit && problem != null
                               ? Text(
-                                  problem,
+                                  problem(context.l10n),
                                   key: const Key('plan-problem'),
                                   style: context.small(tokens.danger),
                                 )
@@ -356,7 +360,7 @@ class _PlanEditorState extends State<_PlanEditor> {
                     padding: const EdgeInsets.only(top: NekoSpace.sm),
                     child: _Notice(
                       key: const Key('plan-error'),
-                      text: error,
+                      text: error(context.l10n),
                       color: tokens.danger,
                     ),
                   ),
@@ -381,7 +385,7 @@ class _PlanEditorState extends State<_PlanEditor> {
                         onPressed: submitting
                             ? null
                             : () => setState(() => _revising = false),
-                        child: const Text('返回'),
+                        child: Text(context.l10n.commonBack),
                       ),
                     ),
                     const SizedBox(width: NekoSpace.sm),
@@ -395,7 +399,10 @@ class _PlanEditorState extends State<_PlanEditor> {
                                 RevisePlan(text),
                               )
                             : null,
-                        child: _Label(submitting, '提交修改意见'),
+                        child: _Label(
+                          submitting,
+                          context.l10n.planSubmitFeedback,
+                        ),
                       ),
                     ),
                   ],
@@ -412,7 +419,7 @@ class _PlanEditorState extends State<_PlanEditor> {
                               const ApprovePlan(),
                             )
                           : null,
-                      child: _Label(submitting, '批准并执行'),
+                      child: _Label(submitting, context.l10n.planApprove),
                     ),
                     const SizedBox(height: NekoSpace.sm),
                     Row(
@@ -424,7 +431,7 @@ class _PlanEditorState extends State<_PlanEditor> {
                             onPressed: enabled
                                 ? () => setState(() => _revising = true)
                                 : null,
-                            child: const Text('要求修改'),
+                            child: Text(context.l10n.planRevise),
                           ),
                         ),
                         const SizedBox(width: NekoSpace.sm),
@@ -447,8 +454,8 @@ class _PlanEditorState extends State<_PlanEditor> {
                               ),
                             ),
                             onPressed: enabled ? interactions.exitPlan : null,
-                            child: const Text(
-                              '取消并退出计划模式',
+                            child: Text(
+                              context.l10n.planExit,
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -477,15 +484,15 @@ class _Label extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!submitting) return Text(text);
-    return const Row(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        SizedBox.square(
+        const SizedBox.square(
           dimension: 16,
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
-        SizedBox(width: NekoSpace.sm),
-        Text('提交中…'),
+        const SizedBox(width: NekoSpace.sm),
+        Text(context.l10n.commonSubmitting),
       ],
     );
   }
@@ -503,11 +510,15 @@ class _PlanFinal extends StatelessWidget {
     final tokens = NekoTokens.of(context);
     final note = interactions.planNote;
     final feedback = plan.feedback;
+    final l10n = context.l10n;
     final (Color color, String detail) = switch (plan.status) {
-      PlanStatus.approved => (tokens.success, '计划已批准，会话在电脑上开始执行。'),
-      PlanStatus.revisionRequested => (tokens.warning, '已要求修改，助手会按意见重新提交计划。'),
-      PlanStatus.superseded => (tokens.textMuted, '收到了新的输入，这份计划不再需要批准。'),
-      PlanStatus.cancelled => (tokens.danger, '运行已停止或会话已归档，计划不再需要批准。'),
+      PlanStatus.approved => (tokens.success, l10n.planDetailApproved),
+      PlanStatus.revisionRequested => (
+        tokens.warning,
+        l10n.planDetailRevisionRequested,
+      ),
+      PlanStatus.superseded => (tokens.textMuted, l10n.planDetailSuperseded),
+      PlanStatus.cancelled => (tokens.danger, l10n.planDetailCancelled),
       PlanStatus.awaitingApproval => (tokens.textMuted, ''),
     };
     return Column(
@@ -525,13 +536,13 @@ class _PlanFinal extends StatelessWidget {
                 if (note != null)
                   _Notice(
                     key: const Key('plan-note-settled'),
-                    text: note,
+                    text: note(l10n),
                     color: tokens.warning,
                   ),
                 _PlanBody(plan: plan),
                 const SizedBox(height: NekoSpace.md),
                 Text(
-                  planStatusLabel(plan.status),
+                  planStatusLabel(l10n, plan.status),
                   key: const Key('plan-final-status'),
                   style: Theme.of(context).textTheme.titleSmall
                       ?.copyWith(color: color),
@@ -546,7 +557,7 @@ class _PlanFinal extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: NekoSpace.xs),
                     child: Text(
-                      '修改意见：$feedback',
+                      l10n.planFinalFeedback(feedback),
                       key: const Key('plan-final-feedback'),
                     ),
                   ),
@@ -571,7 +582,7 @@ class _PlanFinal extends StatelessWidget {
                   interactions.dismissPlan();
                   Navigator.of(context).maybePop();
                 },
-                child: const Text('关闭'),
+                child: Text(l10n.commonClose),
               ),
             ),
           ),

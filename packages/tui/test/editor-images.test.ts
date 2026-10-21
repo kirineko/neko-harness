@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { type Terminal, TuiAltScreen } from "@earendil-works/pi-tui";
 import { BoundedEditor } from "../src/components/editor.ts";

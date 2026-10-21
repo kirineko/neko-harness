@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:neko_mobile/core/pairing/pairing_text.dart';
 import 'package:neko_mobile/features/connect/scan_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
@@ -59,7 +60,9 @@ final scannerBuilderProvider = Provider<ScannerBuilder>(
 );
 
 final scanControllerProvider = Provider<ScanController>((ref) {
-  throw UnimplementedError('scanControllerProvider 必须在应用根部或测试中覆盖');
+  throw UnimplementedError(
+    'scanControllerProvider must be overridden at the app root or in tests',
+  );
 });
 
 class ScanPage extends ConsumerStatefulWidget {
@@ -114,7 +117,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
     final state = _controller.state;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('连接电脑')),
+      appBar: AppBar(title: Text(context.l10n.scanTitle)),
       body: switch (state) {
         ScanCamera() => _buildCamera(_controller, scannerBuilder, state),
         ScanConfirm() => _buildConfirm(state.target),
@@ -146,7 +149,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
             padding: const EdgeInsets.all(NekoSpace.md),
             child: Column(
               children: <Widget>[
-                const Text('相机不可用或权限被拒绝，可在系统设置中开启相机权限。'),
+                Text(context.l10n.scanCameraUnavailable),
                 const SizedBox(height: NekoSpace.sm),
                 Wrap(
                   spacing: 8,
@@ -156,12 +159,12 @@ class _ScanPageState extends ConsumerState<ScanPage> {
                     FilledButton.tonal(
                       key: const Key('open-settings-button'),
                       onPressed: openAppDetailsSettings,
-                      child: const Text('打开应用设置'),
+                      child: Text(context.l10n.scanOpenSettings),
                     ),
                     FilledButton.tonal(
                       key: const Key('retry-camera-button'),
                       onPressed: controller.retryCamera,
-                      child: const Text('重试相机'),
+                      child: Text(context.l10n.scanRetryCamera),
                     ),
                   ],
                 ),
@@ -172,7 +175,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: NekoSpace.md),
             child: Text(
-              state.lastError!.message,
+              state.lastError!.message(context.l10n),
               key: const Key('scan-error-text'),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
@@ -191,7 +194,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            '连接 ${target.name}？',
+            context.l10n.scanConfirmTitle(target.name),
             key: const Key('confirm-name'),
             style: Theme.of(context).textTheme.headlineSmall,
           ),
@@ -201,20 +204,20 @@ class _ScanPageState extends ConsumerState<ScanPage> {
             key: const Key('confirm-endpoint'),
           ),
           Text(
-            '证书指纹 ${target.fingerprint.substring(0, 12)}…',
+            context.l10n.scanFingerprint(target.fingerprint.substring(0, 12)),
             key: const Key('confirm-fingerprint'),
           ),
           const SizedBox(height: NekoSpace.lg),
           FilledButton(
             key: const Key('confirm-pair-button'),
             onPressed: controller.confirm,
-            child: const Text('确认连接'),
+            child: Text(context.l10n.scanConfirmPair),
           ),
           const SizedBox(height: NekoSpace.sm),
           OutlinedButton(
             key: const Key('confirm-back-button'),
             onPressed: controller.backToCamera,
-            child: const Text('返回'),
+            child: Text(context.l10n.commonBack),
           ),
         ],
       ),
@@ -229,7 +232,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            failure.message,
+            failure.message(context.l10n),
             key: const Key('failed-message'),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
@@ -237,7 +240,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
           FilledButton.tonal(
             key: const Key('failed-back-button'),
             onPressed: ref.read(scanControllerProvider).backToCamera,
-            child: const Text('返回'),
+            child: Text(context.l10n.commonBack),
           ),
         ],
       ),
@@ -261,9 +264,9 @@ class _PastePanel extends ConsumerWidget {
             child: TextField(
               key: const Key('paste-field'),
               controller: pasteController,
-              decoration: const InputDecoration(
-                labelText: '粘贴配对文本',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.l10n.scanPasteLabel,
+                border: const OutlineInputBorder(),
               ),
               onSubmitted: (_) => _submit(),
             ),
@@ -272,7 +275,7 @@ class _PastePanel extends ConsumerWidget {
           FilledButton(
             key: const Key('paste-submit-button'),
             onPressed: _submit,
-            child: const Text('配对'),
+            child: Text(context.l10n.scanPairButton),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:neko_mobile/core/pairing/pairing_models.dart';
 import 'package:neko_mobile/core/rpc/connection_manager.dart';
 import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/computers/computers_page.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
@@ -29,13 +30,13 @@ class NekoDrawer extends ConsumerWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: <Widget>[
-                  _SectionTitle('电脑', tokens),
+                  _SectionTitle(context.l10n.drawerSectionComputers, tokens),
                   _SavedComputers(manager: manager),
                   ListTile(
                     key: const Key('drawer-pair'),
                     minTileHeight: NekoSpace.touch,
                     leading: const NekoIcon(NekoIcons.scan, size: 20),
-                    title: const Text('扫码配对新电脑'),
+                    title: Text(context.l10n.pairNewComputer),
                     onTap: () {
                       Navigator.of(context).pop();
                       manager.stopToScan();
@@ -46,7 +47,7 @@ class NekoDrawer extends ConsumerWidget {
                     key: const Key('drawer-computers'),
                     minTileHeight: NekoSpace.touch,
                     leading: const NekoIcon(NekoIcons.monitor, size: 20),
-                    title: const Text('电脑管理与设置'),
+                    title: Text(context.l10n.drawerComputersSettings),
                     trailing: NekoIcon(
                       NekoIcons.chevronRight,
                       size: 16,
@@ -62,7 +63,7 @@ class NekoDrawer extends ConsumerWidget {
                     },
                   ),
                   const Divider(),
-                  _SectionTitle('外观', tokens),
+                  _SectionTitle(context.l10n.appearanceTitle, tokens),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: NekoSpace.md,
@@ -73,23 +74,50 @@ class NekoDrawer extends ConsumerWidget {
                       builder: (context, mode, _) => SegmentedButton<ThemeMode>(
                         key: const Key('drawer-theme'),
                         showSelectedIcon: false,
-                        segments: const <ButtonSegment<ThemeMode>>[
+                        segments: <ButtonSegment<ThemeMode>>[
                           ButtonSegment<ThemeMode>(
                             value: ThemeMode.system,
-                            label: Text('自动'),
+                            label: Text(context.l10n.themeAuto),
                           ),
                           ButtonSegment<ThemeMode>(
                             value: ThemeMode.light,
-                            label: Text('浅色'),
+                            label: Text(context.l10n.themeLight),
                           ),
                           ButtonSegment<ThemeMode>(
                             value: ThemeMode.dark,
-                            label: Text('深色'),
+                            label: Text(context.l10n.themeDark),
                           ),
                         ],
                         selected: <ThemeMode>{mode},
                         onSelectionChanged: (value) =>
                             app.setThemeMode(value.first),
+                      ),
+                    ),
+                  ),
+                  _SectionTitle(context.l10n.languageTitle, tokens),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NekoSpace.md,
+                      vertical: NekoSpace.xs,
+                    ),
+                    child: ValueListenableBuilder<Locale>(
+                      valueListenable: app.locale,
+                      builder: (context, locale, _) => SegmentedButton<Locale>(
+                        key: const Key('drawer-language'),
+                        showSelectedIcon: false,
+                        segments: <ButtonSegment<Locale>>[
+                          ButtonSegment<Locale>(
+                            value: kLocaleZh,
+                            label: Text(context.l10n.languageZh),
+                          ),
+                          ButtonSegment<Locale>(
+                            value: kLocaleEn,
+                            label: Text(context.l10n.languageEn),
+                          ),
+                        ],
+                        selected: <Locale>{locale},
+                        onSelectionChanged: (value) =>
+                            app.setLocale(value.first),
                       ),
                     ),
                   ),
@@ -134,13 +162,14 @@ class _Header extends StatelessWidget {
       initialData: manager.state,
       builder: (context, snapshot) {
         final state = snapshot.data ?? manager.state;
+        final l10n = context.l10n;
         final (String label, Color color) = switch (state) {
-          NekoConnReady() => ('在线', tokens.success),
-          NekoConnConnecting() => ('连接中', tokens.warning),
-          NekoConnRestoring() => ('重连中', tokens.warning),
-          NekoConnOffline() => ('离线', tokens.danger),
-          NekoConnIdle() => ('未连接', tokens.textFaint),
-          _ => ('需要重新配对', tokens.danger),
+          NekoConnReady() => (l10n.connOnline, tokens.success),
+          NekoConnConnecting() => (l10n.connConnecting, tokens.warning),
+          NekoConnRestoring() => (l10n.connReconnecting, tokens.warning),
+          NekoConnOffline() => (l10n.connOffline, tokens.danger),
+          NekoConnIdle() => (l10n.connIdle, tokens.textFaint),
+          _ => (l10n.connNeedsRepair, tokens.danger),
         };
         final computer = manager.computer;
         return Padding(

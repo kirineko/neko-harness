@@ -6,10 +6,11 @@ import {
 	exportFileName,
 } from "@neko-harness/core/conversation-export";
 import type { ImageFile } from "@neko-harness/core/image-transfer";
+import { getT } from "./i18n/index.ts";
 
 export class ExportCancelledError extends Error {
 	constructor() {
-		super("会话已切换，导出已取消");
+		super(getT()("export.cancelled"));
 		this.name = "ExportCancelledError";
 	}
 }
@@ -59,8 +60,10 @@ export async function buildSessionExport(args: {
 
 /** Completion notice text: file name plus how many images could not be embedded. */
 export function exportNotice(result: Pick<SessionExport, "fileName" | "skippedImages">): string {
-	const skipped = result.skippedImages > 0 ? `，${result.skippedImages} 张图片未能内嵌` : "";
-	return `已导出 ${result.fileName}${skipped}`;
+	const t = getT();
+	return result.skippedImages > 0
+		? t("export.doneSkipped", { name: result.fileName, count: result.skippedImages })
+		: t("export.done", { name: result.fileName });
 }
 
 export function downloadFile(fileName: string, content: string, mimeType: string): void {

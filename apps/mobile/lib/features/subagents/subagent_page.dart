@@ -6,6 +6,8 @@ import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/approvals/approval_sheet.dart';
 import 'package:neko_mobile/features/chat/chat_page.dart';
 import 'package:neko_mobile/features/subagents/subagent_controller.dart';
+import 'package:neko_mobile/l10n/core_text.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 import 'package:neko_mobile/ui/widgets/transcript_view.dart';
@@ -40,17 +42,17 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('停止这一轮？'),
-        content: Text('只停止「${round.title}」的当前轮次，主会话与其他子 agent 继续运行。'),
+        title: Text(context.l10n.subagentStopTitle),
+        content: Text(context.l10n.subagentStopBody(round.title)),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             key: const Key('subagent-stop-confirm'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('停止'),
+            child: Text(context.l10n.subagentStop),
           ),
         ],
       ),
@@ -84,10 +86,12 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
                 ),
                 Text(
                   status.readonly
-                      ? '分叉历史（只读）'
+                      ? context.l10n.subagentForkedReadonly
                       : status.busy
-                      ? (status.status ?? '运行中…')
-                      : '空闲',
+                      ? (status.status == null
+                            ? context.l10n.chatRunning
+                            : localizeStatus(context.l10n, status.status!))
+                      : context.l10n.subagentIdle,
                   style: context.meta(tokens.textMuted),
                 ),
               ],
@@ -96,7 +100,7 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
               if (active != null && !status.readonly)
                 IconButton(
                   key: const Key('subagent-stop'),
-                  tooltip: '停止当前轮',
+                  tooltip: context.l10n.subagentStopTooltip,
                   onPressed: _controller.canControl
                       ? () => _stop(active)
                       : null,
@@ -127,7 +131,9 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
                             materialTapTargetSize:
                                 MaterialTapTargetSize.shrinkWrap,
                             label: Text(
-                              '累计 ${formatTokens(status.usage.totalTokens)} tokens',
+                              context.l10n.subagentUsageTotal(
+                                formatTokens(status.usage.totalTokens),
+                              ),
                             ),
                           ),
                         ),
@@ -148,8 +154,13 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
                                     )
                                   : null,
                               label: Text(
-                                '第 ${round.round ?? round.taskId} 轮 · ${round.status}'
-                                '${round.usage == null ? '' : ' · ${formatTokens(round.usage!.totalTokens)}'}',
+                                context.l10n.subagentRound(
+                                      round.round ?? round.taskId,
+                                      round.status,
+                                    ) +
+                                    (round.usage == null
+                                        ? ''
+                                        : ' · ${formatTokens(round.usage!.totalTokens)}'),
                               ),
                             ),
                           ),
@@ -160,7 +171,7 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
                   child: _controller.transcript.loaded
                       ? TranscriptView(
                           actions: _controller,
-                          emptyText: '子 agent 还没有输出',
+                          emptyText: context.l10n.subagentEmpty,
                         )
                       : Center(
                           child:
@@ -168,7 +179,7 @@ class _SubagentPageState extends ConsumerState<SubagentPage> {
                               ? const CircularProgressIndicator()
                               : TextButton(
                                   onPressed: _controller.open,
-                                  child: const Text('重新加载'),
+                                  child: Text(context.l10n.subagentReload),
                                 ),
                         ),
                 ),

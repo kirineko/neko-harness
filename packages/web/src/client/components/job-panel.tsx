@@ -2,6 +2,7 @@ import { JobTail, summarizeJobs } from "@neko-harness/core/job-summary";
 import type { WireJobSummary } from "@neko-harness/gateway/contract";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { atBottom, jobStatusText, sanitizeJobOutput } from "../lib/job-output";
 
 const POLL_MS = 1000;
@@ -9,6 +10,7 @@ const POLL_MS = 1000;
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 function Detail({ sessionId, job }: { sessionId: string; job: WireJobSummary }) {
+	const t = useT();
 	const jobId = job.jobId;
 	const tail = useRef(new JobTail());
 	const [, setVersion] = useState(0);
@@ -87,7 +89,7 @@ function Detail({ sessionId, job }: { sessionId: string; job: WireJobSummary }) 
 							className="focus-neko rounded-lg border border-sakura-300 px-2 py-0.5 disabled:opacity-50"
 							onClick={stop}
 						>
-							{stopping ? "正在停止…" : "停止任务"}
+							{stopping ? t("job.stopping") : t("job.stop")}
 						</button>
 					)}
 				</div>
@@ -111,10 +113,12 @@ function Detail({ sessionId, job }: { sessionId: string; job: WireJobSummary }) 
 					}}
 				>
 					{tail.current.dropped > 0 && (
-						<p className="mb-2 text-xs text-sakura-800">… 已省略更早的 {tail.current.dropped} 字节输出</p>
+						<p className="mb-2 text-xs text-sakura-800">{t("job.dropped", { count: tail.current.dropped })}</p>
 					)}
 					{text === "" ? (
-						<p className="text-xs text-ink-500">{tail.current.offset === undefined ? "读取中…" : "暂无输出"}</p>
+						<p className="text-xs text-ink-500">
+							{tail.current.offset === undefined ? t("job.reading") : t("job.noOutput")}
+						</p>
 					) : (
 						<pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink-800">{text}</pre>
 					)}
@@ -125,7 +129,7 @@ function Detail({ sessionId, job }: { sessionId: string; job: WireJobSummary }) 
 						onClick={toBottom}
 						className="focus-neko discrete-in absolute right-3 bottom-3 rounded-full border border-sakura-300 bg-surface px-3.5 py-1 text-xs font-medium text-sakura-800 hover:bg-sakura-50"
 					>
-						回到底部 ↓
+						{t("job.toBottom")}
 					</button>
 				)}
 			</div>
@@ -144,6 +148,7 @@ export function JobPanel({
 	open: boolean;
 	onClose: () => void;
 }) {
+	const t = useT();
 	const [selected, setSelected] = useState<string | null>(null);
 	const [now, setNow] = useState(Date.now);
 	const closeButton = useRef<HTMLButtonElement>(null);
@@ -190,7 +195,7 @@ export function JobPanel({
 			ref={panel}
 			role={narrow ? "dialog" : "complementary"}
 			aria-modal={narrow && open ? true : undefined}
-			aria-label="后台任务"
+			aria-label={t("job.panel")}
 			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:static lg:z-auto lg:w-[min(42vw,40rem)] lg:shrink-0`}
 			onKeyDown={(e) => {
 				if (!e.currentTarget.contains(e.target as Node)) return;
@@ -215,18 +220,18 @@ export function JobPanel({
 			}}
 		>
 			<div className="flex items-center justify-between border-b border-sakura-200 px-4 py-1.5">
-				<strong className="text-sm text-ink-800">后台任务</strong>
+				<strong className="text-sm text-ink-800">{t("job.panel")}</strong>
 				<button
 					ref={closeButton}
 					type="button"
 					className="focus-neko rounded-lg px-2 py-1 text-sm text-ink-600 hover:bg-sakura-50"
 					onClick={onClose}
 				>
-					关闭
+					{t("common.close")}
 				</button>
 			</div>
 			{summary.rows.length === 0 ? (
-				<p className="p-4 text-sm text-ink-500">这个会话还没有后台任务。</p>
+				<p className="p-4 text-sm text-ink-500">{t("job.panelEmpty")}</p>
 			) : (
 				<>
 					<div className="max-h-44 shrink-0 overflow-auto border-b border-sakura-100 p-2">

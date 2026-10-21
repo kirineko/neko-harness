@@ -1,11 +1,13 @@
 import { Container, Markdown, MouseRegion, Text } from "@earendil-works/pi-tui";
 import type { DefaultImagePrompt } from "@neko-harness/core";
 import type { SkillInvocation } from "@neko-harness/core/skill-invocation";
+import { getLanguage, t } from "../i18n/index.ts";
 import { getActiveThemeMode, getMarkdownTheme, theme } from "../theme/index.ts";
 
 /** 用户消息：蓝色气泡（整行背景 + 樱花左缘条），Markdown 渲染；/skill: 展开块折叠为单行标记。 */
 export class UserMessageComponent extends Container {
 	#renderTheme = getActiveThemeMode();
+	#renderLanguage = getLanguage();
 	#text: string;
 	#skill?: SkillInvocation;
 	#defaultImagePrompt?: DefaultImagePrompt;
@@ -31,8 +33,9 @@ export class UserMessageComponent extends Container {
 
 	/** 每行加 `▍` accent 左缘（底色 userBg 贯通）；内容宽度 -1，间距由内容自身 padding 提供。 */
 	override render(width: number): string[] {
-		if (this.#renderTheme !== getActiveThemeMode()) {
+		if (this.#renderTheme !== getActiveThemeMode() || this.#renderLanguage !== getLanguage()) {
 			this.#renderTheme = getActiveThemeMode();
+			this.#renderLanguage = getLanguage();
 			this.#rebuild();
 		}
 
@@ -47,9 +50,7 @@ export class UserMessageComponent extends Container {
 			this.addChild(
 				new MouseRegion(
 					new Text(
-						theme.dim(
-							`${this.#expanded ? "v" : ">"} Default image prompt · Click to ${this.#expanded ? "hide" : "view"}`,
-						),
+						theme.dim(this.#expanded ? t("user.imagePromptExpanded") : t("user.imagePromptCollapsed")),
 						1,
 						0,
 						theme.userBg,
@@ -70,7 +71,7 @@ export class UserMessageComponent extends Container {
 			const args = invocation.args.replace(/\s+/g, " ").trim();
 			const preview = args.length > 100 ? `${args.slice(0, 99)}…` : args;
 			const head = `${theme.toolTitle(`✦ skill:${invocation.name}`)}${preview ? ` ${theme.userText(preview)}` : ""}`;
-			const source = theme.dim(`skill body from ${invocation.location} (collapsed)`);
+			const source = theme.dim(t("user.skillSource", { location: invocation.location }));
 			this.addChild(new Text(`${head}\n${source}`, 1, 0, theme.userBg));
 			return;
 		}

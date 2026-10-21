@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
@@ -46,12 +47,12 @@ it("answers a real question end to end through the dock and keeps the directory 
 		await chat.submit({ content: "set up storage" });
 		await waitFor(() => dock.visible, "the question reaches the dock");
 		expect(dock.pendingCount).toBe(1);
-		expect(plain(dock.render(100))).toContain("等待回答");
+		expect(plain(dock.render(100))).toContain("Awaiting answer");
 		expect(dock.autoOpen(true)).toBe(true);
 		await waitFor(() => plain(dock.render(100)).includes("PostgreSQL"), "the full question loads");
 		const panel = plain(dock.render(100));
 		expect(panel).toContain("Which database?");
-		expect(panel).toContain("[推荐] PostgreSQL");
+		expect(panel).toContain("[Recommended] PostgreSQL");
 		expect(panel).not.toContain("(●)");
 
 		// The directory marks the blocked session and the transcript card follows the structured state.
@@ -59,7 +60,7 @@ it("answers a real question end to end through the dock and keeps the directory 
 		const workspace = client.directory.state.value.sessions[0]!.workspaceRoot;
 		const id = client.directory.state.value.sessions[0]!.id;
 		const blocked = sessionPickerItems(client.directory.state.value.sessions, workspace, "other")[0]!;
-		expect(blocked.description).toContain("等待回答");
+		expect(blocked.description).toContain("Awaiting answer");
 		expect(blocked.description).not.toContain("Running");
 		const card = chat.view.value?.items.find((i) => i.type === "tool" && i.name === "ask_user");
 		expect(card).toMatchObject({ interaction: { kind: "ask_user", status: "pending" } });

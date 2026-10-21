@@ -1,22 +1,24 @@
 import type { JobLike } from "@neko-harness/core/job-summary";
 import { formatDuration } from "@neko-harness/core/job-summary";
+import { getT, type PlainKey } from "./i18n/index.ts";
 
-export const JOB_STATUS_LABELS: Record<JobLike["status"], string> = {
-	running: "运行中",
-	exited: "已退出",
-	failed: "失败",
-	stopped: "已停止",
-	lost: "已丢失",
+const JOB_STATUS_KEYS: Record<JobLike["status"], PlainKey> = {
+	running: "job.status.running",
+	exited: "job.status.exited",
+	failed: "job.status.failed",
+	stopped: "job.status.stopped",
+	lost: "job.status.lost",
 };
 
-/** `运行中 · 1m 5s`, `失败 · 退出码 2`, `失败 · 超时`, `已丢失 · 网关重启`. */
+/** `Running · 1m 5s`, `Failed · exit code 2`, `Failed · timed out`, `Lost · gateway restarted` (in the UI language). */
 export function jobStatusText(job: JobLike, now: number): string {
-	const status = JOB_STATUS_LABELS[job.status];
+	const t = getT();
+	const status = t(JOB_STATUS_KEYS[job.status]);
 	if (job.status === "running") return `${status} · ${formatDuration(now - job.startedAt)}`;
-	if (job.reason === "timeout") return `${status} · 超时`;
-	if (job.reason === "spawn-error") return `${status} · 无法启动`;
-	if (job.exitCode !== null) return `${status} · 退出码 ${job.exitCode}`;
-	if (job.reason === "restart") return `${status} · 网关重启`;
+	if (job.reason === "timeout") return `${status} · ${t("job.reason.timeout")}`;
+	if (job.reason === "spawn-error") return `${status} · ${t("job.reason.spawnError")}`;
+	if (job.exitCode !== null) return `${status} · ${t("job.reason.exitCode", { code: job.exitCode })}`;
+	if (job.reason === "restart") return `${status} · ${t("job.reason.restart")}`;
 	return `${status} · ${formatDuration((job.endedAt ?? now) - job.startedAt)}`;
 }
 

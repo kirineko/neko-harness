@@ -1,3 +1,4 @@
+import { EXPLORER_LABEL } from "../lib/i18n/server-text.ts";
 import type { OpenTargetId } from "../lib/open-workspace";
 
 /** 打开目标的彩色图标：品牌与系统图标保持原色，不走单色 `Icon`。 */
@@ -56,6 +57,6 @@ export function FileManagerIcon({ size = 18 }: { size?: number }) {
 export function OpenTargetIcon({ id, label, size }: { id: OpenTargetId; label: string; size?: number }) {
 	if (id === "vscode") return <VscodeIcon size={size} />;
 	if (label === "Finder") return <FinderIcon size={size} />;
-	if (label === "资源管理器") return <ExplorerIcon size={size} />;
+	if (label === EXPLORER_LABEL) return <ExplorerIcon size={size} />;
 	return <FileManagerIcon size={size} />;
 }

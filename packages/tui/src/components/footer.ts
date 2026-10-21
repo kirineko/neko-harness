@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { type Component, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { formatTokens, modelDisplayName } from "../format.ts";
+import { t } from "../i18n/index.ts";
 import { labels } from "../labels.ts";
 import { theme } from "../theme/index.ts";
 
@@ -26,13 +27,15 @@ export type FooterStats = {
 	readonly thinkingLevel: string | null;
 	readonly busy: string | undefined;
 	readonly compaction?: string;
+	/** Colour of the compaction status; defaults to warning (an operation in progress). */
+	readonly compactionTone?: StatusTone;
 	readonly canAbort?: boolean;
 	readonly usageText: string;
 	readonly cwd: string;
 };
 
 /** 主行右侧状态词的语义色:就绪 ok / 忙碌 accent / 压缩进行 warning / 失败 error。 */
-type StatusTone = "ok" | "accent" | "warning" | "error";
+export type StatusTone = "ok" | "accent" | "warning" | "error";
 
 /**
  * 状态栏两行(design D8):主行身份(工作区 · 模型 · Think 档)+ 右对齐状态词,
@@ -62,11 +65,7 @@ export class StatusFooter implements Component {
 	#tone(): StatusTone {
 		const s = this.#stats;
 		if (!s) return "ok";
-		if (s.compaction !== undefined) {
-			if (s.compaction.startsWith("Compaction failed")) return "error";
-			if (["Compacting", "Waiting", "Retrying", "Applying"].some((w) => s.compaction!.includes(w))) return "warning";
-			return "ok";
-		}
+		if (s.compaction !== undefined) return s.compactionTone ?? "warning";
 		return s.busy ? (s.questionCount ? "warning" : "accent") : "ok";
 	}
 
@@ -88,10 +87,10 @@ export class StatusFooter implements Component {
 						: theme.ok(statusText);
 		const modelShort = modelDisplayName(s.model);
 		const identity: Array<{ text: string; slot: (t: string) => string }> = [
-			...(s.planMode ? [{ text: "PLAN", slot: theme.warning }] : []),
+			...(s.planMode ? [{ text: t("footer.plan"), slot: theme.warning }] : []),
 			{ text: basename(s.cwd) || s.cwd, slot: theme.muted },
 			{ text: modelShort, slot: theme.model },
-			...(s.thinkingLevel ? [{ text: `Think ${s.thinkingLevel}`, slot: theme.dim }] : []),
+			...(s.thinkingLevel ? [{ text: t("footer.think", { level: s.thinkingLevel }), slot: theme.dim }] : []),
 		];
 		const statusWidth = visibleWidth(statusText);
 		// 逐级丢弃最右身份段,直到左段与状态词可容纳(至少留 1 格间隔)。
@@ -116,33 +115,38 @@ export class StatusFooter implements Component {
 		const agentHint = s.subagentCount
 			? this.panelOpen
 				? ""
-				: `→ Agents ${s.subagentCount}${s.approvalCount ? ` · Approval ${s.approvalCount}` : ""}`
+				: `${t("footer.agents", { count: s.subagentCount })}${s.approvalCount ? ` · ${t("footer.approval", { count: s.approvalCount })}` : ""}`
 			: "";
-		const jobHint = s.jobCount && !this.panelOpen ? `Jobs ${s.jobCount}` : "";
-		const questionHint = s.questionCount ? `${s.questionCount} question${s.questionCount > 1 ? "s" : ""} waiting` : "";
+		const jobHint = s.jobCount && !this.panelOpen ? t("footer.jobs", { count: s.jobCount }) : "";
+		const questionHint = s.questionCount
+			? t(s.questionCount > 1 ? "footer.questionsWaiting" : "footer.questionWaiting", { count: s.questionCount })
+			: "";
 		const todoHint = s.todoProgress ?? "";
-		const planHint = s.planAwaiting ? "Plan awaiting approval, /plan to view" : "";
+		const planHint = s.planAwaiting ? t("footer.planAwaiting") : "";
 		const dockOpen = s.questionOpen || s.planOpen;
 		const hints = this.panelOpen
 			? ""
 			: dockOpen
-				? "Esc Close · Ctrl+C Stop"
+				? t("hint.dockOpen")
 				: s.canAbort && !s.busy
-					? "Esc Stop"
+					? t("hint.escStop")
 					: s.busy
 						? labels.busyHints
 						: labels.idleHints;
 		const compactHints = dockOpen
-			? "Esc Close · Ctrl+C Stop"
+			? t("hint.dockOpen")
 			: s.canAbort && !s.busy
-				? "Esc Stop"
+				? t("hint.escStop")
 				: s.busy
 					? labels.busyCompact
 					: labels.idleCompact;
 		const context = s.contextUsage;
 		const contextText =
 			context && context.window > 0
-				? `Ctx ${context.percent === null ? "?" : `${context.percent.toFixed(1)}%`}/${formatTokens(context.window)}`
+				? t("footer.context", {
+						percent: context.percent === null ? "?" : `${context.percent.toFixed(1)}%`,
+						window: formatTokens(context.window),
+					})
 				: "";
 		const usage = [contextText, s.usageText].filter(Boolean).join(" · ");
 		const cost = s.usageText.match(/\$[\d.]+/)?.[0] ?? "";
@@ -152,10 +156,10 @@ export class StatusFooter implements Component {
 		const minimalHints = this.panelOpen
 			? ""
 			: dockOpen
-				? "Esc Close"
+				? t("hint.escClose")
 				: s.canAbort || s.busy
-					? "Esc Stop"
-					: "/help Keys";
+					? t("hint.escStop")
+					: t("hint.helpKeys");
 		// A waiting question or plan is blocking, so it outlives every other hint when the row is short.
 		const joinHints = (metric: string, hint: string, todo = true) =>
 			[metric, questionHint, planHint, todo ? todoHint : "", agentHint, jobHint, hint].filter(Boolean).join(" · ");
@@ -195,5 +199,10 @@ export class StatusFooter implements Component {
 }
 
 export function usageText(input: number, output: number, cacheRead: number, costTotal: number): string {
-	return `In: ${formatTokens(input)} Out: ${formatTokens(output)} Cache: ${formatTokens(cacheRead)} $${costTotal.toFixed(4)}`;
+	return t("footer.usage", {
+		input: formatTokens(input),
+		output: formatTokens(output),
+		cache: formatTokens(cacheRead),
+		cost: `$${costTotal.toFixed(4)}`,
+	});
 }

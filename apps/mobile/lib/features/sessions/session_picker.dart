@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/features/app_controller.dart';
 import 'package:neko_mobile/features/chat/chat_controller.dart';
 import 'package:neko_mobile/features/sessions/sessions_controller.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/neko_icons.dart';
 import 'package:neko_mobile/ui/theme.dart';
 
-String relativeTime(int millis, [DateTime? now]) {
+/// 相对时间：一天内用相对写法，超过 30 天用语言对应的日期格式（zh 为 yyyy-MM-dd，en 为 dd/MM/yyyy）。
+String relativeTime(AppLocalizations l10n, int millis, [DateTime? now]) {
   if (millis <= 0) return '';
   final at = DateTime.fromMillisecondsSinceEpoch(millis);
   final diff = (now ?? DateTime.now()).difference(at);
-  if (diff.inMinutes < 1) return '刚刚';
-  if (diff.inHours < 1) return '${diff.inMinutes} 分钟前';
-  if (diff.inDays < 1) return '${diff.inHours} 小时前';
-  if (diff.inDays < 30) return '${diff.inDays} 天前';
-  return '${at.year}-${at.month.toString().padLeft(2, '0')}-${at.day.toString().padLeft(2, '0')}';
+  if (diff.inMinutes < 1) return l10n.relTimeNow;
+  if (diff.inHours < 1) return l10n.relTimeMinutes(diff.inMinutes);
+  if (diff.inDays < 1) return l10n.relTimeHours(diff.inHours);
+  if (diff.inDays < 30) return l10n.relTimeDays(diff.inDays);
+  return DateFormat(l10n.datePattern).format(at);
 }
 
 /// 在当前工作区新建会话并打开；新建动作只经 [SessionsController.create]，
@@ -168,10 +171,10 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                 key: const Key('sessions-search'),
                 controller: _search,
                 onChanged: sessions.search,
-                decoration: const InputDecoration(
-                  prefixIcon: NekoIcon(NekoIcons.search, size: 16),
-                  prefixIconConstraints: BoxConstraints(minWidth: 40),
-                  hintText: '搜索标题或首条消息',
+                decoration: InputDecoration(
+                  prefixIcon: const NekoIcon(NekoIcons.search, size: 16),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 40),
+                  hintText: context.l10n.sessionsSearchHint,
                 ),
               ),
             ),
@@ -179,7 +182,7 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: NekoSpace.md),
                 child: Text(
-                  sessions.error!,
+                  sessions.error!(context.l10n),
                   style: context.small(tokens.danger),
                 ),
               ),
@@ -208,7 +211,9 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                           padding: const EdgeInsets.all(NekoSpace.xl),
                           child: Center(
                             child: Text(
-                              sessions.query.isEmpty ? '还没有会话' : '没有匹配的会话',
+                              sessions.query.isEmpty
+                                  ? context.l10n.sessionsEmpty
+                                  : context.l10n.sessionsNoMatch,
                               style: context.small(tokens.textFaint),
                             ),
                           ),
@@ -223,7 +228,9 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                       selectedTileColor: tokens.surfaceMuted,
                       minTileHeight: NekoSpace.touch,
                       title: Text(
-                        s.title.isEmpty ? '新会话' : s.title,
+                        s.title.isEmpty
+                            ? context.l10n.sessionNewTitle
+                            : s.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -244,7 +251,7 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                                           : NekoSpace.sm,
                                     ),
                                     child: Text(
-                                      '等待回答',
+                                      context.l10n.sessionAwaitingAnswer,
                                       style: context.small(tokens.warning),
                                     ),
                                   ),
@@ -258,7 +265,7 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                                           : NekoSpace.sm,
                                     ),
                                     child: Text(
-                                      '等待批准',
+                                      context.l10n.sessionAwaitingApproval,
                                       style: context.small(tokens.warning),
                                     ),
                                   ),
@@ -273,7 +280,7 @@ class _SessionPickerState extends ConsumerState<SessionPicker> {
                               ],
                             ),
                       trailing: Text(
-                        relativeTime(s.messageAt),
+                        relativeTime(context.l10n, s.messageAt),
                         style: context.meta(tokens.textFaint),
                       ),
                       onTap: () => widget.onOpen(s),

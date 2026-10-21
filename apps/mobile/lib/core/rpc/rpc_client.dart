@@ -51,38 +51,46 @@ class RpcClosed extends RpcState {
   final String? reason;
 }
 
+/// 连接层失败：[code] 是稳定的类别码，[params] 是细节参数；用户可见文案由界面层按语言映射。
 sealed class RpcException implements Exception {
-  const RpcException(this.message);
+  const RpcException(this.code, [this.params = const <String, Object>{}]);
 
-  final String message;
+  final String code;
+  final Map<String, Object> params;
+
+  @override
+  String toString() => 'RpcException($code${params.isEmpty ? '' : ' $params'})';
 }
 
 class RpcUnauthorizedException extends RpcException {
-  const RpcUnauthorizedException() : super('电脑拒绝了本设备（401）');
+  const RpcUnauthorizedException() : super('unauthorized');
 }
 
 class RpcRevokedException extends RpcException {
-  const RpcRevokedException() : super('设备授权已被电脑撤销');
+  const RpcRevokedException() : super('revoked');
 }
 
 class RpcIncompatibleException extends RpcException {
-  const RpcIncompatibleException({this.needs}) : super('协议版本不兼容');
+  const RpcIncompatibleException({this.needs}) : super('incompatible');
 
   /// 'app' | 'computer'，无法区分时为 null。
   final String? needs;
 }
 
 class RpcCertificateException extends RpcException {
-  const RpcCertificateException() : super('电脑证书与配对指纹不符');
+  const RpcCertificateException() : super('certificate');
 }
 
 class RpcNetworkException extends RpcException {
-  const RpcNetworkException() : super('网络连接失败');
+  const RpcNetworkException() : super('network');
 }
 
 /// hello 响应不符合 design D6 契约。
 class RpcProtocolException extends RpcException {
-  const RpcProtocolException([super.message = 'hello 响应不合法']);
+  const RpcProtocolException([
+    String detail = 'hello_invalid',
+    Map<String, Object> params = const <String, Object>{},
+  ]) : super('protocol:$detail', params);
 }
 
 /// 服务端以 JSON-RPC 通知推送的事件（chat.patch、approvals.changed 等）。
@@ -177,7 +185,7 @@ class NekoRpcClient implements ActiveConnection {
   RpcHelloResult get hello {
     final h = _hello;
     if (h == null) {
-      throw StateError('hello 尚未完成');
+      throw StateError('hello has not completed');
     }
     return h;
   }
@@ -216,10 +224,10 @@ class NekoRpcClient implements ActiveConnection {
   /// 建立 WSS 连接并完成 server.hello；成功返回自身。
   Future<NekoRpcClient> connect() async {
     if (_disposed) {
-      throw StateError('client 已释放');
+      throw StateError('client is disposed');
     }
     if (_rpc != null || _connecting) {
-      throw StateError('连接已存在或进行中');
+      throw StateError('connection already exists or is in progress');
     }
     _connecting = true;
     _emit(const RpcConnecting());
@@ -278,7 +286,9 @@ class NekoRpcClient implements ActiveConnection {
         final needs = data['needs'];
         throw RpcIncompatibleException(needs: needs is String ? needs : null);
       }
-      throw RpcProtocolException('server.hello 返回错误: ${e.message}');
+      throw RpcProtocolException('hello_error', <String, Object>{
+        'message': e.message,
+      });
     } on WebSocketException {
       // 升级被拒（如 401）：认证失败或授权已撤销。
       await _teardown();
@@ -296,7 +306,9 @@ class NekoRpcClient implements ActiveConnection {
       rethrow;
     } catch (e) {
       await _teardown();
-      throw RpcProtocolException('连接失败: ${e.runtimeType}');
+      throw RpcProtocolException('connect_failed', <String, Object>{
+        'type': e.runtimeType.toString(),
+      });
     }
   }
 
@@ -328,7 +340,7 @@ class NekoRpcClient implements ActiveConnection {
 
   RpcHelloResult _parseHello(Object? raw) {
     if (raw is! Map<String, dynamic>) {
-      throw const RpcProtocolException('hello 结果不是对象');
+      throw const RpcProtocolException('hello_not_object');
     }
     final apiVersion = raw['apiVersion'];
     final serverId = raw['serverId'];
@@ -336,19 +348,19 @@ class NekoRpcClient implements ActiveConnection {
     final gatewayVersion = raw['gatewayVersion'];
     final capabilities = raw['capabilities'];
     if (apiVersion is! int || apiVersion < 1) {
-      throw const RpcProtocolException('apiVersion 不合法');
+      throw const RpcProtocolException('api_version_invalid');
     }
     if (serverId is! String || serverId.isEmpty) {
-      throw const RpcProtocolException('serverId 不合法');
+      throw const RpcProtocolException('server_id_invalid');
     }
     if (serverName is! String || serverName.isEmpty) {
-      throw const RpcProtocolException('serverName 不合法');
+      throw const RpcProtocolException('server_name_invalid');
     }
     if (gatewayVersion is! String || gatewayVersion.isEmpty) {
-      throw const RpcProtocolException('gatewayVersion 不合法');
+      throw const RpcProtocolException('gateway_version_invalid');
     }
     if (capabilities is! List || capabilities.any((c) => c is! String)) {
-      throw const RpcProtocolException('capabilities 不合法');
+      throw const RpcProtocolException('capabilities_invalid');
     }
     return RpcHelloResult(
       apiVersion: apiVersion,

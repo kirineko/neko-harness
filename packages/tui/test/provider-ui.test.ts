@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoModelRef, NekoSelectableModel } from "@neko-harness/core";
@@ -193,7 +194,9 @@ it("recognises gateway provider rejections", () => {
 });
 
 it("describes /login as provider and key management", () => {
-	expect(commands.find((command) => command.name === "login")?.description).toBe("Manage model providers and API keys");
+	expect(commands().find((command) => command.name === "login")?.description).toBe(
+		"Manage model providers and API keys",
+	);
 });
 
 const defaultState = (effective: NekoModelRef, source: NekoDefaultModelState["source"]): NekoDefaultModelState => ({

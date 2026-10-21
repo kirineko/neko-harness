@@ -4,6 +4,7 @@ import { ProviderCombobox } from "../components/provider-combobox";
 import { ProviderCredentialCard } from "../components/provider-credential-card";
 import { SettingsShell } from "../components/settings-shell";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import type { ProviderOption } from "../lib/providers";
 import { useNekoState } from "../lib/store";
 
@@ -19,6 +20,7 @@ function providerFromHash(): string {
 
 export function SettingsPage() {
 	const { credentials, phase } = useNekoState();
+	const t = useT();
 	const ready = phase === "ready" && credentials !== null;
 	const [selected, setSelected] = useState(providerFromHash);
 	useEffect(() => {
@@ -39,7 +41,11 @@ export function SettingsPage() {
 			id: item.id,
 			name: item.name,
 			keywords: item.envVar,
-			detail: !enabled ? "未启用" : status && status.source !== "none" ? "已配置" : "未配置 Key",
+			detail: !enabled
+				? t("settings.credentials.disabled")
+				: status && status.source !== "none"
+					? t("settings.credentials.configured")
+					: t("settings.credentials.keyMissing"),
 			tone: !enabled ? "off" : status && status.source !== "none" ? "on" : "warn",
 		};
 	});
@@ -54,21 +60,26 @@ export function SettingsPage() {
 		<SettingsShell active="credentials">
 			<div className="mx-auto w-full max-w-4xl px-5 pt-6 pb-3">
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-					<h1 className="text-xl font-bold text-ink-900">模型服务</h1>
-					<span className="ml-auto text-xs text-ink-500">{phase === "ready" ? "已连接" : "连接中…"}</span>
+					<h1 className="text-xl font-bold text-ink-900">{t("settings.credentials.title")}</h1>
+					<span className="ml-auto text-xs text-ink-500">
+						{phase === "ready" ? t("common.connected") : t("common.connecting")}
+					</span>
 				</div>
-				<p className="mt-1 text-sm text-ink-500">
-					启用要使用的模型服务并配置 API Key；保存值优先于环境变量，所有工作区共用。DeepSeek 始终启用。
-				</p>
+				<p className="mt-1 text-sm text-ink-500">{t("settings.credentials.intro")}</p>
 			</div>
 			<main className="mx-auto w-full max-w-4xl px-5 pb-8">
 				<div className="flex flex-col gap-4">
 					<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 						<div className="w-full min-w-0 sm:w-80">
-							<ProviderCombobox label="模型服务商" options={options} value={spec.id} onChange={setSelected} />
+							<ProviderCombobox
+								label={t("settings.credentials.providerLabel")}
+								options={options}
+								value={spec.id}
+								onChange={setSelected}
+							/>
 						</div>
 						<span className="text-xs text-ink-500">
-							已启用 {enabledCount} / {MODEL_PROVIDERS.length}
+							{t("settings.credentials.enabledCount", { enabled: enabledCount, total: MODEL_PROVIDERS.length })}
 						</span>
 					</div>
 					<ProviderCredentialCard

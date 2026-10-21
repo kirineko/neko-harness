@@ -3,6 +3,7 @@ import type { Delegation } from "@neko-harness/core";
 import { ApprovalQueue, type NekoGatewayConnection } from "@neko-harness/gateway/client-session";
 import { approvalText } from "./approval-ui.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { getLanguage, t } from "./i18n/index.ts";
 import { getSelectListTheme, theme } from "./theme/index.ts";
 
 /** An automatically focused Pi selection list above the editor. */
@@ -13,6 +14,7 @@ export class ApprovalDock {
 	#presented: number | undefined;
 	#changed: () => void;
 	#choices: SelectList;
+	#choicesLanguage = getLanguage();
 	#offset = 0;
 	#max = 0;
 	#choiceRow = 0;
@@ -21,21 +23,26 @@ export class ApprovalDock {
 	#error = "";
 	constructor(connect: NekoGatewayConnection["subagent"], changed: () => void) {
 		this.#changed = changed;
-		this.#choices = new SelectList(
-			[
-				{ value: "allowed", label: "Allow once" },
-				{ value: "denied", label: "Deny" },
-			],
-			2,
-			getSelectListTheme(),
-		);
-		this.#choices.onSelect = ({ value }) => {
-			void this.#decide(value as "allowed" | "denied");
-		};
+		this.#choices = this.#newChoices(0);
 		this.#queue = new ApprovalQueue(connect, () => {
 			this.#sync();
 			changed();
 		});
+	}
+	#newChoices(selected: number): SelectList {
+		const choices = new SelectList(
+			[
+				{ value: "allowed", label: t("approval.allowOnce") },
+				{ value: "denied", label: t("approval.deny") },
+			],
+			2,
+			getSelectListTheme(),
+		);
+		choices.onSelect = ({ value }) => {
+			void this.#decide(value as "allowed" | "denied");
+		};
+		choices.setSelectedIndex(selected);
+		return choices;
 	}
 	get #pending() {
 		return this.#queue.pending.filter(({ item }) => !this.#settled.has(item.id));
@@ -118,17 +125,26 @@ export class ApprovalDock {
 	}
 	render(width: number): string[] {
 		if (!this.visible) return [];
+		if (this.#choicesLanguage !== getLanguage()) {
+			const selected = this.#choices.getSelectedItem()?.value === "denied" ? 1 : 0;
+			this.#choices = this.#newChoices(selected);
+			this.#choicesLanguage = getLanguage();
+		}
 		const pending = this.#pending;
 		const selected = pending.find(({ item }) => item.id === this.#id);
-		if (!selected) return new Text(approvalText(this.#queue.error ?? "Loading..."), 0, 0).render(width);
+		if (!selected) return new Text(approvalText(this.#queue.error ?? t("common.loading")), 0, 0).render(width);
 		const { item, title } = selected;
 		this.#presented = item.id;
 		const header = theme.accent(
-			truncateToWidth(approvalText(`Approval ${pending.indexOf(selected) + 1}/${pending.length} · ${title}`), width),
+			truncateToWidth(
+				approvalText(t("approval.header", { index: pending.indexOf(selected) + 1, total: pending.length, title })),
+				width,
+			),
 		);
+		const timeout = item.timeout ?? t("approval.timeoutDefault");
 		const body = new Text(
 			approvalText(
-				`${item.command}\nCwd: ${item.cwd}\nTimeout: ${item.timeout ?? "default"}${this.#error ? `\n${this.#error}` : ""}`,
+				`${item.command}\n${t("approval.cwd", { cwd: item.cwd })}\n${t("approval.timeout", { timeout })}${this.#error ? `\n${this.#error}` : ""}`,
 			),
 			0,
 			0,
@@ -138,8 +154,15 @@ export class ApprovalDock {
 		this.#offset = Math.min(this.#offset, this.#max);
 		const rows = [header, ...body.slice(this.#offset, this.#offset + bodyHeight)];
 		this.#choiceRow = rows.length;
-		rows.push(...(this.#busy.has(item.id) ? [theme.dim("Submitting..."), ""] : this.#choices.render(width)));
-		rows.push(truncateToWidth(shortcutHints(["↑↓", "Select"], ["Enter", "Confirm"], ["PgUp/PgDn", "Scroll"]), width));
+		rows.push(
+			...(this.#busy.has(item.id) ? [theme.dim(t("approval.submittingDots")), ""] : this.#choices.render(width)),
+		);
+		rows.push(
+			truncateToWidth(
+				shortcutHints(["↑↓", t("action.select")], ["Enter", t("action.confirm")], ["PgUp/PgDn", t("action.scroll")]),
+				width,
+			),
+		);
 		return rows;
 	}
 	invalidate() {

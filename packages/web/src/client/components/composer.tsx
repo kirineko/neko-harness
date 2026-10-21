@@ -17,8 +17,17 @@ import {
 import { appActions } from "../lib/bootstrap";
 import { commandSuggestions, isCommandQuery } from "../lib/command-suggestions";
 import { fitHeight } from "../lib/composer-height";
+import { localizeCoreError, localizeCoreText } from "../lib/i18n/core-text.ts";
+import { getT, type PlainKey, useT } from "../lib/i18n/index.ts";
 import { type HistoryBrowse, stepHistory } from "../lib/input-history";
-import { PLAN_MODE_LABEL, PLAN_UNSUPPORTED_TEXT, planCommandArgs, planErrorText, planState } from "../lib/plan-ui";
+import {
+	isPlanBusy,
+	planCommandArgs,
+	planErrorText,
+	planModeLabel,
+	planState,
+	planUnsupportedText,
+} from "../lib/plan-ui";
 import { providerIssue, providerName } from "../lib/providers";
 import { questionUi } from "../lib/question-ui";
 import { getState, storeActions, useNekoState } from "../lib/store";
@@ -29,7 +38,7 @@ import { ModelPicker } from "./model-picker";
 import { Icon } from "./primitives";
 import { QueueBar } from "./queue-bar";
 
-type Attachment = { id: string; file: File; error?: string; processing?: boolean };
+type Attachment = { id: string; file: File; error?: PlainKey; processing?: boolean };
 type Draft = { text: string; files: Attachment[]; requestId: string };
 const drafts = new Map<string, Draft>();
 const draftListeners = new Set<() => void>();
@@ -39,28 +48,29 @@ export function composerEngaged(sessionId: string): boolean {
 	const draft = drafts.get(sessionId);
 	if (draft && (draft.text.trim() !== "" || draft.files.length > 0)) return true;
 	const active = document.activeElement;
-	return active?.tagName === "TEXTAREA" && active.getAttribute("aria-label") === "消息输入";
+	return active?.tagName === "TEXTAREA" && active.hasAttribute("data-composer-input");
 }
 export function reloadForUpgrade(): void {
+	const t = getT();
 	const state = getState(),
 		session = state.currentSessionId,
 		key = session ?? `none:${state.workspaceRoot}`;
 	const draft = drafts.get(key);
 	if (submitting.size || state.operating) {
-		storeActions.notice({ level: "info", text: "发送中，请稍后刷新" });
+		storeActions.notice({ level: "info", text: t("composer.upgrade.sending") });
 		return;
 	}
 	if ([...drafts.values()].some((d) => d.files.length)) {
-		storeActions.notice({ level: "info", text: "先发送或移除附件，再刷新" });
+		storeActions.notice({ level: "info", text: t("composer.upgrade.attachments") });
 		return;
 	}
 	if (!state.webInfo) {
-		storeActions.notice({ level: "error", text: "连接未就绪，请稍后重试" });
+		storeActions.notice({ level: "error", text: t("composer.upgrade.notReady") });
 		return;
 	}
 	// Preserve other sessions' drafts by asking the user to handle them first.
 	if ([...drafts.entries()].some(([id, d]) => id !== key && d.text.trim())) {
-		storeActions.notice({ level: "info", text: "其他会话有草稿，请先发送或清空" });
+		storeActions.notice({ level: "info", text: t("composer.upgrade.otherDrafts") });
 		return;
 	}
 	try {
@@ -73,7 +83,7 @@ export function reloadForUpgrade(): void {
 			requestId: draft?.requestId ?? crypto.randomUUID(),
 		});
 	} catch {
-		storeActions.notice({ level: "error", text: "草稿保存失败，请先复制文字" });
+		storeActions.notice({ level: "error", text: t("composer.upgrade.saveFailed") });
 		return;
 	}
 	window.location.reload();
@@ -117,6 +127,7 @@ function Thumbnail({ file }: { file: File }) {
 }
 function SessionComposer(props: Props & { sessionId: string }) {
 	const { credentials, view, models, workspaceRoot, phase, operating } = useNekoState();
+	const t = useT();
 	const active = view?.compaction?.active ?? [];
 	if (!drafts.has(props.sessionId))
 		drafts.set(props.sessionId, { text: "", files: [], requestId: crypto.randomUUID() });
@@ -144,7 +155,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 	const [menu, setMenu] = useState(false);
 	const [skills, setSkills] = useState<readonly NekoSkillInfo[]>([]);
 	const [commandSelected, setCommandSelected] = useState(0);
-	const [skillStatus, setSkillStatus] = useState("");
+	const [skillStatus, setSkillStatus] = useState<PlainKey | "">("");
 	const commandId = useId();
 	const [drag, setDrag] = useState(false);
 	const textarea = useRef<HTMLTextAreaElement>(null);
@@ -209,9 +220,9 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			file,
 			processing: true,
 			error: !["image/png", "image/jpeg", "image/webp"].includes(file.type)
-				? "仅支持 PNG、JPEG、WebP"
+				? "composer.attach.type"
 				: file.size > 20 * 1024 * 1024
-					? "单图不能超过 20 MiB"
+					? "composer.attach.size"
 					: undefined,
 		}));
 		edit({ files: [...current.current.files, ...next] });
@@ -224,7 +235,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 				const bitmap = await createImageBitmap(attachment.file);
 				bitmap.close();
 			} catch {
-				error = "无法解码图片，请重新选择";
+				error = "composer.attach.decode";
 			}
 		}
 		const saved = drafts.get(props.sessionId);
@@ -248,24 +259,24 @@ function SessionComposer(props: Props & { sessionId: string }) {
 		setCommandSelected(0);
 		if (!menu) return;
 		if (props.sessionId.startsWith("none:")) {
-			setSkillStatus("新建会话后可选择工作区技能");
+			setSkillStatus("composer.skills.newSession");
 			return;
 		}
 		if (phase !== "ready" || operating) {
-			setSkillStatus("等待会话连接…");
+			setSkillStatus("composer.skills.waiting");
 			return;
 		}
 		const controller = new AbortController();
-		setSkillStatus("正在加载技能…");
+		setSkillStatus("composer.skills.loading");
 		void appActions
 			.listSkills(props.sessionId, controller.signal)
 			.then((list) => {
 				if (controller.signal.aborted) return;
 				setSkills(list);
-				setSkillStatus(list.length ? "" : "当前工作区暂无可用技能");
+				setSkillStatus(list.length ? "" : "composer.skills.empty");
 			})
 			.catch(() => {
-				if (!controller.signal.aborted) setSkillStatus("技能加载失败，请关闭菜单后重试");
+				if (!controller.signal.aborted) setSkillStatus("composer.skills.failed");
 			});
 		return () => controller.abort();
 	}, [props.sessionId, phase, operating, menu]);
@@ -275,14 +286,15 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			if (imageRequest.current) return;
 			const controller = new AbortController();
 			imageRequest.current = controller;
-			setError("正在读取图片…");
+			setError(t("composer.image.reading"));
 			void (async () => {
 				let sessionId = props.sessionId;
 				if (sessionId.startsWith("none:")) {
 					creating.current = true;
 					await appActions.createSession();
 					const state = getState();
-					if (state.workspaceRoot !== workspaceRoot || !state.currentSessionId) throw new Error("工作区已切换");
+					if (state.workspaceRoot !== workspaceRoot || !state.currentSessionId)
+						throw new Error(t("composer.workspaceChanged"));
 					sessionId = state.currentSessionId;
 					drafts.set(sessionId, before);
 					for (const listener of draftListeners) listener();
@@ -307,7 +319,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			})()
 				.catch((error) => {
 					if (!controller.signal.aborted) {
-						const text = error instanceof Error ? error.message : "图片读取失败，请重试";
+						const text = error instanceof Error ? error.message : t("composer.image.readFailed");
 						setError(text);
 						if (creating.current) storeActions.notice({ level: "error", text });
 					}
@@ -347,22 +359,26 @@ function SessionComposer(props: Props & { sessionId: string }) {
 	}, [expiresAt]);
 	const compaction = active.length
 		? active.some((c) => c.retry)
-			? "压缩重试中"
+			? t("composer.compaction.retrying")
 			: active.some((c) => c.blocking)
-				? "等待上下文压缩"
-				: "正在压缩上下文"
+				? t("composer.compaction.waiting")
+				: t("composer.compaction.running")
 		: view?.compaction?.failure
-			? `压缩失败：${view.compaction.failure.error}`
+			? t("composer.compaction.failure", { error: view.compaction.failure.error })
 			: latest && !expired
-				? {
-						applied: "上下文已压缩",
-						nothing: "当前无需压缩",
-						skipped: "已跳过过期摘要",
-						cancelled: "压缩已取消",
-						failed: "压缩失败，可重试",
-						summarizing: "正在压缩上下文",
-						"waiting-to-apply": "等待应用压缩摘要",
-					}[latest.phase]
+				? t(
+						(
+							{
+								applied: "composer.compaction.applied",
+								nothing: "composer.compaction.nothing",
+								skipped: "composer.compaction.skipped",
+								cancelled: "composer.compaction.cancelled",
+								failed: "composer.compaction.failed",
+								summarizing: "composer.compaction.running",
+								"waiting-to-apply": "composer.compaction.applying",
+							} as const
+						)[latest.phase],
+					)
 				: null;
 	const compactionFailed = !active.length && (!!view?.compaction?.failure || latest?.phase === "failed");
 	const usage = view?.taskUsage ?? view?.usage ?? null;
@@ -384,7 +400,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 				update({ ...before, text: "", requestId: crypto.randomUUID() });
 			setMenu(false);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "压缩失败，请重试");
+			setError(e instanceof Error ? localizeCoreError(e.message) : t("composer.compactFailed"));
 		} finally {
 			locked.current = false;
 			setPending(false);
@@ -398,19 +414,19 @@ function SessionComposer(props: Props & { sessionId: string }) {
 		setError("");
 		setNote("");
 		if (args !== "") {
-			setNote("/plan 不接受参数；先切换到规划模式，再正常描述需求");
+			setNote(t("composer.plan.noArgs"));
 			return;
 		}
 		if (props.sessionId.startsWith("none:")) {
-			setNote("请先开始会话，再切换规划模式");
+			setNote(t("composer.plan.needSession"));
 			return;
 		}
 		if (plan === null) {
-			setNote(PLAN_UNSUPPORTED_TEXT);
+			setNote(planUnsupportedText());
 			return;
 		}
 		if (props.busy) {
-			setNote("会话运行中，请先等待回答结束或停止后再切换规划模式");
+			setNote(t("composer.plan.busy"));
 			return;
 		}
 		locked.current = true;
@@ -423,7 +439,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			setMenu(false);
 		} catch (e) {
 			const text = planErrorText(e);
-			(text.startsWith("会话运行中") ? setNote : setError)(text);
+			(isPlanBusy(e) ? setNote : setError)(text);
 		} finally {
 			locked.current = false;
 			setPending(false);
@@ -445,12 +461,12 @@ function SessionComposer(props: Props & { sessionId: string }) {
 		if (locked.current || props.disabled || missingKey || noVision || (!before.text.trim() && !before.files.length))
 			return;
 		if (before.files.length > 4 || before.files.reduce((n, a) => n + a.file.size, 0) > 40 * 1024 * 1024) {
-			setError("每条消息最多 4 张图片，总大小不超过 40 MiB");
+			setError(t("composer.attach.limit"));
 			return;
 		}
 		if (before.files.some((a) => a.processing)) return;
 		if (before.files.some((a) => a.error)) {
-			setError("请先移除不支持的附件");
+			setError(t("composer.attach.removeUnsupported"));
 			return;
 		}
 		locked.current = true;
@@ -467,7 +483,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 				await appActions.createSession();
 				const state = getState();
 				if (state.workspaceRoot !== workspaceRoot || !state.currentSessionId)
-					throw new Error("工作区已切换，草稿已保留");
+					throw new Error(t("composer.workspaceChangedDraft"));
 				target = state.currentSessionId;
 				drafts.set(target, before);
 				for (const listener of draftListeners) listener();
@@ -485,7 +501,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 					requestId: crypto.randomUUID(),
 				});
 		} catch (e) {
-			const message = e instanceof Error ? e.message : "发送失败，请重试";
+			const message = e instanceof Error ? localizeCoreError(e.message) : t("composer.sendFailed");
 			setError(message);
 			if (getState().currentSessionId !== props.sessionId) storeActions.notice({ level: "error", text: message });
 		} finally {
@@ -521,11 +537,11 @@ function SessionComposer(props: Props & { sessionId: string }) {
 				const base = current.current.text;
 				const text = outcome.text ?? item.preview;
 				edit({ text: base.trim() ? `${base}\n${text}` : text });
-				setNote("无法改为引导，消息已撤回到输入框");
-			} else if (outcome.result === "unknown") setNote("该消息已不在队列中");
-			else if (outcome.result !== "steered") setNote("该消息已发送，无法引导");
+				setNote(t("composer.queue.steerWithdrawn"));
+			} else if (outcome.result === "unknown") setNote(t("composer.queue.gone"));
+			else if (outcome.result !== "steered") setNote(t("composer.queue.sentNoSteer"));
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "引导失败，请重试");
+			setError(e instanceof Error ? localizeCoreError(e.message) : t("composer.queue.steerFailed"));
 		} finally {
 			setWithdrawing(null);
 		}
@@ -541,12 +557,12 @@ function SessionComposer(props: Props & { sessionId: string }) {
 				const base = current.current.text;
 				const text = outcome.text ?? item.preview;
 				edit({ text: base.trim() ? `${base}\n${text}` : text });
-				if (outcome.images) setNote("图片未恢复，请重新添加");
+				if (outcome.images) setNote(t("composer.queue.imagesNotRestored"));
 				textarea.current?.focus();
-			} else if (outcome.result === "unknown") setNote("该消息已不在队列中");
-			else setNote("该消息已发送，无法撤回");
+			} else if (outcome.result === "unknown") setNote(t("composer.queue.gone"));
+			else setNote(t("composer.queue.sentNoWithdraw"));
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "撤回失败，请重试");
+			setError(e instanceof Error ? localizeCoreError(e.message) : t("composer.queue.withdrawFailed"));
 		} finally {
 			setWithdrawing(null);
 		}
@@ -554,7 +570,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 	const busyCard = props.busy || active.some((c) => c.reason === "manual" || c.blocking);
 	return (
 		<section
-			aria-label="消息输入"
+			aria-label={t("composer.input")}
 			className="relative shrink-0 px-3 pt-1 pb-3 sm:px-4 sm:pb-4"
 			onDragOver={(e) => {
 				if (e.dataTransfer.types.includes("Files")) {
@@ -589,36 +605,34 @@ function SessionComposer(props: Props & { sessionId: string }) {
 								data-question-hint
 								className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-snug text-tianyi-900 sm:text-sm"
 							>
-								<span className="min-w-0 break-words">
-									助手正在等待你的回答。此处发送的消息仍会排队（含引导），回答或跳过后才进入上下文，不会当作答案。
-								</span>
+								<span className="min-w-0 break-words">{t("composer.questionHint")}</span>
 								<button
 									type="button"
 									className="focus-neko shrink-0 rounded-full border border-tianyi-300 bg-tianyi-50 px-2.5 py-0.5 text-xs text-tianyi-900 hover:bg-tianyi-100"
 									onClick={openQuestion}
 								>
-									打开问题
+									{t("composer.openQuestion")}
 								</button>
 							</output>
 						)}
-						{drag && <p className="text-sm text-sakura-700">松开以添加图片，不会自动发送</p>}
+						{drag && <p className="text-sm text-sakura-700">{t("composer.dropHint")}</p>}
 						{issue && (
 							<p className="text-sm text-sakura-700">
 								{issue === "disabled"
-									? `模型服务 ${providerName(view?.agent.model?.provider ?? "")} 已取消启用，请重新启用或切换模型。`
-									: `尚未配置 ${providerName(view?.agent.model?.provider ?? "")} Key。`}
+									? t("composer.provider.disabled", { provider: providerName(view?.agent.model?.provider ?? "") })
+									: t("composer.provider.keyMissing", { provider: providerName(view?.agent.model?.provider ?? "") })}
 								<Link
 									to="/settings"
 									hash={`credential-${view?.agent.model?.provider ?? ""}`}
-									className="focus-neko underline"
+									className="focus-neko ml-1 underline"
 								>
-									前往设置
+									{t("composer.provider.goSettings")}
 								</Link>
 							</p>
 						)}
-						{noVision && <p className="text-sm text-sakura-700">当前模型不支持图片，请切换模型或移除附件。</p>}
+						{noVision && <p className="text-sm text-sakura-700">{t("composer.noVision")}</p>}
 						{!model?.input.includes("image") && view?.items.some((i) => i.type === "user" && i.images?.length) && (
-							<p className="text-xs text-ink-500">当前模型无法查看历史原图，仍可使用已有文字分析。</p>
+							<p className="text-xs text-ink-500">{t("composer.noHistoryImages")}</p>
 						)}
 						{note && <output className="block break-words text-sm text-ink-600">{note}</output>}
 						{error && (
@@ -635,11 +649,11 @@ function SessionComposer(props: Props & { sessionId: string }) {
 									<span className="block truncate text-xs" title={a.file.name}>
 										{a.file.name}
 									</span>
-									{a.processing && <span className="text-xs text-ink-500">检查图片…</span>}
-									{a.error && <span className="text-xs text-sakura-700">{a.error}</span>}
+									{a.processing && <span className="text-xs text-ink-500">{t("composer.attach.checking")}</span>}
+									{a.error && <span className="text-xs text-sakura-700">{t(a.error)}</span>}
 									<button
 										type="button"
-										aria-label={`移除 ${a.file.name}`}
+										aria-label={t("composer.attach.remove", { name: a.file.name })}
 										className="focus-neko absolute right-0 top-0 rounded-full bg-base px-1"
 										onClick={() => edit({ files: current.current.files.filter((f) => f.id !== a.id) })}
 									>
@@ -656,12 +670,13 @@ function SessionComposer(props: Props & { sessionId: string }) {
 						rows={1}
 						placeholder={
 							waitingQuestions.length > 0
-								? "助手在等你回答，此处消息将排队"
+								? t("composer.placeholder.waiting")
 								: props.busy
-									? "运行中：消息将在回答结束后排队，可在排队条中引导或撤回"
-									: "输入消息，@ 引用文件，/ 命令"
+									? t("composer.placeholder.busy")
+									: t("composer.placeholder.idle")
 						}
-						aria-label="消息输入"
+						aria-label={t("composer.input")}
+						data-composer-input
 						aria-autocomplete="list"
 						aria-controls={mentions.controls ?? (menu ? commandId : undefined)}
 						aria-activedescendant={
@@ -741,8 +756,8 @@ function SessionComposer(props: Props & { sessionId: string }) {
 						/>
 						<button
 							type="button"
-							aria-label="添加图片"
-							title="添加图片（最多 4 张）"
+							aria-label={t("composer.addImage")}
+							title={t("composer.addImageTitle")}
 							disabled={props.disabled}
 							onClick={() => picker.current?.click()}
 							className="focus-neko inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-600 hover:bg-sakura-50"
@@ -751,7 +766,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 						</button>
 						<button
 							type="button"
-							aria-label="输入操作菜单"
+							aria-label={t("composer.menu")}
 							aria-expanded={menu}
 							className="focus-neko inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-sakura-50"
 							onClick={() => {
@@ -770,8 +785,8 @@ function SessionComposer(props: Props & { sessionId: string }) {
 								className={`shrink-0 rounded-full bg-tianyi-50 px-2 py-1 font-mono text-xs ${context.percent !== null && context.percent > 90 ? "text-sakura-700 font-semibold" : "text-ink-600"}`}
 								title={
 									context.tokens === null
-										? "暂无有效用量；首次回答或压缩后的新回答完成后更新"
-										: `最近一次成功回答的上下文用量：${context.tokens} / ${context.window} tokens；非会话累计用量`
+										? t("composer.ctx.none")
+										: t("composer.ctx.usage", { tokens: context.tokens, window: context.window })
 								}
 							>
 								Ctx {context.percent === null ? "?" : `${context.percent.toFixed(1)}%`}/{formatTokens(context.window)}
@@ -782,9 +797,7 @@ function SessionComposer(props: Props & { sessionId: string }) {
 								<span
 									className={`max-w-full whitespace-nowrap rounded-full border px-2 py-1 text-xs ${compactionFailed ? "border-sakura-300 bg-sakura-50 text-sakura-700" : "border-tianyi-200 bg-tianyi-50 text-ink-600"}`}
 									title={
-										latest?.phase === "nothing" && !active.length
-											? "保留近期上下文，暂无可压缩的旧内容；默认保留最近约 20,000 tokens"
-											: undefined
+										latest?.phase === "nothing" && !active.length ? t("composer.compaction.nothingTitle") : undefined
 									}
 								>
 									{compaction}
@@ -794,9 +807,9 @@ function SessionComposer(props: Props & { sessionId: string }) {
 								<span
 									data-plan-mode
 									className="max-w-full whitespace-nowrap rounded-full border border-sakura-300 bg-sakura-50 px-2 py-1 text-xs font-medium text-sakura-800"
-									title="只读调研并提交计划；批准后自动退出并开始执行。输入 /plan 可退出"
+									title={t("composer.planModeTitle")}
 								>
-									{PLAN_MODE_LABEL}
+									{planModeLabel()}
 								</span>
 							)}
 						</output>
@@ -804,25 +817,35 @@ function SessionComposer(props: Props & { sessionId: string }) {
 							{props.busy && props.status !== null && (
 								<span
 									className="inline-flex min-w-0 max-w-64 items-center gap-1.5 text-xs font-medium text-sakura-700"
-									title={props.status}
+									title={localizeCoreText(props.status, t)}
 								>
 									<span className="dots shrink-0" aria-hidden>
 										<span />
 										<span />
 										<span />
 									</span>
-									<span className="truncate">{props.status.replace(/\.\.\.$/, "")}</span>
+									<span className="truncate">{localizeCoreText(props.status, t).replace(/(\.\.\.|…)$/, "")}</span>
 								</span>
 							)}
 							{usage !== null && (
 								<button
 									type="button"
 									className="telemetry focus-neko shrink-0 rounded-full px-1.5 py-1 font-mono text-xs text-ink-500"
-									aria-label={`任务总用量：输入 ${usage.input}，输出 ${usage.output}，缓存读 ${usage.cacheRead}，成本 ${formatCost(usage.cost)}`}
+									aria-label={t("composer.usage.aria", {
+										input: usage.input,
+										output: usage.output,
+										cacheRead: usage.cacheRead,
+										cost: formatCost(usage.cost),
+									})}
 								>
 									↑{formatTokens(usage.input)} ↓{formatTokens(usage.output)}
 									<span className="telemetry-detail" aria-hidden>
-										输入 {usage.input} · 输出 {usage.output} · 缓存读 {usage.cacheRead} · {formatCost(usage.cost)}
+										{t("composer.usage.detail", {
+											input: usage.input,
+											output: usage.output,
+											cacheRead: usage.cacheRead,
+											cost: formatCost(usage.cost),
+										})}
 									</span>
 								</button>
 							)}
@@ -839,16 +862,16 @@ function SessionComposer(props: Props & { sessionId: string }) {
 								onClick={() => void submit()}
 								className="btn-primary focus-neko h-10 shrink-0 rounded-full px-3 text-sm disabled:opacity-50"
 							>
-								{pending ? "处理中" : props.busy ? "排队" : "发送"}
+								{pending ? t("composer.working") : props.busy ? t("composer.queue") : t("composer.send")}
 							</button>
 							{busyCard && (
 								<button
 									type="button"
 									onClick={() => appActions.abort()}
 									className="btn-stop focus-neko h-10 rounded-full px-2 text-sm"
-									title="中止当前会话运行及可中止任务"
+									title={t("composer.stopTitle")}
 								>
-									停止
+									{t("composer.stop")}
 								</button>
 							)}
 						</div>
@@ -859,11 +882,11 @@ function SessionComposer(props: Props & { sessionId: string }) {
 					<ComposerSuggestions
 						anchor={card}
 						id={commandId}
-						title="输入命令"
+						title={t("composer.commandTitle")}
 						items={menuItems}
 						selected={selectedCommand}
 						onSelect={setCommandSelected}
-						message={skillStatus || (menuItems.length ? undefined : "没有匹配的命令或技能")}
+						message={skillStatus ? t(skillStatus) : menuItems.length ? undefined : t("composer.noCommands")}
 						onAccept={acceptCommand}
 					/>
 				)}

@@ -23,10 +23,12 @@ class PairingTextOk extends PairingTextResult {
 }
 
 class PairingTextError extends PairingTextResult {
-  const PairingTextError(this.kind, this.message, {this.unsupportedVersion});
+  const PairingTextError(this.kind, this.code, {this.unsupportedVersion});
 
   final PairingTextErrorKind kind;
-  final String message;
+
+  /// 稳定的细分码（如 missing_prefix、fp_invalid）；用户可见文案由界面层按语言映射。
+  final String code;
 
   /// kind == unsupportedVersion 时的版本号。
   final int? unsupportedVersion;
@@ -85,23 +87,29 @@ PairingTextResult parsePairingText(String text, {DateTime Function()? clock}) {
   if (!trimmed.startsWith('$kPairingScheme:')) {
     return const PairingTextError(
       PairingTextErrorKind.invalid,
-      '缺少 nekopair: 前缀',
+      'missing_prefix',
     );
   }
   final rest = trimmed.substring('$kPairingScheme:'.length);
   final sep = rest.indexOf(':');
   if (sep <= 0) {
-    return const PairingTextError(PairingTextErrorKind.invalid, '缺少版本段');
+    return const PairingTextError(
+      PairingTextErrorKind.invalid,
+      'missing_version',
+    );
   }
   final versionToken = rest.substring(0, sep);
   final version = int.tryParse(versionToken);
   if (version == null) {
-    return const PairingTextError(PairingTextErrorKind.invalid, '版本段不是数字');
+    return const PairingTextError(
+      PairingTextErrorKind.invalid,
+      'version_not_number',
+    );
   }
   if (version != kPairingVersion) {
     return PairingTextError(
       PairingTextErrorKind.unsupportedVersion,
-      '不支持的配对版本 $version',
+      'unsupported_version',
       unsupportedVersion: version,
     );
   }
@@ -113,70 +121,55 @@ PairingTextResult parsePairingText(String text, {DateTime Function()? clock}) {
     final decoded = utf8.decode(bytes, allowMalformed: false);
     final parsed = jsonDecode(decoded);
     if (parsed is! Map<String, dynamic>) {
-      return const PairingTextError(PairingTextErrorKind.invalid, 'JSON 必须是对象');
+      return const PairingTextError(PairingTextErrorKind.invalid, 'not_object');
     }
     json = parsed;
   } on FormatException {
-    return const PairingTextError(
-      PairingTextErrorKind.invalid,
-      'base64url、UTF-8 或 JSON 不合法',
-    );
+    return const PairingTextError(PairingTextErrorKind.invalid, 'bad_payload');
   }
 
   final sid = json['sid'];
   if (sid is! String || sid.isEmpty) {
-    return const PairingTextError(PairingTextErrorKind.invalid, 'sid 缺失或不是字符串');
+    return const PairingTextError(PairingTextErrorKind.invalid, 'sid_invalid');
   }
   final name = json['name'];
   if (name is! String || name.length > 64) {
-    return const PairingTextError(
-      PairingTextErrorKind.invalid,
-      'name 缺失或超过 64 字符',
-    );
+    return const PairingTextError(PairingTextErrorKind.invalid, 'name_invalid');
   }
   final endpoint = _parseEndpoint(json['ep']);
   if (endpoint == null) {
     return const PairingTextError(
       PairingTextErrorKind.invalid,
-      'ep 必须是 https://IPv4字面量:端口，不允许 userinfo/query/fragment/path',
+      'endpoint_invalid',
     );
   }
   final fp = json['fp'];
   if (fp is! String || !_fingerprintPattern.hasMatch(fp)) {
-    return const PairingTextError(
-      PairingTextErrorKind.invalid,
-      'fp 必须是 64 位十六进制',
-    );
+    return const PairingTextError(PairingTextErrorKind.invalid, 'fp_invalid');
   }
   final code = json['code'];
   if (code is! String) {
-    return const PairingTextError(
-      PairingTextErrorKind.invalid,
-      'code 缺失或不是字符串',
-    );
+    return const PairingTextError(PairingTextErrorKind.invalid, 'code_missing');
   }
   try {
     if (base64Url.decode(base64Url.normalize(code)).length != 32) {
       return const PairingTextError(
         PairingTextErrorKind.invalid,
-        'code 必须是 32 字节 base64url',
+        'code_length',
       );
     }
   } on FormatException {
     return const PairingTextError(
       PairingTextErrorKind.invalid,
-      'code 不是合法 base64url',
+      'code_encoding',
     );
   }
   final exp = json['exp'];
   if (exp is! int || exp <= 0) {
-    return const PairingTextError(
-      PairingTextErrorKind.invalid,
-      'exp 必须是正整数 Unix 毫秒',
-    );
+    return const PairingTextError(PairingTextErrorKind.invalid, 'exp_invalid');
   }
   if (exp <= now.millisecondsSinceEpoch) {
-    return const PairingTextError(PairingTextErrorKind.expired, '配对码已过期');
+    return const PairingTextError(PairingTextErrorKind.expired, 'expired');
   }
   return PairingTextOk(
     PairingTarget(

@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
-import { plainText, TODO_STATUS_LABEL, todoState } from "../lib/interactions.ts";
+import { useT } from "../lib/i18n/index.ts";
+import { plainText, todoState, todoStatusLabel } from "../lib/interactions.ts";
 import { useNekoState } from "../lib/store.ts";
 import { Icon } from "./primitives.tsx";
 
@@ -11,6 +12,7 @@ const MARKS = {
 
 /** Top-bar entry: progress of the model's todo list. Hidden when the gateway has no todos or the list is empty. */
 export function TodoButton(props: { open: boolean; onToggle: () => void; panelId: string }) {
+	const t = useT();
 	const todo = todoState(useNekoState());
 	if (todo === null || todo.total === 0) return null;
 	return (
@@ -19,12 +21,16 @@ export function TodoButton(props: { open: boolean; onToggle: () => void; panelId
 			className="focus-neko shrink-0 whitespace-nowrap rounded-full border border-sakura-300 px-2.5 py-0.5 text-xs text-sakura-800 hover:bg-sakura-50"
 			aria-expanded={props.open}
 			aria-controls={props.panelId}
-			aria-label={`待办 ${todo.completed}/${todo.total}，已完成 ${todo.completed} 项${todo.offline ? "（离线）" : ""}`}
-			title="待办进度（只读）"
+			aria-label={t("todo.aria", {
+				done: todo.completed,
+				total: todo.total,
+				offline: todo.offline ? t("todo.ariaOffline") : "",
+			})}
+			title={t("todo.progressTitle")}
 			onClick={props.onToggle}
 		>
 			<span className="max-sm:hidden" aria-hidden>
-				待办{" "}
+				{t("todo.label")}{" "}
 			</span>
 			<span aria-hidden>
 				{todo.completed}/{todo.total}
@@ -38,6 +44,7 @@ export function TodoButton(props: { open: boolean; onToggle: () => void; panelId
  * the stop button or a question card; a long list scrolls inside its own height cap.
  */
 export function TodoPanel(props: { id: string; onClose: () => void }) {
+	const t = useT();
 	const todo = todoState(useNekoState());
 	if (todo === null || todo.total === 0) return null;
 	const onKeyDown = (event: KeyboardEvent) => {
@@ -48,18 +55,16 @@ export function TodoPanel(props: { id: string; onClose: () => void }) {
 	return (
 		<section
 			id={props.id}
-			aria-label="待办列表"
+			aria-label={t("todo.panel")}
 			data-todo-panel
 			className="flex max-h-[min(45dvh,20rem)] min-h-[3rem] shrink-[10] flex-col border-b border-sakura-200 bg-base"
 			onKeyDown={onKeyDown}
 		>
 			<div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-xs">
-				<strong className="text-ink-800">
-					待办 · 已完成 {todo.completed}/{todo.total}
-				</strong>
+				<strong className="text-ink-800">{t("todo.heading", { done: todo.completed, total: todo.total })}</strong>
 				{todo.offline && (
 					<output className="rounded-full border border-sakura-300 bg-sakura-50 px-2 py-0.5 text-sakura-800">
-						离线 · 显示最后一次加载的内容，可能不是最新状态
+						{t("todo.offlineNote")}
 					</output>
 				)}
 				<button
@@ -67,7 +72,7 @@ export function TodoPanel(props: { id: string; onClose: () => void }) {
 					className="focus-neko ml-auto rounded-lg px-2 py-1 text-ink-600 hover:bg-sakura-50"
 					onClick={props.onClose}
 				>
-					关闭
+					{t("common.close")}
 				</button>
 			</div>
 			<div className="chat-column flex min-h-0 flex-1 flex-col">
@@ -76,7 +81,7 @@ export function TodoPanel(props: { id: string; onClose: () => void }) {
 					data-todo-scroll
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll a long list.
 					tabIndex={0}
-					aria-label="待办条目"
+					aria-label={t("todo.items")}
 				>
 					<ol className="space-y-1.5">
 						{todo.items.map((item) => (
@@ -88,7 +93,7 @@ export function TodoPanel(props: { id: string; onClose: () => void }) {
 										name={item.status === "completed" ? "check" : item.status === "in_progress" ? "spinner" : "clock"}
 										size={12}
 									/>
-									{TODO_STATUS_LABEL[item.status]}
+									{todoStatusLabel(item.status)}
 								</span>
 								<span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-ink-800">
 									{plainText(item.text)}

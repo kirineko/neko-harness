@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/ui/theme.dart';
 import 'package:neko_mobile/ui/widgets/math_markdown.dart';
 
@@ -59,7 +60,8 @@ class NekoMarkdown extends StatelessWidget {
       ),
       onTapLink: (text, href, title) {},
       // 远程图片不自动加载：避免提示注入借手机发起请求（泄露数据/探测局域网）。
-      imageBuilder: (uri, title, alt) => Text('[图片 ${alt ?? uri.toString()}]'),
+      imageBuilder: (uri, title, alt) =>
+          Text(context.l10n.markdownImage(alt ?? uri.toString())),
     );
   }
 }

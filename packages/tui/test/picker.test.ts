@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { PickerPanel } from "../src/components/picker.ts";
 

@@ -1,5 +1,7 @@
 import qrcode from "qrcode-generator";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatDate, formatDateTime } from "../lib/i18n/format.ts";
+import { useLanguage, useT } from "../lib/i18n/index.ts";
 import { type MobileAdminState, type MobilePairing as MobilePairingInfo, mobileAdmin } from "../lib/mobile-admin";
 import { useNekoState } from "../lib/store";
 import { CopyButton } from "./copy-button";
@@ -14,6 +16,7 @@ function messageOf(error: unknown): string {
 }
 
 function QrCode(props: { text: string }) {
+	const t = useT();
 	const qr = qrcode(0, "M");
 	qr.addData(props.text, "Byte");
 	qr.make();
@@ -33,7 +36,7 @@ function QrCode(props: { text: string }) {
 			shapeRendering="crispEdges"
 			className="h-44 w-44 rounded-xl bg-white p-2 text-ink-900"
 		>
-			<title>手机配对二维码</title>
+			<title>{t("pairing.qrTitle")}</title>
 			<path d={cells.join(" ")} fill="currentColor" />
 		</svg>
 	);
@@ -41,6 +44,8 @@ function QrCode(props: { text: string }) {
 
 export function MobilePairing() {
 	const { webInfo } = useNekoState();
+	const t = useT();
+	const language = useLanguage();
 	const [supported, setSupported] = useState<boolean | null>(null);
 	const [data, setData] = useState<MobileAdminState | null>(null);
 	const [error, setError] = useState("");
@@ -147,13 +152,13 @@ export function MobilePairing() {
 			if (listening) {
 				await mobileAdmin.disable();
 				setPairing(null);
-				setNotice("手机访问已关闭，已受理的任务继续运行。");
+				setNotice(t("pairing.disabledNotice"));
 			} else {
 				const parsed = Number(port);
-				if (address.trim() === "") throw new Error("请选择要监听的局域网地址。");
-				if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) throw new Error("端口必须是 1-65535 的整数。");
+				if (address.trim() === "") throw new Error(t("pairing.addressRequired"));
+				if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) throw new Error(t("pairing.portInvalid"));
 				await mobileAdmin.enable({ address: address.trim(), port: parsed });
-				setNotice(`手机访问已开启：${address.trim()}:${parsed}`);
+				setNotice(t("pairing.enabledNotice", { address: `${address.trim()}:${parsed}` }));
 			}
 			await refresh();
 		} catch (actionError) {
@@ -169,7 +174,7 @@ export function MobilePairing() {
 		try {
 			const next = await mobileAdmin.createPairing();
 			setPairing(next);
-			setNotice("二维码已生成，120 秒内有效。");
+			setNotice(t("pairing.qrGenerated"));
 		} catch (pairingError) {
 			setPairing(null);
 			setError(messageOf(pairingError));
@@ -185,7 +190,7 @@ export function MobilePairing() {
 		try {
 			const rotated = await mobileAdmin.regenerateCertificate();
 			setPairing(null);
-			setNotice(`证书已重新生成（${rotated.fingerprint.slice(0, 12)}…），手机需重新扫码配对。`);
+			setNotice(t("pairing.certRotated", { fingerprint: rotated.fingerprint.slice(0, 12) }));
 			await refresh();
 		} catch (rotateError) {
 			setError(messageOf(rotateError));
@@ -200,7 +205,7 @@ export function MobilePairing() {
 		setError("");
 		try {
 			const result = await mobileAdmin.revoke(deviceId);
-			setNotice(result.revoked ? "已撤销设备授权，该设备已受理的任务继续运行。" : "设备不存在或已撤销。");
+			setNotice(result.revoked ? t("pairing.revoked") : t("pairing.revokeMissing"));
 			await refresh();
 		} catch (revokeError) {
 			setError(messageOf(revokeError));
@@ -212,17 +217,17 @@ export function MobilePairing() {
 	if (supported === null) {
 		return (
 			<section className="rounded-2xl border border-sakura-200 bg-surface p-5 shadow-soft">
-				<h2 className="text-base font-bold text-ink-900">手机配对</h2>
-				<p className="mt-2 text-sm text-ink-500">读取中…</p>
+				<h2 className="text-base font-bold text-ink-900">{t("settings.mobile.title")}</h2>
+				<p className="mt-2 text-sm text-ink-500">{t("common.loading")}</p>
 			</section>
 		);
 	}
 	if (!supported) {
 		return (
 			<section className="rounded-2xl border border-sakura-200 bg-surface p-5 shadow-soft">
-				<h2 className="text-base font-bold text-ink-900">手机配对</h2>
+				<h2 className="text-base font-bold text-ink-900">{t("settings.mobile.title")}</h2>
 				<p className="mt-2 text-sm text-ink-600" role="alert">
-					当前 gateway 版本不支持手机配对。请更新或重启电脑端后刷新本页；聊天功能不受影响。
+					{t("pairing.unsupported")}
 				</p>
 			</section>
 		);
@@ -234,28 +239,25 @@ export function MobilePairing() {
 	const relayed = data?.state.status === "listening" && data.state.mode === "wsl-relay";
 	const stateLine =
 		data === null
-			? "读取中…"
+			? t("common.loading")
 			: data.state.status === "listening"
-				? `已开启 · https://${liveAddress}${relayed ? "（经 Windows 中继）" : ""}`
+				? t("pairing.stateOn", { address: liveAddress, relay: relayed ? t("pairing.relayed") : "" })
 				: data.state.status === "error"
-					? "开启失败"
+					? t("pairing.stateError")
 					: data.state.status === "disabled"
-						? "已关闭"
-						: "处理中…";
+						? t("pairing.stateOff")
+						: t("credential.working");
 
 	return (
 		<section className="rounded-2xl border border-sakura-200 bg-surface p-5 shadow-soft">
 			<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-				<h2 className="text-base font-bold text-ink-900">手机配对</h2>
+				<h2 className="text-base font-bold text-ink-900">{t("settings.mobile.title")}</h2>
 				<span className="rounded-full bg-tianyi-50 px-3 py-1 text-xs text-tianyi-800">{stateLine}</span>
 			</div>
-			<p className="mb-3 text-xs text-ink-500">允许手机控制电脑上的 Agent。配对仅限本机管理，请只在可信网络中开启。</p>
+			<p className="mb-3 text-xs text-ink-500">{t("pairing.intro")}</p>
 
 			{wsl !== null && (
-				<p className="mb-3 rounded-xl bg-tianyi-50 px-3 py-2 text-xs text-tianyi-800">
-					当前在 WSL 中运行：这里列出的是 Windows 的局域网地址，开启后由 Windows
-					侧的转发进程接入手机连接（无需管理员权限，关闭手机访问或退出 neko 时自动停止）。
-				</p>
+				<p className="mb-3 rounded-xl bg-tianyi-50 px-3 py-2 text-xs text-tianyi-800">{t("pairing.wslNote")}</p>
 			)}
 			{wsl?.error != null && (
 				<p className="mb-3 rounded-xl bg-sakura-50 px-3 py-2 text-xs text-sakura-800" role="alert">
@@ -264,7 +266,7 @@ export function MobilePairing() {
 			)}
 			{data?.state.status === "error" && (
 				<p className="mb-3 rounded-xl bg-sakura-50 px-3 py-2 text-xs text-sakura-800" role="alert">
-					开启失败：{data.state.error}。请检查所选地址与端口是否被占用。
+					{t("pairing.startFailed", { error: data.state.error })}
 				</p>
 			)}
 			{error !== "" && (
@@ -282,10 +284,10 @@ export function MobilePairing() {
 						onChange={() => void toggle()}
 						className="focus-neko h-4 w-4 rounded border-sakura-300 accent-sakura-600"
 					/>
-					允许手机控制电脑上的 Agent
+					{t("pairing.allow")}
 				</label>
 				<label className="inline-flex min-h-6 items-center gap-2 text-sm text-ink-700">
-					地址
+					{t("pairing.address")}
 					<select
 						value={address}
 						disabled={busy || listening === true}
@@ -293,17 +295,19 @@ export function MobilePairing() {
 						className="focus-neko rounded-xl border border-sakura-200 bg-base px-2 py-1.5 text-sm"
 					>
 						{data?.candidates.length === 0 && (
-							<option value="">{wsl !== null ? "未发现 Windows 局域网地址" : "未发现局域网地址"}</option>
+							<option value="">{wsl !== null ? t("pairing.noAddressWindows") : t("pairing.noAddress")}</option>
 						)}
 						{(data?.candidates ?? []).map((candidate) => (
 							<option key={candidate} value={candidate}>
-								{candidate === data?.lastConnectedAddress ? `${candidate}（上次连接成功）` : candidate}
+								{candidate === data?.lastConnectedAddress
+									? t("pairing.lastConnected", { address: candidate })
+									: candidate}
 							</option>
 						))}
 					</select>
 				</label>
 				<label className="inline-flex min-h-6 items-center gap-2 text-sm text-ink-700" htmlFor="mobile-port">
-					端口
+					{t("pairing.port")}
 					<input
 						id="mobile-port"
 						type="number"
@@ -318,9 +322,7 @@ export function MobilePairing() {
 			</div>
 			{listening !== true && (data?.candidates.length ?? 0) === 0 && (
 				<p className="mt-2 text-xs text-ink-500">
-					{wsl !== null
-						? "未发现可用的 Windows 局域网地址，请确认 Windows 已连接网络且 WSL 互操作可用。"
-						: "未发现可用的局域网地址，请确认电脑已连接网络（本机回环地址不可用于手机访问）。"}
+					{wsl !== null ? t("pairing.noUsableWindows") : t("pairing.noUsable")}
 				</p>
 			)}
 
@@ -331,22 +333,22 @@ export function MobilePairing() {
 							<div className="flex items-start gap-3">
 								<QrCode text={pairing.pairingText} />
 								<div className="flex flex-col items-start gap-2">
-									<span className="text-xs text-ink-500">二维码剩余 {remaining} 秒</span>
-									<CopyButton text={pairing.pairingText} label="复制配对文本" />
+									<span className="text-xs text-ink-500">{t("pairing.qrRemaining", { seconds: remaining })}</span>
+									<CopyButton text={pairing.pairingText} label={t("pairing.copyText")} />
 									<button
 										type="button"
 										disabled={busy}
 										onClick={() => void generateQr()}
 										className="focus-neko rounded-full bg-sakura-100 px-4 py-1.5 text-sm font-semibold text-sakura-800 disabled:opacity-50"
 									>
-										刷新二维码
+										{t("pairing.refreshQr")}
 									</button>
 								</div>
 							</div>
 						) : (
 							<div className="flex flex-col items-start gap-2">
 								{pairing !== null && remaining <= 0 && (
-									<span className="text-xs text-ink-500">二维码已过期，请刷新后重新扫码。</span>
+									<span className="text-xs text-ink-500">{t("pairing.qrExpired")}</span>
 								)}
 								<button
 									type="button"
@@ -354,13 +356,12 @@ export function MobilePairing() {
 									onClick={() => void generateQr()}
 									className="focus-neko rounded-full bg-sakura-100 px-4 py-1.5 text-sm font-semibold text-sakura-800 disabled:opacity-50"
 								>
-									生成二维码
+									{t("pairing.generateQr")}
 								</button>
 							</div>
 						)}
 						<p className="max-w-64 text-xs text-ink-500">
-							用手机 App 扫码，或点击「复制配对文本」后在 App 中粘贴。请确保手机与电脑在同一网络，防火墙放行所选端口
-							{relayed ? "（WSL 下需在 Windows 防火墙放行 powershell.exe）" : ""}。
+							{t("pairing.scanHint", { relay: relayed ? t("pairing.relayFirewall") : "" })}
 						</p>
 					</div>
 				</div>
@@ -368,10 +369,13 @@ export function MobilePairing() {
 
 			<div className="mt-4 border-t border-sakura-100 pt-4">
 				<div className="flex flex-wrap items-center gap-2">
-					<h3 className="text-sm font-semibold text-ink-800">证书</h3>
+					<h3 className="text-sm font-semibold text-ink-800">{t("pairing.certificate")}</h3>
 					{certificate !== null && (
 						<span className="text-xs text-ink-500">
-							{certificate.fingerprint.slice(0, 16)}… · 到期 {new Date(certificate.expiresAt).toLocaleDateString()}
+							{t("pairing.certInfo", {
+								fingerprint: certificate.fingerprint.slice(0, 16),
+								date: formatDate(certificate.expiresAt, language),
+							})}
 						</span>
 					)}
 					<button
@@ -380,23 +384,21 @@ export function MobilePairing() {
 						onClick={() => setConfirm("regenerate")}
 						className="focus-neko ml-auto rounded-full px-3 py-1.5 text-sm text-ink-500 disabled:opacity-50"
 					>
-						重新生成证书
+						{t("pairing.regenerate")}
 					</button>
 				</div>
 				{certificateWarning && (
 					<p className="mt-2 text-xs text-sakura-800" role="alert">
-						证书即将到期，建议尽快重新生成；重新生成后全部手机需重新扫码。
+						{t("pairing.certExpiring")}
 					</p>
 				)}
-				<p className="mt-2 text-xs text-ink-500">
-					重新生成会断开全部手机并撤销全部设备授权，电脑上已受理的任务继续运行。
-				</p>
+				<p className="mt-2 text-xs text-ink-500">{t("pairing.regenerateWarning")}</p>
 			</div>
 
 			<div className="mt-4 border-t border-sakura-100 pt-4">
-				<h3 className="text-sm font-semibold text-ink-800">已配对设备</h3>
+				<h3 className="text-sm font-semibold text-ink-800">{t("pairing.devices")}</h3>
 				{data === null || data.devices.length === 0 ? (
-					<p className="mt-2 text-xs text-ink-500">暂无已配对设备。</p>
+					<p className="mt-2 text-xs text-ink-500">{t("pairing.noDevices")}</p>
 				) : (
 					<ul className="mt-2 flex flex-col gap-2">
 						{data.devices.map((device) => (
@@ -408,16 +410,18 @@ export function MobilePairing() {
 								<span
 									className={`rounded-full px-2 py-0.5 text-xs ${device.online ? "bg-tianyi-50 text-tianyi-800" : "bg-ink-100 text-ink-500"}`}
 								>
-									{device.online ? "在线" : "离线"}
+									{device.online ? t("pairing.online") : t("pairing.offline")}
 								</span>
-								<span className="text-xs text-ink-500">最后连接 {new Date(device.lastSeenAt).toLocaleString()}</span>
+								<span className="text-xs text-ink-500">
+									{t("pairing.lastSeen", { time: formatDateTime(device.lastSeenAt, language) })}
+								</span>
 								<button
 									type="button"
 									disabled={busy}
 									onClick={() => setConfirm({ deviceId: device.deviceId, name: device.name })}
 									className="focus-neko ml-auto rounded-full px-3 py-1.5 text-sm text-sakura-800 disabled:opacity-50"
 								>
-									撤销
+									{t("pairing.revoke")}
 								</button>
 							</li>
 						))}
@@ -427,8 +431,9 @@ export function MobilePairing() {
 
 			{webInfo?.gatewaySpawned === true && (
 				<p className="mt-4 rounded-xl bg-tianyi-50 px-3 py-2 text-xs text-tianyi-800">
-					本页面通过 neko web 启动了 gateway；退出本页面会同时停止 gateway 与手机入口。需要手机长期连接时，请改用
-					<code className="mx-1">neko serve</code>或保持 TUI 运行。
+					{t("pairing.spawnedBefore")}
+					<code className="mx-1">neko serve</code>
+					{t("pairing.spawnedAfter")}
 				</p>
 			)}
 
@@ -437,47 +442,43 @@ export function MobilePairing() {
 			</output>
 
 			{confirm === "regenerate" && (
-				<Modal title="重新生成证书" onClose={() => setConfirm(null)}>
-					<p className="text-sm text-ink-700">
-						将生成新的自签名证书：全部手机断开、全部设备授权失效，需要重新扫码配对。电脑上已受理的任务继续运行。
-					</p>
+				<Modal title={t("pairing.regenerate")} onClose={() => setConfirm(null)}>
+					<p className="text-sm text-ink-700">{t("pairing.regenerateConfirm")}</p>
 					<div className="mt-4 flex justify-end gap-2">
 						<button
 							type="button"
 							className="focus-neko rounded-full px-4 py-1.5 text-sm text-ink-500"
 							onClick={() => setConfirm(null)}
 						>
-							取消
+							{t("common.cancel")}
 						</button>
 						<button
 							type="button"
 							className="focus-neko rounded-full bg-sakura-100 px-4 py-1.5 text-sm font-semibold text-sakura-800"
 							onClick={() => void confirmRegenerate()}
 						>
-							确认重新生成
+							{t("pairing.confirmRegenerate")}
 						</button>
 					</div>
 				</Modal>
 			)}
 			{typeof confirm === "object" && confirm !== null && (
-				<Modal title={`撤销设备「${confirm.name}」`} onClose={() => setConfirm(null)}>
-					<p className="text-sm text-ink-700">
-						撤销后该手机立即断开且无法重新连接；电脑上已受理的任务继续运行，停止任务需在电脑上单独操作。
-					</p>
+				<Modal title={t("pairing.revokeTitle", { name: confirm.name })} onClose={() => setConfirm(null)}>
+					<p className="text-sm text-ink-700">{t("pairing.revokeConfirm")}</p>
 					<div className="mt-4 flex justify-end gap-2">
 						<button
 							type="button"
 							className="focus-neko rounded-full px-4 py-1.5 text-sm text-ink-500"
 							onClick={() => setConfirm(null)}
 						>
-							取消
+							{t("common.cancel")}
 						</button>
 						<button
 							type="button"
 							className="focus-neko rounded-full bg-sakura-100 px-4 py-1.5 text-sm font-semibold text-sakura-800"
 							onClick={() => void confirmRevoke(confirm.deviceId)}
 						>
-							确认撤销
+							{t("pairing.confirmRevoke")}
 						</button>
 					</div>
 				</Modal>

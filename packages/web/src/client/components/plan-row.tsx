@@ -1,6 +1,8 @@
 import type { ChatItem } from "@neko-harness/core";
+import type { PlanStatus } from "@neko-harness/core/interactions";
+import { useT } from "../lib/i18n/index.ts";
 import { plainText } from "../lib/interactions";
-import { PLAN_STATUS_LABEL } from "../lib/plan-ui";
+import { planStatusLabel } from "../lib/plan-ui";
 import { Markdown } from "./markdown";
 import { Icon } from "./primitives";
 
@@ -11,10 +13,11 @@ type SubmitPlan = Extract<NonNullable<Extract<ChatItem, { type: "tool" }>["inter
  * The decision controls live only in the plan card above the composer; `status` is the plan's current status
  * when the viewer knows it, otherwise the row stays neutral.
  */
-export function PlanRow({ interaction, status }: { interaction: SubmitPlan; status?: keyof typeof PLAN_STATUS_LABEL }) {
+export function PlanRow({ interaction, status }: { interaction: SubmitPlan; status?: PlanStatus }) {
+	const t = useT();
 	return (
 		<section
-			aria-label="助手提交的计划"
+			aria-label={t("plan.row.section")}
 			data-plan-row
 			data-status={status}
 			className="rounded-card border border-tianyi-200 bg-surface px-3 py-2 text-sm shadow-soft"
@@ -22,11 +25,11 @@ export function PlanRow({ interaction, status }: { interaction: SubmitPlan; stat
 			<div className="flex flex-wrap items-center gap-2">
 				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-on-accent">
 					<Icon name="sparkles" size={12} />
-					计划
+					{t("plan.card.badge")}
 				</span>
 				{status !== undefined && (
 					<span className="shrink-0 rounded-full border border-ink-200 bg-ink-50 px-2 py-0.5 text-xs font-medium text-ink-700">
-						{PLAN_STATUS_LABEL[status]}
+						{planStatusLabel(status)}
 					</span>
 				)}
 			</div>

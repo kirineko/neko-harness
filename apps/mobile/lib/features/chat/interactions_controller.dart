@@ -8,6 +8,7 @@ import 'package:neko_mobile/features/chat/chat_controller.dart'
     show describeError;
 import 'package:neko_mobile/features/plan/plan_decision.dart';
 import 'package:neko_mobile/features/questions/question_draft.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 
 /// 失效提示驱动的读取：同一时刻只有一个在途读取；读取期间收到更高 revision
 /// 就在本次结束后再读，直到持有的 revision 追上提示（有界，避免异常服务端造成死循环）。
@@ -74,10 +75,13 @@ class InteractionsController extends ChangeNotifier {
   }
 
   static const int _maxDrafts = 64;
-  static const String noReceiptMessage =
-      '未收到电脑的回执：回答可能已送达，也可能没有。恢复连接后请先查看问题状态，再决定是否重新提交。';
-  static const String planNoReceiptMessage =
-      '未收到电脑的回执：决定可能已送达，也可能没有。恢复连接后请先查看计划状态，再决定是否重新提交。';
+
+  /// 回执丢失：回答可能已送达，不自动重发。
+  static String noReceiptMessage(AppLocalizations l10n) =>
+      l10n.interactionsNoReceiptAnswer;
+
+  static String planNoReceiptMessage(AppLocalizations l10n) =>
+      l10n.interactionsNoReceiptPlan;
 
   late final _RevisionReader _todoReader;
   late final _RevisionReader _questionReader;
@@ -96,10 +100,10 @@ class InteractionsController extends ChangeNotifier {
   bool _planFresh = false;
   bool _planReading = false;
   bool _planDirty = false;
-  String? _planLoadError;
+  UiText? _planLoadError;
   bool _planSubmitting = false;
-  String? _planError;
-  String? _planNote;
+  UiText? _planError;
+  UiText? _planNote;
 
   /// 本端提交决定后收到的记录；他端先决定时它就是实际结果。卡片保留到用户关闭。
   PlanRecord? _planOutcome;
@@ -110,18 +114,18 @@ class InteractionsController extends ChangeNotifier {
 
   TodoList? _todos;
   bool _todosFresh = false;
-  String? _todosError;
+  UiText? _todosError;
 
   int _questionsRevision = 0;
   bool _questionsFresh = false;
   List<QuestionSummary> _pending = <QuestionSummary>[];
-  String? _questionsError;
+  UiText? _questionsError;
   final Map<int, QuestionRecord> _records = <int, QuestionRecord>{};
   final Set<int> _loading = <int>{};
-  final Map<int, String> _loadErrors = <int, String>{};
+  final Map<int, UiText> _loadErrors = <int, UiText>{};
   final Set<String> _submitting = <String>{};
-  final Map<String, String> _errors = <String, String>{};
-  final Map<String, String> _notes = <String, String>{};
+  final Map<String, UiText> _errors = <String, UiText>{};
+  final Map<String, UiText> _notes = <String, UiText>{};
 
   /// 进程内的答案草稿与“用户已关闭”记录：按 server/session/question/version 隔离，不落盘。
   final LinkedHashMap<String, QuestionDraft> _drafts =
@@ -147,7 +151,7 @@ class InteractionsController extends ChangeNotifier {
   /// 本订阅是否已读到最新待办；离线或重连后尚未重读时为 false，界面据此标注“非最新”。
   bool get todosCurrent => connected && _todosFresh;
 
-  String? get todosError => _todosError;
+  UiText? get todosError => _todosError;
 
   List<QuestionSummary> get pending => _pending;
 
@@ -155,21 +159,21 @@ class InteractionsController extends ChangeNotifier {
 
   bool get questionsLoaded => _questionsFresh;
 
-  String? get questionsError => _questionsError;
+  UiText? get questionsError => _questionsError;
 
   QuestionRecord? record(int id) => _records[id];
 
   bool isLoading(int id) => _loading.contains(id);
 
-  String? loadError(int id) => _loadErrors[id];
+  UiText? loadError(int id) => _loadErrors[id];
 
   bool isSubmitting(QuestionRecord question) =>
       _submitting.contains(_keyOf(question));
 
-  String? submitError(QuestionRecord question) => _errors[_keyOf(question)];
+  UiText? submitError(QuestionRecord question) => _errors[_keyOf(question)];
 
   /// 实际结果与本端提交不同时的说明（如他端先回答）。
-  String? settlementNote(QuestionRecord question) => _notes[_keyOf(question)];
+  UiText? settlementNote(QuestionRecord question) => _notes[_keyOf(question)];
 
   /// 卡片要显示的计划：本端刚做出的决定（含他端先决定的实际结果），否则是仍待批准的计划。
   /// 没有待批准计划且没有本端结果时为 null（隐藏）。
@@ -184,12 +188,12 @@ class InteractionsController extends ChangeNotifier {
   /// 提交期间禁止重复提交。
   bool get planSubmitting => _planSubmitting;
 
-  String? get planError => _planError;
+  UiText? get planError => _planError;
 
-  String? get planLoadError => _planLoadError;
+  UiText? get planLoadError => _planLoadError;
 
   /// 实际结果与本端提交不同时的说明（如他端先决定）。
-  String? get planNote => _planNote;
+  UiText? get planNote => _planNote;
 
   /// 状态摘要里的版本是否已读到记录；用于“读取中/重试”提示。
   bool get planLoaded => _planFresh;
@@ -496,7 +500,7 @@ class InteractionsController extends ChangeNotifier {
     } catch (error) {
       if (epoch != _epoch) return;
       _loadErrors[id] = error is MobileApiException && error.code == 'not_found'
-          ? '该问题已不存在或已结束'
+          ? (l10n) => l10n.interactionsQuestionGone
           : describeError(error);
       // 未决列表里已没有它：以列表为准。
       if (error is MobileApiException && error.code == 'not_found') {
@@ -657,7 +661,7 @@ class InteractionsController extends ChangeNotifier {
           ? PlanStatus.approved
           : PlanStatus.revisionRequested;
       if (result.status != expected) {
-        _planNote = '其他设备已先处理，以下是实际结果。';
+        _planNote = (l10n) => l10n.interactionsSettledElsewhere;
       }
       _plan = result;
       _planOutcome = result;
@@ -770,7 +774,7 @@ class InteractionsController extends ChangeNotifier {
       );
       if (epoch != _epoch) return;
       if (!_sameOutcome(response, result)) {
-        _notes[key] = '其他设备已先处理，以下是实际结果。';
+        _notes[key] = (l10n) => l10n.interactionsSettledElsewhere;
       }
       _applyRecord(result);
       unawaited(refreshQuestions());

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 非敏感的本地偏好（草稿、待确认请求、上次选择、主题）。凭据只在安全存储中。
+/// 非敏感的本地偏好（草稿、待确认请求、上次选择、主题、界面语言）。凭据只在安全存储中。
 abstract class PrefsStore {
   Future<String?> get(String key);
 
@@ -51,6 +51,8 @@ abstract final class PrefKeys {
   static String pending(String serverId) => 'neko.pending.$serverId';
 
   static const String themeMode = 'neko.theme';
+
+  static const String language = 'neko.language';
 }
 
 /// 待确认的发送（design D9）：受理前持久化，重启/重连后先查状态。

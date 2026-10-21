@@ -11,52 +11,53 @@ import {
 	type Theme,
 	useAppearance,
 } from "../lib/appearance";
+import { type PlainKey, type Translate, useT } from "../lib/i18n/index.ts";
 import { Markdown } from "./markdown";
 
-const THEME_OPTIONS: readonly { id: Theme; label: string; blurb: string }[] = [
-	{ id: "sakura", label: "樱花", blurb: "蓝粉白浅色，默认" },
-	{ id: "light", label: "纸白", blurb: "中性冷灰白，克制" },
-	{ id: "dark", label: "夜墨", blurb: "深蓝灰深色，夜间友好" },
+const THEME_OPTIONS: readonly { id: Theme; label: PlainKey; blurb: PlainKey }[] = [
+	{ id: "sakura", label: "appearance.theme.sakura", blurb: "appearance.theme.sakuraBlurb" },
+	{ id: "light", label: "appearance.theme.light", blurb: "appearance.theme.lightBlurb" },
+	{ id: "dark", label: "appearance.theme.dark", blurb: "appearance.theme.darkBlurb" },
 ];
 
-const FONT_OPTIONS: readonly { id: ChatFont; label: string }[] = [
-	{ id: "sans", label: "无衬线" },
-	{ id: "serif", label: "衬线" },
-	{ id: "mono", label: "等宽" },
+const FONT_OPTIONS: readonly { id: ChatFont; label: PlainKey }[] = [
+	{ id: "sans", label: "appearance.font.sans" },
+	{ id: "serif", label: "appearance.font.serif" },
+	{ id: "mono", label: "appearance.font.mono" },
 ];
 
-const SIZE_OPTIONS: readonly { id: ChatSize; label: string }[] = [
-	{ id: "13", label: "小 13px" },
-	{ id: "14", label: "默认 14px" },
-	{ id: "16", label: "大 16px" },
-	{ id: "18", label: "特大 18px" },
+const SIZE_OPTIONS: readonly { id: ChatSize; label: PlainKey }[] = [
+	{ id: "13", label: "appearance.size.13" },
+	{ id: "14", label: "appearance.size.14" },
+	{ id: "16", label: "appearance.size.16" },
+	{ id: "18", label: "appearance.size.18" },
 ];
 
-const WEIGHT_OPTIONS: readonly { id: ChatWeight; label: string }[] = [
-	{ id: "regular", label: "常规" },
-	{ id: "medium", label: "中等" },
-	{ id: "semibold", label: "偏粗" },
+const WEIGHT_OPTIONS: readonly { id: ChatWeight; label: PlainKey }[] = [
+	{ id: "regular", label: "appearance.weight.regular" },
+	{ id: "medium", label: "appearance.weight.medium" },
+	{ id: "semibold", label: "appearance.weight.semibold" },
 ];
 
-const LEADING_OPTIONS: readonly { id: ChatLeading; label: string }[] = [
-	{ id: "compact", label: "紧凑" },
-	{ id: "normal", label: "标准" },
-	{ id: "relaxed", label: "宽松" },
+const LEADING_OPTIONS: readonly { id: ChatLeading; label: PlainKey }[] = [
+	{ id: "compact", label: "appearance.leading.compact" },
+	{ id: "normal", label: "appearance.leading.normal" },
+	{ id: "relaxed", label: "appearance.leading.relaxed" },
 ];
 
-const SAMPLE_USER = "帮我看看这个函数为什么返回了 undefined？";
-const SAMPLE_ASSISTANT = [
-	"这是一段**示例回答**，用来预览当前排版。行内代码如 `const total = items.length`，下面是代码块：",
-	"",
-	"```ts",
-	"function total(items: number[]) {",
-	"  return items.reduce((sum, n) => sum + n, 0);",
-	"}",
-	"```",
-	"",
-	"- 列表项一",
-	"- 列表项二",
-].join("\n");
+const sampleAssistant = (t: Translate) =>
+	[
+		t("appearance.sampleAssistantIntro"),
+		"",
+		"```ts",
+		"function total(items: number[]) {",
+		"  return items.reduce((sum, n) => sum + n, 0);",
+		"}",
+		"```",
+		"",
+		`- ${t("appearance.sampleItem1")}`,
+		`- ${t("appearance.sampleItem2")}`,
+	].join("\n");
 
 function Section(props: { id: string; title: string; blurb?: string; children: ReactNode }) {
 	return (
@@ -78,10 +79,11 @@ function ChipGroup<T extends string>(props: {
 	name: string;
 	label: string;
 	hint?: string;
-	options: readonly { id: T; label: string }[];
+	options: readonly { id: T; label: PlainKey }[];
 	value: T;
 	onPick: (value: T) => void;
 }) {
+	const t = useT();
 	return (
 		<fieldset className="m-0 min-w-0 border-0 p-0">
 			<legend className="text-sm font-semibold text-ink-900">{props.label}</legend>
@@ -103,7 +105,7 @@ function ChipGroup<T extends string>(props: {
 							checked={props.value === option.id}
 							onChange={() => props.onPick(option.id)}
 						/>
-						{option.label}
+						{t(option.label)}
 					</label>
 				))}
 			</div>
@@ -114,6 +116,7 @@ function ChipGroup<T extends string>(props: {
 
 /** 迷你预览：节点自身写 data-theme，所以无论当前是什么主题都显示该主题的真实配色。 */
 function ThemePreview({ theme }: { theme: Theme }) {
+	const t = useT();
 	return (
 		<span data-theme={theme} className="block rounded-xl border border-ink-200 bg-base p-2.5 text-ink-900">
 			<span className="flex items-center gap-1.5 pb-2">
@@ -122,19 +125,20 @@ function ThemePreview({ theme }: { theme: Theme }) {
 				<span className="h-1.5 w-8 rounded-full bg-ink-200" />
 			</span>
 			<span className="ml-auto block w-3/5 rounded-lg border border-sakura-300 bg-sakura-100 px-2 py-1 text-xs text-sakura-900">
-				你好
+				{t("appearance.previewUser")}
 			</span>
 			<span className="mt-1.5 block w-4/5 rounded-lg border border-tianyi-200 bg-surface px-2 py-1 text-xs text-ink-900">
-				你好，有什么可以帮你？
+				{t("appearance.previewAssistant")}
 			</span>
 		</span>
 	);
 }
 
 function ThemePicker(props: { value: Theme; onPick: (value: Theme) => void }) {
+	const t = useT();
 	return (
 		<fieldset className="m-0 min-w-0 border-0 p-0">
-			<legend className="sr-only">主题</legend>
+			<legend className="sr-only">{t("appearance.theme")}</legend>
 			<div className="grid gap-3 sm:grid-cols-3">
 				{THEME_OPTIONS.map((option) => {
 					const selected = props.value === option.id;
@@ -156,9 +160,9 @@ function ThemePicker(props: { value: Theme; onPick: (value: Theme) => void }) {
 							<ThemePreview theme={option.id} />
 							<span className="mt-2 flex items-baseline gap-2 px-1 pb-0.5">
 								<span className={`text-sm ${selected ? "font-bold text-sakura-800" : "font-semibold text-ink-900"}`}>
-									{option.label}
+									{t(option.label)}
 								</span>
-								<span className="text-xs text-ink-500">{option.blurb}</span>
+								<span className="text-xs text-ink-500">{t(option.blurb)}</span>
 							</span>
 						</label>
 					);
@@ -170,61 +174,66 @@ function ThemePicker(props: { value: Theme; onPick: (value: Theme) => void }) {
 
 export function AppearancePanel({ store = appearanceStore() }: { store?: AppearanceStore }) {
 	const appearance: Appearance = useAppearance(store);
+	const t = useT();
 	return (
 		<div className="flex flex-col gap-4">
-			<Section id="theme" title="主题">
+			<Section id="theme" title={t("appearance.theme")}>
 				<ThemePicker value={appearance.theme} onPick={(theme) => store.set({ theme })} />
 			</Section>
-			<Section id="typography" title="聊天排版" blurb="只影响聊天里的消息正文与输入框；代码块、工具卡与侧栏保持不变。">
+			<Section id="typography" title={t("appearance.typography")} blurb={t("appearance.typographyBlurb")}>
 				<div className="flex flex-col gap-4">
 					<ChipGroup
 						name="appearance-font"
-						label="字体"
-						hint="使用本机已安装的系统字体，实际效果取决于你的设备；缺少时自动回退。"
+						label={t("appearance.font")}
+						hint={t("appearance.fontHint")}
 						options={FONT_OPTIONS}
 						value={appearance.font}
 						onPick={(font) => store.set({ font })}
 					/>
 					<ChipGroup
 						name="appearance-size"
-						label="字号"
+						label={t("appearance.size")}
 						options={SIZE_OPTIONS}
 						value={appearance.size}
 						onPick={(size) => store.set({ size })}
 					/>
 					<ChipGroup
 						name="appearance-weight"
-						label="字重"
+						label={t("appearance.weight")}
 						options={WEIGHT_OPTIONS}
 						value={appearance.weight}
 						onPick={(weight) => store.set({ weight })}
 					/>
 					<ChipGroup
 						name="appearance-leading"
-						label="行高"
+						label={t("appearance.leading")}
 						options={LEADING_OPTIONS}
 						value={appearance.leading}
 						onPick={(leading) => store.set({ leading })}
 					/>
 				</div>
 			</Section>
-			<Section id="preview" title="示例" blurb="随上面的选择即时变化。">
+			<Section id="preview" title={t("appearance.sample")} blurb={t("appearance.sampleBlurb")}>
 				<div className="flex flex-col gap-2 rounded-xl bg-base p-3" data-testid="appearance-sample">
-					<div className="bubble-user ml-auto max-w-[85%] px-4 py-2.5 whitespace-pre-wrap">{SAMPLE_USER}</div>
+					<div className="bubble-user ml-auto max-w-[85%] px-4 py-2.5 whitespace-pre-wrap">
+						{t("appearance.sampleUser")}
+					</div>
 					<div className="bubble-assistant max-w-full px-4 py-2.5">
-						<Markdown text={SAMPLE_ASSISTANT} />
+						<Markdown text={sampleAssistant(t)} />
 					</div>
 				</div>
 			</Section>
 			<div className="flex items-center justify-end gap-3">
-				<span className="text-xs text-ink-500">{isDefaultAppearance(appearance) ? "当前为默认外观" : "已自定义"}</span>
+				<span className="text-xs text-ink-500">
+					{isDefaultAppearance(appearance) ? t("appearance.isDefault") : t("appearance.customized")}
+				</span>
 				<button
 					type="button"
 					onClick={() => store.reset()}
 					disabled={isDefaultAppearance(appearance)}
 					className="btn-primary focus-neko h-9 rounded-full px-4 text-sm disabled:opacity-50"
 				>
-					恢复默认
+					{t("appearance.reset")}
 				</button>
 			</div>
 		</div>

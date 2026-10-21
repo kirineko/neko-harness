@@ -1,15 +1,16 @@
 import { PLAN_LIMITS, type PlanRecord } from "@neko-harness/core/interactions";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { plainText } from "../lib/interactions";
-import { decisionStatus, PLAN_STATUS_LABEL, planErrorText, planSettlementText, planState } from "../lib/plan-ui";
+import { decisionStatus, planErrorText, planSettlementText, planState, planStatusLabel } from "../lib/plan-ui";
 import { useNekoState } from "../lib/store";
 import { Markdown } from "./markdown";
 import { DismissButton, Icon } from "./primitives";
 
 type Decision = { kind: "approve" } | { kind: "revise"; feedback: string };
 
-const focusComposer = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="消息输入"]')?.focus();
+const focusComposer = () => document.querySelector<HTMLTextAreaElement>("textarea[data-composer-input]")?.focus();
 
 /** The plan the assistant submitted and waits on, between the questions and the composer. Not modal and never a chat submit. */
 export function PlanDock() {
@@ -18,6 +19,7 @@ export function PlanDock() {
 }
 
 function SessionPlan({ sessionId }: { sessionId: string }) {
+	const t = useT();
 	const app = useNekoState();
 	const info = planState(app);
 	const awaiting = info?.awaiting ?? null;
@@ -40,10 +42,10 @@ function SessionPlan({ sessionId }: { sessionId: string }) {
 		if (previous === null || previous.version === awaiting?.version || deciding.current.has(previous.version)) return;
 		setNotice(
 			current !== null && current.version === previous.version
-				? `该计划已不在等待批准：${PLAN_STATUS_LABEL[current.status]}`
-				: "该计划已不在等待批准，可能已在其他端处理或已被新的计划取代。",
+				? t("plan.card.gone", { status: planStatusLabel(current.status) })
+				: t("plan.card.goneOther"),
 		);
-	}, [awaiting, current]);
+	}, [awaiting, current, t]);
 
 	const settle = (record: PlanRecord, mine: boolean) => {
 		if (alive.current) setNotice(planSettlementText(record, mine));
@@ -51,7 +53,11 @@ function SessionPlan({ sessionId }: { sessionId: string }) {
 
 	if (awaiting === null && notice === null) return null;
 	return (
-		<section aria-label="计划审批" data-plan-dock className="flex shrink-0 flex-col px-3 pt-0.5 pb-1 sm:px-4">
+		<section
+			aria-label={t("plan.card.section")}
+			data-plan-dock
+			className="flex shrink-0 flex-col px-3 pt-0.5 pb-1 sm:px-4"
+		>
 			<div className="chat-column flex flex-col gap-1.5">
 				{notice !== null && (
 					<output
@@ -59,7 +65,7 @@ function SessionPlan({ sessionId }: { sessionId: string }) {
 						className="flex items-start gap-2 rounded-xl border border-tianyi-200 bg-surface px-3 py-2 text-sm text-ink-800"
 					>
 						<span className="max-h-24 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words">{notice}</span>
-						<DismissButton label="关闭结果提示" onClick={() => setNotice(null)} />
+						<DismissButton label={t("plan.card.dismiss")} onClick={() => setNotice(null)} />
 					</output>
 				)}
 				{awaiting !== null && (
@@ -84,6 +90,7 @@ function PlanCard(props: {
 	deciding: Set<string>;
 	onSettled: (record: PlanRecord, mine: boolean) => void;
 }) {
+	const t = useT();
 	const { plan, online } = props;
 	const [busy, setBusy] = useState<Decision["kind"] | "exit" | null>(null);
 	const [revising, setRevising] = useState(false);
@@ -115,13 +122,16 @@ function PlanCard(props: {
 		setError("");
 		try {
 			const saved = await appActions.planRespond(props.sessionId, { version: plan.version, decision });
-			if (saved.status === "awaiting_approval") throw new Error("决定尚未保存，请重试");
+			if (saved.status === "awaiting_approval") throw new Error(t("plan.card.notSaved"));
 			const mine =
 				saved.status === decisionStatus(decision.kind) &&
 				(decision.kind === "approve" || saved.feedback === decision.feedback);
 			props.onSettled(saved, mine);
 		} catch (e) {
-			setError(`提交失败：${planErrorText(e)}${decision.kind === "revise" ? "（反馈草稿已保留，请手动重试）" : ""}`);
+			setError(
+				t("plan.card.submitFailed", { error: planErrorText(e) }) +
+					(decision.kind === "revise" ? t("plan.card.draftKept") : ""),
+			);
 		} finally {
 			props.deciding.delete(plan.version);
 			sending.current = false;
@@ -139,7 +149,7 @@ function PlanCard(props: {
 		try {
 			await appActions.planMode(props.sessionId, "normal");
 		} catch (e) {
-			setError(`退出失败：${planErrorText(e)}`);
+			setError(t("plan.card.exitFailed", { error: planErrorText(e) }));
 		} finally {
 			props.deciding.delete(plan.version);
 			sending.current = false;
@@ -150,7 +160,7 @@ function PlanCard(props: {
 	return (
 		<section
 			ref={card}
-			aria-label="待批准计划"
+			aria-label={t("plan.card.awaiting")}
 			data-plan-card
 			data-version={plan.version}
 			className="flex max-h-[min(50dvh,32rem)] flex-col rounded-xl border border-tianyi-300 bg-tianyi-50 text-sm shadow-soft"
@@ -158,11 +168,11 @@ function PlanCard(props: {
 			<div className="flex shrink-0 items-center gap-2 px-3 py-1.5">
 				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-on-accent">
 					<Icon name="sparkles" size={12} />
-					计划
+					{t("plan.card.badge")}
 				</span>
 				<span className="shrink-0 text-xs font-medium text-tianyi-900">
-					{PLAN_STATUS_LABEL.awaiting_approval}
-					{online ? "" : " · 离线"}
+					{planStatusLabel("awaiting_approval")}
+					{online ? "" : t("plan.card.offline")}
 				</span>
 			</div>
 			<div
@@ -189,7 +199,7 @@ function PlanCard(props: {
 				{revising && (
 					<div>
 						<label htmlFor={`${base}-feedback`} className="mb-1 block text-xs font-medium text-ink-600">
-							修改意见
+							{t("plan.card.feedback")}
 						</label>
 						<textarea
 							ref={area}
@@ -205,11 +215,7 @@ function PlanCard(props: {
 				)}
 			</div>
 			<div className="shrink-0 space-y-1 border-t border-tianyi-200 px-3 py-2">
-				{!online && (
-					<output className="block text-xs text-sakura-800">
-						离线：批准、修改与退出已停用，重新连接后需要手动操作。
-					</output>
-				)}
+				{!online && <output className="block text-xs text-sakura-800">{t("plan.card.offlineNote")}</output>}
 				{error && (
 					<p role="alert" className="break-words text-xs text-sakura-800">
 						{error}
@@ -224,7 +230,7 @@ function PlanCard(props: {
 								className="btn-primary focus-neko h-9 rounded-full px-4 text-sm disabled:opacity-50"
 								onClick={() => void decide({ kind: "revise", feedback: trimmed })}
 							>
-								{busy === "revise" ? "提交中…" : "提交修改意见"}
+								{busy === "revise" ? t("plan.card.submitting") : t("plan.card.submitFeedback")}
 							</button>
 							<button
 								type="button"
@@ -235,10 +241,10 @@ function PlanCard(props: {
 									setError("");
 								}}
 							>
-								取消
+								{t("common.cancel")}
 							</button>
 							<span className="min-w-0 text-xs text-ink-500">
-								{trimmed === "" ? "请填写修改意见" : `${feedback.length}/${PLAN_LIMITS.feedbackChars}`}
+								{trimmed === "" ? t("plan.card.needFeedback") : `${feedback.length}/${PLAN_LIMITS.feedbackChars}`}
 							</span>
 						</>
 					) : (
@@ -249,7 +255,7 @@ function PlanCard(props: {
 								className="btn-primary focus-neko h-9 rounded-full px-4 text-sm disabled:opacity-50"
 								onClick={() => void decide({ kind: "approve" })}
 							>
-								{busy === "approve" ? "提交中…" : "批准并执行"}
+								{busy === "approve" ? t("plan.card.submitting") : t("plan.card.approve")}
 							</button>
 							<button
 								type="button"
@@ -257,7 +263,7 @@ function PlanCard(props: {
 								className="focus-neko h-9 rounded-full border border-ink-300 bg-surface px-3 text-sm text-ink-700 hover:bg-ink-50 disabled:opacity-50"
 								onClick={() => setRevising(true)}
 							>
-								要求修改
+								{t("plan.card.revise")}
 							</button>
 							<button
 								type="button"
@@ -265,9 +271,9 @@ function PlanCard(props: {
 								className="focus-neko h-9 rounded-full border border-sakura-300 bg-surface px-3 text-sm text-sakura-800 hover:bg-sakura-50 disabled:opacity-50"
 								onClick={() => void exit()}
 							>
-								{busy === "exit" ? "处理中…" : "取消并退出计划模式"}
+								{busy === "exit" ? t("plan.card.processing") : t("plan.card.exit")}
 							</button>
-							<span className="min-w-0 text-xs text-ink-500">不决定也可继续输入，新的消息会取代这份计划。</span>
+							<span className="min-w-0 text-xs text-ink-500">{t("plan.card.hint")}</span>
 						</>
 					)}
 				</div>

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { useT } from "../lib/i18n/index.ts";
 import { filterProviderOptions, type ProviderOption } from "../lib/providers";
 import { Icon } from "./primitives";
 
@@ -13,6 +14,7 @@ export function ProviderCombobox(props: {
 	disabled?: boolean;
 }) {
 	const { options, value } = props;
+	const t = useT();
 	const base = useId();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState<string | null>(null);
@@ -87,7 +89,7 @@ export function ProviderCombobox(props: {
 					spellCheck={false}
 					disabled={props.disabled}
 					value={query ?? selected?.name ?? ""}
-					placeholder="选择服务商"
+					placeholder={t("providerCombo.placeholder")}
 					onChange={(event) => {
 						setQuery(event.target.value);
 						setActive(0);
@@ -136,7 +138,7 @@ export function ProviderCombobox(props: {
 						{option.detail && <span className={`shrink-0 text-xs ${TONE[option.tone ?? "off"]}`}>{option.detail}</span>}
 					</div>
 				))}
-				{open && shown.length === 0 && <p className="px-2.5 py-2 text-xs text-ink-500">没有匹配的服务商。</p>}
+				{open && shown.length === 0 && <p className="px-2.5 py-2 text-xs text-ink-500">{t("providerCombo.empty")}</p>}
 			</div>
 		</div>
 	);

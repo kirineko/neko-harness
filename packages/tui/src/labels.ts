@@ -1,49 +1,70 @@
-/** Product language is English; conversation and tool payloads are never translated. */
+/** Product text follows the interface language (see `./i18n`); conversation and tool payloads are never translated. */
 
 import type { SlashCommand } from "@earendil-works/pi-tui";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { t } from "./i18n/index.ts";
 
-export const commands: SlashCommand[] = [
-	{ name: "help", description: "Show keyboard shortcuts and commands" },
-	{ name: "version", description: "View versions and check for updates" },
-	{ name: "compact", description: "Compact context (/compact optional instructions)" },
-	{ name: "copy", description: "Copy the last assistant response" },
-	{ name: "export", description: "Export session (/export path.md|.html|.json [--thinking])" },
-	{ name: "exit", description: "Exit neko TUI" },
-	{ name: "new", description: "Create a new session" },
-	{ name: "sessions", description: "Switch or create a session" },
-	{ name: "login", description: "Manage model providers and API keys" },
-	{ name: "model", description: "Choose a model" },
-	{ name: "agents", description: "View agent tasks and activity" },
-	{ name: "jobs", description: "View background jobs" },
-	{ name: "todos", description: "View the assistant's todo list" },
-	{ name: "question", description: "Answer the assistant's question (Ctrl+O)" },
-	{ name: "plan", description: "Toggle plan mode, or review the plan awaiting approval (Shift+Tab)" },
-	{ name: "search", description: "Choose the web search provider (Tavily/DeepSeek); K sets its key" },
-	{ name: "context", description: "Tune context compaction and tool result pruning" },
-	{ name: "theme", description: "Choose color theme (auto/light/dark)" },
-	{ name: "think", description: "Set thinking level (/think high)" },
-	{ name: "fork", description: "Fork this session" },
-	{ name: "archive", description: "Archive this session" },
-	{ name: "skills", description: "Browse and install skills from the market" },
+/** Slash command list for the current language; rebuild it after a language switch. */
+export const commands = (): SlashCommand[] => [
+	{ name: "help", description: t("command.help") },
+	{ name: "version", description: t("command.version") },
+	{ name: "compact", description: t("command.compact") },
+	{ name: "copy", description: t("command.copy") },
+	{ name: "export", description: t("command.export") },
+	{ name: "exit", description: t("command.exit") },
+	{ name: "new", description: t("command.new") },
+	{ name: "sessions", description: t("command.sessions") },
+	{ name: "login", description: t("command.login") },
+	{ name: "model", description: t("command.model") },
+	{ name: "agents", description: t("command.agents") },
+	{ name: "jobs", description: t("command.jobs") },
+	{ name: "todos", description: t("command.todos") },
+	{ name: "question", description: t("command.question") },
+	{ name: "plan", description: t("command.plan") },
+	{ name: "search", description: t("command.search") },
+	{ name: "context", description: t("command.context") },
+	{ name: "theme", description: t("command.theme") },
+	{ name: "language", description: t("command.language") },
+	{ name: "think", description: t("command.think") },
+	{ name: "fork", description: t("command.fork") },
+	{ name: "archive", description: t("command.archive") },
+	{ name: "skills", description: t("command.skills") },
 ];
 export const labels = {
-	ready: "Ready",
-	connecting: "Connecting...",
-	loading: "Loading...",
-	applying: "Applying...",
-	noResults: "No results",
+	get ready() {
+		return t("common.ready");
+	},
+	get connecting() {
+		return t("common.connecting");
+	},
+	get loading() {
+		return t("common.loading");
+	},
+	get applying() {
+		return t("common.applying");
+	},
+	get noResults() {
+		return t("common.noResults");
+	},
 	get close() {
-		return shortcutHints(["Esc", "Close"]);
+		return shortcutHints(["Esc", t("action.close")]);
 	},
 	get retry() {
-		return shortcutHints(["Enter", "Retry"], ["Esc", "Close"]);
+		return shortcutHints(["Enter", t("action.retry")], ["Esc", t("action.close")]);
 	},
 	get select() {
-		return shortcutHints(["↑↓", "Select"], ["Enter", "Open"], ["Esc", "Close"]);
+		return shortcutHints(["↑↓", t("action.select")], ["Enter", t("action.open")], ["Esc", t("action.close")]);
 	},
-	idleHints: "Enter Send · /help Keys",
-	busyHints: "Enter Queue · Esc Stop",
-	idleCompact: "Enter Send · /help Keys",
-	busyCompact: "Enter Queue · Esc Stop",
+	get idleHints() {
+		return t("hint.idle");
+	},
+	get busyHints() {
+		return t("hint.busy");
+	},
+	get idleCompact() {
+		return t("hint.idle");
+	},
+	get busyCompact() {
+		return t("hint.busy");
+	},
 };

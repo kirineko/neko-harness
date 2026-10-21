@@ -16,10 +16,12 @@ import {
 	LOCKED_PROVIDERS,
 } from "@neko-harness/core";
 import type { NekoCredentialState } from "@neko-harness/gateway";
+import { t } from "../i18n/index.ts";
 import { style, theme } from "../theme/index.ts";
 import { shortcutHints } from "./shortcut-hints.ts";
 
 const AUTO_CLOSE_MS = 800;
+const newFilter = () => new Input({ prompt: "❯ ", placeholder: t("common.filterPlaceholder") });
 
 type CredentialStatus = NekoCredentialState["statuses"][string];
 type Group = "model" | "search";
@@ -48,7 +50,7 @@ export class LoginPanel implements Component {
 	focused = false;
 	open = false;
 	#level: "list" | "key" = "list";
-	#filter = new Input({ prompt: "❯ ", placeholder: "Type to filter" });
+	#filter = newFilter();
 	#index = 0;
 	#inputs = new Map<string, Input>();
 	#state: NekoCredentialState | undefined;
@@ -97,7 +99,7 @@ export class LoginPanel implements Component {
 		this.#confirmingRemove = false;
 		this.#message = "";
 		this.#inputs.clear();
-		this.#filter = new Input({ prompt: "❯ ", placeholder: "Type to filter" });
+		this.#filter = newFilter();
 		this.#index = 0;
 		this.#provider = "deepseek";
 		this.#group = "model";
@@ -122,7 +124,7 @@ export class LoginPanel implements Component {
 		this.open = false;
 		this.#confirmingRemove = false;
 		this.#inputs.clear();
-		this.#filter = new Input({ prompt: "❯ ", placeholder: "Type to filter" });
+		this.#filter = newFilter();
 		this.#unsubscribe?.();
 		this.#unsubscribe = undefined;
 		this.#closed();
@@ -206,7 +208,7 @@ export class LoginPanel implements Component {
 			if (confirming) void this.#apply(true);
 			else {
 				this.#confirmingRemove = true;
-				this.#message = "Press Ctrl+R again to remove the saved key.";
+				this.#message = t("login.pressAgain");
 			}
 		} else if (matchesKey(data, "tab")) this.#backToList();
 		else {
@@ -224,27 +226,27 @@ export class LoginPanel implements Component {
 	async #toggleEnabled({ spec, group }: Row) {
 		if (group === "search") {
 			this.#message = isModelProvider(spec.id)
-				? `${spec.name} shares its key with the model provider and has no enable switch here.`
-				: `${spec.name} is a web search credential and has no enable switch.`;
+				? t("login.searchShared", { name: spec.name })
+				: t("login.searchNoSwitch", { name: spec.name });
 			return;
 		}
 		if (isLocked(spec.id)) {
-			this.#message = `${spec.name} is always enabled.`;
+			this.#message = t("login.alwaysEnabled", { name: spec.name });
 			return;
 		}
 		if (!isModelProvider(spec.id)) return;
 		const enable = !this.#isEnabled(spec);
 		const generation = this.#generation;
 		this.#busy = true;
-		this.#message = enable ? "Enabling..." : "Disabling...";
+		this.#message = enable ? t("login.enabling") : t("login.disabling");
 		this.#changed();
 		try {
 			await this.#toggle(spec.id, enable);
 			if (generation === this.#generation)
-				this.#message = enable ? `${spec.name} enabled. Press Enter to add a key.` : `${spec.name} disabled.`;
+				this.#message = enable ? t("login.enabled", { name: spec.name }) : t("login.disabled", { name: spec.name });
 		} catch (error) {
 			if (generation === this.#generation)
-				this.#message = error instanceof Error ? error.message : "Could not update the provider. Try again.";
+				this.#message = error instanceof Error ? error.message : t("login.updateFailed");
 		} finally {
 			if (generation === this.#generation) {
 				this.#busy = false;
@@ -267,12 +269,12 @@ export class LoginPanel implements Component {
 		const key = this.#input.getValue().trim();
 		if (!remove) {
 			if (!key) {
-				this.#message = "Enter an API key.";
+				this.#message = t("login.enterKey");
 				this.#changed();
 				return;
 			}
 			if (Array.from(key).some((char) => char.charCodeAt(0) < 32)) {
-				this.#message = "Key contains a newline or control character. Remove it and try again.";
+				this.#message = t("login.keyControlChar");
 				this.#changed();
 				return;
 			}
@@ -280,19 +282,19 @@ export class LoginPanel implements Component {
 		const generation = this.#generation;
 		const provider = this.#provider;
 		this.#busy = true;
-		this.#message = remove ? "Removing..." : "Saving...";
+		this.#message = remove ? t("login.removing") : t("login.saving");
 		this.#changed();
 		try {
 			if (remove) await this.#remove(provider);
 			else await this.#save(provider, key);
 			if (generation === this.#generation) {
 				this.#inputs.set(provider, new Input());
-				this.#message = remove ? "Saved key removed." : "Saved. Used by the next request.";
+				this.#message = remove ? t("login.removed") : t("login.saved");
 				this.#scheduleAutoClose(generation);
 			}
 		} catch (error) {
 			if (generation === this.#generation)
-				this.#message = error instanceof Error ? error.message : "Could not update API key. Try again.";
+				this.#message = error instanceof Error ? error.message : t("login.keyFailed");
 		} finally {
 			if (generation === this.#generation) {
 				this.#busy = false;
@@ -315,7 +317,7 @@ export class LoginPanel implements Component {
 		const items = this.#visible();
 		this.#index = Math.max(0, Math.min(this.#index, items.length - 1));
 		const selected = items[this.#index];
-		const rows = [theme.accent(style.bold("Model providers and API keys"))];
+		const rows = [theme.accent(style.bold(t("login.title")))];
 		if (this.height >= 4) {
 			this.#filter.focused = this.focused;
 			rows.push(...this.#filter.render(w).slice(0, 1));
@@ -324,7 +326,7 @@ export class LoginPanel implements Component {
 		const entries: Entry[] = [];
 		let group: string | undefined;
 		for (const row of items) {
-			const next = row.group === "search" ? "Web search" : "Model providers";
+			const next = row.group === "search" ? t("login.groupSearch") : t("login.groupModel");
 			if (next !== group) entries.push({ header: next });
 			group = next;
 			entries.push({ row });
@@ -342,10 +344,15 @@ export class LoginPanel implements Component {
 			const enabled = this.#isEnabled(spec);
 			const modelRow = rowGroup === "model";
 			const mark = modelRow ? (enabled ? "[x]" : "[ ]") : "   ";
-			const right = status ? `${status.source} · env ${status.environmentConfigured ? "set" : "unset"}` : "loading";
+			const right = status
+				? t("login.rowStatus", {
+						source: status.source,
+						state: status.environmentConfigured ? t("login.envSet") : t("login.envUnset"),
+					})
+				: t("login.statusLoading");
 			const leftWidth = Math.max(1, w - 3 - visibleWidth(right));
 			const left = truncateToWidth(
-				`${mark} ${spec.name}${modelRow && isLocked(spec.id) ? " (always on)" : ""}`,
+				`${mark} ${spec.name}${modelRow && isLocked(spec.id) ? t("login.alwaysOn") : ""}`,
 				leftWidth,
 				"...",
 			);
@@ -353,62 +360,81 @@ export class LoginPanel implements Component {
 			if (entry.row === selected) rows.push(theme.selection(`❯ ${label}`));
 			else rows.push(modelRow && !enabled ? theme.dim(`  ${label}`) : `  ${label}`);
 		}
-		if (items.length === 0) rows.push("No matching providers");
+		if (items.length === 0) rows.push(t("login.noMatch"));
 		if (showStatus) {
 			while (rows.length < this.height - 2) rows.push("");
 			const hint = selected
 				? selected.group === "search" && isModelProvider(selected.spec.id)
-					? `Same key as the ${selected.spec.name} model provider. Environment variable: ${selected.spec.envVar}`
-					: `Environment variable: ${selected.spec.envVar}`
+					? t("login.hintShared", { name: selected.spec.name, env: selected.spec.envVar })
+					: t("login.hintEnv", { env: selected.spec.envVar })
 				: "";
 			rows.push(this.#message || (hint ? theme.dim(hint) : ""));
 		}
 		const help = this.#busy
-			? shortcutHints(["Esc", "Close"])
-			: shortcutHints(["↑↓", "Select"], ["Space", "Toggle"], ["Enter", "Key"], ["Esc", "Close"]);
+			? shortcutHints(["Esc", t("action.close")])
+			: shortcutHints(
+					["↑↓", t("action.select")],
+					["Space", t("action.toggle")],
+					["Enter", t("action.key")],
+					["Esc", t("action.close")],
+				);
 		return this.#frame(rows, help, width);
 	}
 	#renderKey(width: number): string[] {
 		const state = this.#status;
 		const spec = CREDENTIAL_PROVIDERS.find((item) => item.id === this.#provider) ?? CREDENTIAL_PROVIDERS[0]!;
-		const source = state?.source === "keyless" ? "keyless (rate-limited)" : (state?.source ?? "Loading...");
+		const source = state?.source === "keyless" ? t("login.sourceKeyless") : (state?.source ?? t("common.loading"));
 		const keyLength = this.#input.getValue().length;
 		// 与 Input 组件同一习语：聚焦时发射零宽硬件光标标记 + fake cursor（无硬件光标时解析为反色块）。
 		// 光标恒在固定星号之后，位置不随密钥长度变化；失焦时不渲染光标。
 		const marker = this.focused ? CURSOR_MARKER : "";
+		const keyLabel = t("login.keyLabel");
+		const paste = [...t("login.pasteKey")];
 		const keyRow =
 			keyLength > 0
-				? `API Key: ********${marker}${this.focused ? renderFakeCursor(" ") : ""} (${keyLength} characters)`
-				: `API Key: ${marker}${this.focused ? `${renderFakeCursor("(")}paste key)` : "(paste key)"}`;
+				? `${keyLabel}********${marker}${this.focused ? renderFakeCursor(" ") : ""} ${t("login.keyLength", { count: keyLength })}`
+				: `${keyLabel}${marker}${this.focused ? `${renderFakeCursor(paste[0] ?? " ")}${paste.slice(1).join("")}` : paste.join("")}`;
 		const tag =
 			this.#group === "search"
 				? isModelProvider(spec.id)
-					? "web search, same key as model provider"
-					: "web search"
+					? t("login.tagSearchShared")
+					: t("login.tagSearch")
 				: this.#isEnabled(spec)
-					? "enabled"
-					: "disabled";
+					? t("login.tagEnabled")
+					: t("login.tagDisabled");
 		const defaultMessage = spec.keyless
-			? `Without a key, ${spec.name} runs in rate-limited keyless mode.`
+			? t("login.keylessMessage", { name: spec.name })
 			: this.#group === "model" && !this.#isEnabled(spec)
-				? "Provider is disabled. Esc, then Space enables it."
-				: "Saved key overrides environment.";
-		const provider = `Provider: ${spec.name} (${tag})`;
+				? t("login.disabledMessage")
+				: t("login.savedOverrides");
+		const provider = t("login.provider", { name: spec.name, tag });
 		const message = this.#message || defaultMessage;
-		const environment = `Environment: ${spec.envVar} ${state ? (state.environmentConfigured ? "Configured" : "Not configured") : "Loading..."}`;
-		const sourceRow = `Active source: ${source}`;
+		const environment = t("login.environment", {
+			env: spec.envVar,
+			state: state
+				? state.environmentConfigured
+					? t("login.envConfigured")
+					: t("login.envNotConfigured")
+				: t("common.loading"),
+		});
+		const sourceRow = t("login.activeSource", { source });
 		// 小窗口先保住提供方、密钥行与状态消息。
 		const rows =
 			this.height - 1 >= 6
 				? [provider, environment, sourceRow, keyRow, message, spec.signupUrl]
 				: [provider, keyRow, message, environment, sourceRow, spec.signupUrl];
 		const help = this.#busy
-			? shortcutHints(["Esc", "Close"])
+			? shortcutHints(["Esc", t("action.close")])
 			: this.#confirmingRemove
-				? shortcutHints(["Ctrl+R", "Confirm remove"], ["Esc", "Back"])
+				? shortcutHints(["Ctrl+R", t("action.confirmRemove")], ["Esc", t("action.back")])
 				: state?.savedConfigured
-					? shortcutHints(["Enter", "Save"], ["Ctrl+R", "Remove"], ["Tab", "Providers"], ["Esc", "Back"])
-					: shortcutHints(["Enter", "Save"], ["Tab", "Providers"], ["Esc", "Back"]);
+					? shortcutHints(
+							["Enter", t("action.save")],
+							["Ctrl+R", t("action.remove")],
+							["Tab", t("action.providers")],
+							["Esc", t("action.back")],
+						)
+					: shortcutHints(["Enter", t("action.save")], ["Tab", t("action.providers")], ["Esc", t("action.back")]);
 		return this.#frame(rows, help, width);
 	}
 }

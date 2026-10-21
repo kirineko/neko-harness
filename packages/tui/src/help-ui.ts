@@ -1,8 +1,10 @@
 import { getKeybindings, matchesKey, TUI_KEYBINDINGS, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { PickerDetail } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { type PlainKey, t } from "./i18n/index.ts";
 import { clipboardShortcutKey, runningInWsl } from "./image-input.ts";
 import { commands } from "./labels.ts";
+import { skipLabel } from "./question-dock.ts";
 import { theme } from "./theme/index.ts";
 
 const keyLabel = (key: string) =>
@@ -13,134 +15,182 @@ const keyLabel = (key: string) =>
 		)
 		.join("+");
 
+/** Pi's own binding descriptions are English; known ids are translated, unknown ones keep Pi's text. */
+export const BINDING_KEYS: Readonly<Record<string, PlainKey>> = {
+	"tui.editor.cursorUp": "help.binding.cursorUp",
+	"tui.editor.cursorDown": "help.binding.cursorDown",
+	"tui.editor.historyPrevious": "help.binding.historyPrevious",
+	"tui.editor.historyNext": "help.binding.historyNext",
+	"tui.editor.cursorLeft": "help.binding.cursorLeft",
+	"tui.editor.cursorRight": "help.binding.cursorRight",
+	"tui.editor.cursorWordLeft": "help.binding.cursorWordLeft",
+	"tui.editor.cursorWordRight": "help.binding.cursorWordRight",
+	"tui.editor.cursorLineStart": "help.binding.cursorLineStart",
+	"tui.editor.cursorLineEnd": "help.binding.cursorLineEnd",
+	"tui.editor.jumpForward": "help.binding.jumpForward",
+	"tui.editor.jumpBackward": "help.binding.jumpBackward",
+	"tui.editor.deleteCharBackward": "help.binding.deleteCharBackward",
+	"tui.editor.deleteCharForward": "help.binding.deleteCharForward",
+	"tui.editor.deleteWordBackward": "help.binding.deleteWordBackward",
+	"tui.editor.deleteWordForward": "help.binding.deleteWordForward",
+	"tui.editor.deleteToLineStart": "help.binding.deleteToLineStart",
+	"tui.editor.deleteToLineEnd": "help.binding.deleteToLineEnd",
+	"tui.editor.yank": "help.binding.yank",
+	"tui.editor.yankPop": "help.binding.yankPop",
+	"tui.editor.undo": "help.binding.undo",
+	"tui.input.newLine": "help.binding.newLine",
+	"tui.input.tab": "help.binding.tab",
+	"tui.altScreen.pageUp": "help.binding.viewportPageUp",
+	"tui.altScreen.pageDown": "help.binding.viewportPageDown",
+	"tui.altScreen.halfPageUp": "help.binding.viewportHalfPageUp",
+	"tui.altScreen.halfPageDown": "help.binding.viewportHalfPageDown",
+	"tui.altScreen.lineUp": "help.binding.viewportLineUp",
+	"tui.altScreen.lineDown": "help.binding.viewportLineDown",
+	"tui.altScreen.previousPrompt": "help.binding.previousPrompt",
+	"tui.altScreen.nextPrompt": "help.binding.nextPrompt",
+	"tui.altScreen.search": "help.binding.search",
+	"tui.altScreen.searchNext": "help.binding.searchNext",
+	"tui.altScreen.searchPrevious": "help.binding.searchPrevious",
+	"tui.altScreen.searchClose": "help.binding.searchClose",
+	"tui.altScreen.top": "help.binding.top",
+	"tui.altScreen.bottom": "help.binding.bottom",
+};
+
+type Row = readonly [key: string, description: string];
+
 export function helpLines(platform: string = process.platform, wsl: boolean = runningInWsl()): string[] {
 	const rows: string[] = [];
-	const section = (title: string, hints: readonly (readonly [string, string])[]) => {
+	const section = (title: string, hints: readonly Row[]) => {
 		rows.push(theme.accent(title), ...hints.map(([key, description]) => shortcutHints([key, description])), "");
 	};
-	section("Chat", [
-		["Enter", "Send; queue while running"],
-		["Esc", "Stop a running task or blocking compaction"],
-		["Esc Esc", "Clear draft when idle (press twice quickly)"],
-		["Up / Down", "Browse previous inputs in this session"],
-		["Ctrl+C", "Stop while running; exit when idle"],
-		["Ctrl+S", "Open sessions"],
-		["Ctrl+O", "Open or close the assistant's question"],
-		[keyLabel(clipboardShortcutKey(platform, wsl)), "Paste clipboard image or text"],
-		["/", "Complete commands"],
-		["@", "Complete workspace files"],
-		["/skill:", "Complete installed skills"],
+	section(t("help.section.chat"), [
+		["Enter", t("help.chat.send")],
+		["Esc", t("help.chat.stop")],
+		["Esc Esc", t("help.chat.clear")],
+		["Up / Down", t("help.chat.history")],
+		["Ctrl+C", t("help.chat.ctrlc")],
+		["Ctrl+S", t("help.chat.sessions")],
+		["Ctrl+O", t("help.chat.question")],
+		[keyLabel(clipboardShortcutKey(platform, wsl)), t("help.chat.paste")],
+		["/", t("help.chat.commands")],
+		["@", t("help.chat.files")],
+		["/skill:", t("help.chat.skills")],
 	]);
-	section("Menus", [
-		["↑↓", "Select"],
-		["Enter", "Open or apply"],
-		["Type", "Filter list"],
-		["Esc / Ctrl+C", "Back or close"],
-		["↑↓ / Wheel", "Scroll details"],
-		["PgUp / PgDn", "Page through details"],
+	section(t("help.section.menus"), [
+		["↑↓", t("help.menus.select")],
+		["Enter", t("help.menus.open")],
+		[t("help.label.type"), t("help.menus.filter")],
+		["Esc / Ctrl+C", t("help.menus.close")],
+		["↑↓ / Wheel", t("help.menus.scroll")],
+		["PgUp / PgDn", t("help.menus.page")],
 	]);
-	section("Agents", [
-		["→", "Open agents from an empty editor; open selected task"],
-		["←", "Return to main chat"],
-		["E", "Expand or collapse tool results and thinking"],
-		["↑ / ↓", "Select Allow once / Deny when approval appears"],
-		["Enter", "Confirm selected approval option"],
-		["PgUp / PgDn", "Scroll full approval command"],
-		["[/]", "Select another pending approval"],
-		["S", "Stop current round; keep agent context (Enter confirms)"],
-		["Click", "Open round card or status-bar Agents entry"],
+	section(t("help.section.agents"), [
+		["→", t("help.agents.open")],
+		["←", t("help.agents.back")],
+		["E", t("help.agents.expand")],
+		["↑ / ↓", t("help.agents.approvalSelect")],
+		["Enter", t("help.agents.approvalConfirm")],
+		["PgUp / PgDn", t("help.agents.approvalScroll")],
+		["[/]", t("help.agents.approvalSwitch")],
+		["S", t("help.agents.stop")],
+		[t("help.label.click"), t("help.agents.click")],
 	]);
-	section("Jobs", [
-		["/jobs", "View background jobs"],
-		["Enter", "Open job output"],
-		["S", "Stop selected running job (Enter confirms)"],
-		["End", "Jump to the newest output"],
-		["←", "Back"],
+	section(t("help.section.jobs"), [
+		["/jobs", t("help.jobs.list")],
+		["Enter", t("help.jobs.output")],
+		["S", t("help.jobs.stop")],
+		["End", t("help.jobs.end")],
+		["←", t("help.jobs.back")],
 	]);
-	section("Queue", [
-		["Alt+↑", "Select queued messages above the editor"],
-		["↑ / ↓", "Move between queued messages"],
-		["Enter", "Steer the selected message (joins the run after the current tool round)"],
-		["Esc", "Withdraw the selected message into the editor; the run keeps going"],
+	section(t("help.section.queue"), [
+		["Alt+↑", t("help.queue.select")],
+		["↑ / ↓", t("help.queue.move")],
+		["Enter", t("help.queue.steer")],
+		["Esc", t("help.queue.withdraw")],
 	]);
-	section("Todos", [
-		["/todos", "View the assistant's todo list (read-only)"],
-		["↑↓ / Wheel", "Scroll a long list"],
-		["PgUp / PgDn", "Page through the list"],
-		["Esc", "Close"],
+	section(t("help.section.todos"), [
+		["/todos", t("help.todos.list")],
+		["↑↓ / Wheel", t("help.todos.scroll")],
+		["PgUp / PgDn", t("help.todos.page")],
+		["Esc", t("help.todos.close")],
 	]);
-	section("Questions", [
-		["Ctrl+O", "Open or close the question panel (also /question)"],
-		["↑ / ↓", "Move between options"],
-		["1-9", "Jump to an option"],
-		["Space", "Select (single choice) or toggle (multiple choice); nothing is preselected"],
-		["Tab", "Switch between the options and the note or answer field"],
-		["Enter", "Submit the answer; on 跳过此问题 it skips the question"],
-		["PgUp / PgDn", "Scroll a long question"],
-		["[ / ]", "Switch between several waiting questions"],
-		["Esc", "Close the panel only: the draft is kept, the question stays open and the run keeps going"],
-		["Ctrl+C", "Stop the run, which cancels the question"],
-		["Messages", "Typed messages stay queued until the question is settled; they are never the answer"],
-		["Approvals", "A waiting approval keeps the keys until you press Ctrl+O; Esc then returns to it"],
+	section(t("help.section.questions"), [
+		["Ctrl+O", t("help.questions.open")],
+		["↑ / ↓", t("help.questions.move")],
+		["1-9", t("help.questions.jump")],
+		["Space", t("help.questions.select")],
+		["Tab", t("help.questions.tab")],
+		["Enter", t("help.questions.enter", { skip: skipLabel() })],
+		["PgUp / PgDn", t("help.questions.scroll")],
+		["[ / ]", t("help.questions.switch")],
+		["Esc", t("help.questions.esc")],
+		["Ctrl+C", t("help.questions.ctrlc")],
+		[t("help.label.messages"), t("help.questions.messages")],
+		[t("help.label.approvals"), t("help.questions.approvals")],
 	]);
-	section("Plan mode", [
-		["/plan", "Enter or leave plan mode; with a plan waiting, open it for review"],
-		["Shift+Tab", "Enter or leave plan mode (idle sessions only)"],
-		["↑ / ↓", "Move between Approve and Request changes in the plan panel"],
-		["Enter", "Choose the highlighted row; Request changes then takes a typed note"],
-		["A / R", "Approve the plan / write the requested changes"],
-		["X", "Cancel the waiting plan and exit plan mode (idle sessions only)"],
-		["PgUp / PgDn", "Scroll a long plan"],
-		["Esc", "Close the panel only: the plan keeps waiting and the draft is kept"],
-		["Messages", "A normal message sent while a plan waits replaces that plan"],
+	section(t("help.section.plan"), [
+		["/plan", t("help.plan.toggle")],
+		["Shift+Tab", t("help.plan.shiftTab")],
+		["↑ / ↓", t("help.plan.move")],
+		["Enter", t("help.plan.choose")],
+		["A / R", t("help.plan.ar")],
+		["X", t("help.plan.exit")],
+		["PgUp / PgDn", t("help.plan.scroll")],
+		["Esc", t("help.plan.esc")],
+		[t("help.label.messages"), t("help.plan.messages")],
 	]);
-	section("Web search", [
-		["/search", "Choose the web search provider"],
-		["Enter", "Apply the highlighted provider"],
-		["K", "Set the highlighted provider's API key (opens /login)"],
+	section(t("help.section.search"), [
+		["/search", t("help.search.choose")],
+		["Enter", t("help.search.apply")],
+		["K", t("help.search.key")],
 	]);
-	section("Context", [
-		["/context", "Tune compaction and tool result pruning"],
-		["Enter", "Choose a setting, then a value to save"],
-		["Esc", "Back"],
+	section(t("help.section.context"), [
+		["/context", t("help.context.tune")],
+		["Enter", t("help.context.choose")],
+		["Esc", t("help.context.back")],
 	]);
-	section("Skills", [
-		["U", "Install for user"],
-		["P", "Install for project"],
-		["D", "Remove"],
-		["V", "Preview"],
-		["Y / N", "Confirm / cancel changes"],
+	section(t("help.section.language"), [["/language", t("help.language.choose")]]);
+	section(t("help.section.skills"), [
+		["U", t("help.skills.user")],
+		["P", t("help.skills.project")],
+		["D", t("help.skills.remove")],
+		["V", t("help.skills.preview")],
+		["Y / N", t("help.skills.confirm")],
 	]);
-	section("Credentials", [
-		["← / →", "Switch provider"],
-		["Enter", "Save key"],
-		["Ctrl+R", "Remove saved key"],
+	section(t("help.section.credentials"), [
+		["← / →", t("help.credentials.switch")],
+		["Enter", t("help.credentials.save")],
+		["Ctrl+R", t("help.credentials.remove")],
 	]);
 	const bindings = getKeybindings();
+	const describe = (id: string): string => {
+		const known = BINDING_KEYS[id];
+		return known !== undefined ? t(known) : (bindings.getDefinition(id as never).description ?? id);
+	};
 	for (const [prefix, title] of [
-		["tui.editor.", "Editing"],
-		["tui.altScreen.", "Main transcript and search"],
+		["tui.editor.", t("help.section.editing")],
+		["tui.altScreen.", t("help.section.transcript")],
 	] as const) {
 		const hints: [string, string][] = [];
 		for (const id of Object.keys(TUI_KEYBINDINGS) as (keyof typeof TUI_KEYBINDINGS)[]) {
 			if (!id.startsWith(prefix) || id === "tui.editor.pageUp" || id === "tui.editor.pageDown") continue;
 			const keys = bindings.getKeys(id);
-			if (keys.length) hints.push([keys.map(keyLabel).join(" / "), bindings.getDefinition(id).description ?? id]);
+			if (keys.length) hints.push([keys.map(keyLabel).join(" / "), describe(id)]);
 		}
 		if (prefix === "tui.editor.") {
 			for (const id of ["tui.input.newLine", "tui.input.tab"] as const)
-				hints.push([bindings.getKeys(id).map(keyLabel).join(" / "), bindings.getDefinition(id).description ?? id]);
+				hints.push([bindings.getKeys(id).map(keyLabel).join(" / "), describe(id)]);
 		}
 		section(title, hints);
 	}
-	section("Mouse", [
-		["Wheel", "Scroll transcript or details"],
-		["Click", "Expand messages, thinking, tools and images"],
-		["Drag", "Select text; release to copy"],
+	section(t("help.section.mouse"), [
+		[t("help.label.wheel"), t("help.mouse.wheel")],
+		[t("help.label.click"), t("help.mouse.click")],
+		[t("help.label.drag"), t("help.mouse.drag")],
 	]);
 	section(
-		"Commands",
-		commands.map((command) => [`/${command.name}`, command.description ?? ""]),
+		t("help.section.commands"),
+		commands().map((command) => [`/${command.name}`, command.description ?? ""]),
 	);
 	return rows;
 }
@@ -151,7 +201,7 @@ export class HelpDetail implements PickerDetail {
 	#max = 0;
 	#page = 1;
 	get help() {
-		return shortcutHints(["↑↓/Wheel", "Scroll"], ["PgUp/PgDn", "Page"], ["Esc", "Close"]);
+		return shortcutHints(["↑↓/Wheel", t("action.scroll")], ["PgUp/PgDn", t("action.page")], ["Esc", t("action.close")]);
 	}
 	scroll(delta: number) {
 		this.#offset = Math.max(0, Math.min(this.#max, this.#offset + delta));

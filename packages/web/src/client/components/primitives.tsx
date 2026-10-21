@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../lib/i18n/index.ts";
 import { MOBILE_QUERY } from "../lib/layout";
 
 export function Icon({
@@ -34,6 +35,7 @@ export function Icon({
 		| "eye"
 		| "phone"
 		| "palette"
+		| "globe"
 		| "layers";
 	size?: number;
 	className?: string;
@@ -68,6 +70,8 @@ export function Icon({
 		layers: "M12 3 3 8l9 5 9-5-9-5ZM3 12.5l9 5 9-5M3 17l9 5 9-5",
 		palette:
 			"M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-1.9-.4-1 .2-2.1 1.4-2.1H17a4 4 0 0 0 4-4c0-5-4-10-9-10ZM7.5 11h.01M10 7.5h.01M14.5 7.5h.01",
+		globe:
+			"M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z",
 		sparkles:
 			"M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8zM18.5 3l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8zM5 16l.7 1.8 1.8.7-1.8.7L5 21l-.7-1.8-1.8-.7 1.8-.7z",
 	};
@@ -110,6 +114,7 @@ export function Modal(props: {
 }) {
 	const ref = useRef<HTMLDialogElement>(null);
 	const id = useId();
+	const t = useT();
 	useEffect(() => {
 		const previous = document.activeElement as HTMLElement | null;
 		const dialog = ref.current!;
@@ -156,8 +161,8 @@ export function Modal(props: {
 				<button
 					type="button"
 					className="icon-btn"
-					aria-label="关闭"
-					title="关闭"
+					aria-label={t("common.close")}
+					title={t("common.close")}
 					disabled={props.locked}
 					onClick={props.onClose}
 				>

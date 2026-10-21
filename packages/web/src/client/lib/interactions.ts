@@ -7,6 +7,7 @@ import {
 	type TodoStatus,
 	todoProgress,
 } from "@neko-harness/core/interactions";
+import { getT, type PlainKey } from "./i18n/index.ts";
 import type { NekoState } from "./store.ts";
 
 type Source = Pick<NekoState, "view" | "phase" | "operating" | "currentSessionId" | "retained">;
@@ -50,32 +51,39 @@ export function questionState(state: Source): QuestionsState | null {
 	return { pending: list.pending, online: state.phase === "ready" && !state.operating && state.view !== null };
 }
 
-export const TODO_STATUS_LABEL: Record<TodoStatus, string> = {
-	pending: "待办",
-	in_progress: "进行中",
-	completed: "已完成",
+const TODO_STATUS_KEY: Record<TodoStatus, PlainKey> = {
+	pending: "todo.status.pending",
+	in_progress: "todo.status.in_progress",
+	completed: "todo.status.completed",
 };
-export const QUESTION_STATUS_LABEL: Record<QuestionStatus, string> = {
-	pending: "等待回答",
-	answered: "已回答",
-	skipped: "已跳过",
-	cancelled: "已取消",
+const QUESTION_STATUS_KEY: Record<QuestionStatus, PlainKey> = {
+	pending: "question.status.pending",
+	answered: "question.status.answered",
+	skipped: "question.status.skipped",
+	cancelled: "question.status.cancelled",
 };
+export const todoStatusLabel = (status: TodoStatus): string => getT()(TODO_STATUS_KEY[status]);
+export const questionStatusLabel = (status: QuestionStatus): string => getT()(QUESTION_STATUS_KEY[status]);
 
-/** Suffix of a session row: a question waiting for the user replaces "运行中"; absent `awaitingAnswer` = unsupported. */
+/** Suffix of a session row: a question waiting for the user replaces "running"; absent `awaitingAnswer` = unsupported. */
 export function sessionStatusText(session: {
 	status: "idle" | "running" | "error";
 	awaitingAnswer?: boolean;
 	awaitingPlan?: boolean;
 }): string {
-	if (session.awaitingAnswer === true) return " · 等待回答";
-	if (session.awaitingPlan === true) return " · 等待批准";
-	return session.status === "running" ? " · 运行中" : session.status === "error" ? " · 出错" : "";
+	const t = getT();
+	if (session.awaitingAnswer === true) return t("session.suffix.awaitingAnswer");
+	if (session.awaitingPlan === true) return t("session.suffix.awaitingPlan");
+	return session.status === "running"
+		? t("session.suffix.running")
+		: session.status === "error"
+			? t("session.suffix.error")
+			: "";
 }
 
 /** Tab title while the page is hidden and the session waits for an answer; restored by the caller. */
 export function awaitingTitle(base: string, pending: number): string {
-	return pending > 0 ? `(${pending}) 等待回答 · ${base}` : base;
+	return pending > 0 ? `${getT()("title.answerPrefix", { count: pending })}${base}` : base;
 }
 
 /**
@@ -98,13 +106,14 @@ export function plainText(text: string): string {
 
 /** One-line state of a settled question, from its saved record. */
 export function settlementText(record: QuestionRecord): string {
+	const t = getT();
 	if (record.status === "answered") {
 		const answer = describeSettlement(record);
-		return answer ? `已回答：${answer}` : "已回答";
+		return answer ? t("question.settle.answeredWith", { answer }) : t("question.settle.answered");
 	}
-	if (record.status === "skipped") return "已跳过，未提供答案";
-	if (record.status === "cancelled") return "已取消（运行已停止或会话已归档）";
-	return QUESTION_STATUS_LABEL.pending;
+	if (record.status === "skipped") return t("question.settle.skipped");
+	if (record.status === "cancelled") return t("question.settle.cancelled");
+	return questionStatusLabel("pending");
 }
 
 /** Whether a saved record is exactly what a response asked for (otherwise another decision won). */

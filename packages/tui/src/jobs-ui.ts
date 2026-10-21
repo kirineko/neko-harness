@@ -4,9 +4,10 @@ import type { JobsClient } from "@neko-harness/gateway/client-session";
 import type { WireJobSummary } from "@neko-harness/gateway/contract";
 import type { PickerDetail, PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { t } from "./i18n/index.ts";
 import { theme } from "./theme/index.ts";
 
-export const JOBS_EMPTY = "No background jobs in this session.";
+export const jobsEmpty = (): string => t("jobs.empty");
 const POLL_MS = 1000;
 const COMMAND_LINES = 3;
 
@@ -44,8 +45,8 @@ export function confirmStop(
 ): void {
 	let submitted = false;
 	panel.showDetail({
-		help: shortcutHints(["Enter", "Stop"], ["Esc", "Back"]),
-		lines: () => [theme.warning(`Stop job ${jobId}? Its process tree is terminated.`)],
+		help: shortcutHints(["Enter", t("action.stop")], ["Esc", t("action.back")]),
+		lines: () => [theme.warning(t("jobs.confirmStop", { jobId }))],
 		handleKey: (key) => {
 			if (!matchesKey(key, "enter")) return false;
 			if (submitted) return true;
@@ -96,10 +97,10 @@ export class JobDetail implements PickerDetail {
 	get help(): string {
 		const running = this.#job?.status === "running";
 		return shortcutHints(
-			["←", "Back"],
-			["↑↓/Wheel", "Scroll"],
-			...(this.#follow ? [] : [["End", "Bottom"] as const]),
-			...(running ? [["S", "Stop"] as const] : []),
+			["←", t("action.back")],
+			["↑↓/Wheel", t("action.scroll")],
+			...(this.#follow ? [] : [["End", t("action.bottom")] as const]),
+			...(running ? [["S", t("action.stop")] as const] : []),
 		);
 	}
 
@@ -178,7 +179,7 @@ export class JobDetail implements PickerDetail {
 		const job = this.#job;
 		const rows: string[] = [];
 		if (!job) {
-			rows.push(theme.dim("This job is no longer available."));
+			rows.push(theme.dim(t("jobs.unavailable")));
 		} else {
 			const row = summarizeJobs([job], Date.now()).rows[0]!;
 			rows.push(
@@ -190,11 +191,10 @@ export class JobDetail implements PickerDetail {
 			if (command.length > COMMAND_LINES) rows.push(theme.dim("…"));
 			rows.push(theme.dim(job.cwd), "");
 		}
-		if (this.#tail.dropped > 0)
-			rows.push(theme.warning(`… ${this.#tail.dropped} bytes of earlier output were dropped`));
+		if (this.#tail.dropped > 0) rows.push(theme.warning(t("jobs.dropped", { count: this.#tail.dropped })));
 		const body = this.#tail.text.replace(/\n$/, "");
 		if (body === "") {
-			if (this.#tail.offset !== undefined && this.#error === "") rows.push(theme.dim("(no output yet)"));
+			if (this.#tail.offset !== undefined && this.#error === "") rows.push(theme.dim(t("jobs.noOutput")));
 		} else for (const line of body.split("\n")) rows.push(...wrapTextWithAnsi(line, width));
 		if (this.#error) rows.push(theme.error(this.#error));
 		this.#maxScroll = Math.max(0, rows.length - height);

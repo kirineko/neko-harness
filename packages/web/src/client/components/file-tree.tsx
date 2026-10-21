@@ -1,5 +1,6 @@
 import type { WorkspaceClient } from "@neko-harness/gateway/client-session";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { useT } from "../lib/i18n/index.ts";
 import { useResource } from "../lib/use-resource.ts";
 import { Icon } from "./primitives";
 
@@ -79,6 +80,7 @@ function Row({
 	first: boolean;
 	ctx: TreeContext;
 }) {
+	const t = useT();
 	const isDir = entry.kind === "directory";
 	const open = isDir && ctx.expanded.has(entry.path);
 	const gone = useRef(ctx.onRowGone);
@@ -111,12 +113,22 @@ function Row({
 			</span>
 			<span className="min-w-0 flex-1 truncate">{entry.name}</span>
 			{entry.kind === "symlink" && (
-				<span className="shrink-0 text-xs text-ink-500" title="符号链接（不跟随）" role="img" aria-label="符号链接">
+				<span
+					className="shrink-0 text-xs text-ink-500"
+					title={t("tree.symlinkTitle")}
+					role="img"
+					aria-label={t("tree.symlink")}
+				>
 					↪
 				</span>
 			)}
 			{entry.protected && (
-				<span className="shrink-0 text-ink-500" title="受保护文件，不提供查看" role="img" aria-label="受保护文件">
+				<span
+					className="shrink-0 text-ink-500"
+					title={t("tree.protectedTitle")}
+					role="img"
+					aria-label={t("tree.protected")}
+				>
 					<Icon name="key" size={13} />
 				</span>
 			)}
@@ -125,6 +137,7 @@ function Row({
 }
 
 function DirNode({ path, depth, ctx }: { path: string; depth: number; ctx: TreeContext }) {
+	const t = useT();
 	const dir = useResource(path, ctx.active, (signal) => ctx.api().dir(path, signal), ctx.version);
 	const indent = { paddingLeft: `${0.375 + depth * 0.875 + 1.25}rem` };
 	const entries = dir.data?.entries as Entry[] | undefined;
@@ -142,12 +155,12 @@ function DirNode({ path, depth, ctx }: { path: string; depth: number; ctx: TreeC
 			))}
 			{entries && entries.length === 0 && dir.status !== "error" && (
 				<div className="py-1 pr-2 text-xs text-ink-500" style={indent}>
-					空目录
+					{t("tree.emptyDir")}
 				</div>
 			)}
 			{!entries && dir.status === "loading" && (
 				<output className="block py-1 pr-2 text-xs text-ink-500" style={indent}>
-					加载中…
+					{t("common.loadingEllipsis")}
 				</output>
 			)}
 			{dir.status === "error" && (
@@ -156,19 +169,19 @@ function DirNode({ path, depth, ctx }: { path: string; depth: number; ctx: TreeC
 					style={indent}
 					role="alert"
 				>
-					<span className="min-w-0 break-words">读取失败：{dir.error}</span>
+					<span className="min-w-0 break-words">{t("tree.readFailed", { error: dir.error ?? "" })}</span>
 					<button
 						type="button"
 						className="focus-neko shrink-0 rounded-md border border-sakura-300 px-2 py-0.5"
 						onClick={dir.reload}
 					>
-						重试
+						{t("common.retry")}
 					</button>
 				</div>
 			)}
 			{dir.data && (dir.data.incomplete || dir.data.limited) && (
 				<div className="py-1 pr-2 text-xs text-sakura-800" style={indent} role="note">
-					列表不完整：{dir.data.limited ? "该目录子项过多，仅显示部分。" : "工作区文件过多，枚举已被截断。"}
+					{t("tree.incomplete", { reason: dir.data.limited ? t("tree.limitedDir") : t("tree.limitedWorkspace") })}
 				</div>
 			)}
 		</>
@@ -213,6 +226,7 @@ export function FileTree(props: {
 	onOpen(path: string): void;
 	onRefresh(): void;
 }) {
+	const t = useT();
 	const [focusPath, setFocusPath] = useState<string | null>(null);
 	const ctx: TreeContext = {
 		api: props.api,
@@ -232,17 +246,17 @@ export function FileTree(props: {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex shrink-0 items-center justify-between gap-2 border-b border-sakura-100 px-3 py-1.5 text-xs">
-				<span className="text-ink-600">只读浏览</span>
+				<span className="text-ink-600">{t("tree.readOnly")}</span>
 				<button
 					type="button"
 					className="focus-neko rounded-lg border border-sakura-300 px-2 py-0.5 text-sakura-800 hover:bg-sakura-50"
-					aria-label="刷新文件树"
+					aria-label={t("tree.refreshAria")}
 					onClick={props.onRefresh}
 				>
-					刷新
+					{t("tree.refresh")}
 				</button>
 			</div>
-			<div role="tree" aria-label="工作区文件树" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1.5">
+			<div role="tree" aria-label={t("tree.aria")} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1.5">
 				<DirNode path="" depth={0} ctx={ctx} />
 			</div>
 		</div>

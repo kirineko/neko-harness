@@ -1,11 +1,13 @@
 import { ApprovalQueue } from "@neko-harness/gateway/client-session";
 import { useEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { useNekoState } from "../lib/store";
 import { ApprovalCard } from "./approval-card";
 
 /** Only unresolved requests live here; transcript panels do not own approval. */
 export function ApprovalInbox() {
+	const t = useT();
 	const { phase, operating, currentSessionId, view } = useNekoState();
 	const [, redraw] = useState(0);
 	const live = useRef<ApprovalQueue | null>(null);
@@ -36,7 +38,7 @@ export function ApprovalInbox() {
 	const pending = queue.pending;
 	if (!pending.length && !queue.error) return null;
 	return (
-		<section aria-label="待审批命令" className="max-h-[40dvh] shrink-0 space-y-2 overflow-auto px-3 py-2">
+		<section aria-label={t("approval.inbox")} className="max-h-[40dvh] shrink-0 space-y-2 overflow-auto px-3 py-2">
 			{pending.map(({ item, title, service }) => (
 				<ApprovalCard
 					key={`${item.id}:${item.version}`}

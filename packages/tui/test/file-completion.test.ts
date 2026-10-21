@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { afterAll, afterEach, beforeAll, expect, it } from "bun:test";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { languageFromPath } from "../lib/diff-highlight.ts";
 import { renderCodeHtml } from "../lib/highlight.ts";
+import { useT } from "../lib/i18n/index.ts";
 import { useResource } from "../lib/use-resource.ts";
 import { formatBytes, isNotFound, lineCount, splitPath } from "../lib/workspace.ts";
 import type { WorkspaceApi } from "./file-tree";
@@ -28,6 +29,7 @@ function readZoom(): number {
 }
 
 function CodeView(props: { file: WireWorkspaceFile; zoom: number; onZoom(delta: number): void }) {
+	const t = useT();
 	const content = (props.file.content ?? "").replace(/\n$/, "");
 	const html = useMemo(() => {
 		const language = content.length > HIGHLIGHT_LIMIT ? undefined : languageFromPath(props.file.path);
@@ -55,7 +57,7 @@ function CodeView(props: { file: WireWorkspaceFile; zoom: number; onZoom(delta: 
 	return (
 		<section
 			ref={area}
-			aria-label="文件内容"
+			aria-label={t("viewer.content")}
 			data-testid="file-code"
 			// biome-ignore lint/a11y/noNoninteractiveTabindex: The scroll container must be keyboard focusable to scroll long lines.
 			tabIndex={0}
@@ -114,6 +116,7 @@ export function FileViewer(props: {
 	onBack(): void;
 	backLabel: string;
 }) {
+	const t = useT();
 	const file = useResource(props.path, props.active, (signal) => props.api().file(props.path, signal));
 	const { name, dir } = splitPath(props.path);
 	const back = useRef<HTMLButtonElement>(null);
@@ -165,11 +168,11 @@ export function FileViewer(props: {
 					<strong className="min-w-0 flex-1 truncate text-sm text-ink-800" title={props.path}>
 						{name}
 					</strong>
-					<fieldset aria-label="代码缩放" className="flex min-w-0 shrink-0 items-center gap-1">
+					<fieldset aria-label={t("viewer.zoom")} className="flex min-w-0 shrink-0 items-center gap-1">
 						<button
 							type="button"
 							className={zoomButton}
-							aria-label="缩小代码"
+							aria-label={t("viewer.zoomOut")}
 							disabled={zoom <= ZOOM_MIN}
 							onClick={() => adjustZoom(-ZOOM_STEP)}
 						>
@@ -178,8 +181,8 @@ export function FileViewer(props: {
 						<button
 							type="button"
 							className={`${zoomButton} min-w-12`}
-							aria-label="重置缩放"
-							title="重置为 100%"
+							aria-label={t("viewer.zoomReset")}
+							title={t("viewer.zoomResetTitle")}
 							disabled={zoom === 100}
 							onClick={() => setZoom(100)}
 						>
@@ -188,7 +191,7 @@ export function FileViewer(props: {
 						<button
 							type="button"
 							className={zoomButton}
-							aria-label="放大代码"
+							aria-label={t("viewer.zoomIn")}
 							disabled={zoom >= ZOOM_MAX}
 							onClick={() => adjustZoom(ZOOM_STEP)}
 						>
@@ -198,49 +201,50 @@ export function FileViewer(props: {
 					<button
 						type="button"
 						className="focus-neko shrink-0 rounded-lg border border-sakura-300 px-2 py-0.5 text-sakura-800 hover:bg-sakura-50 disabled:opacity-50"
-						aria-label="刷新文件内容"
+						aria-label={t("viewer.refreshAria")}
 						disabled={file.status === "loading"}
 						onClick={file.reload}
 					>
-						{file.status === "loading" && data ? "刷新中…" : "刷新"}
+						{file.status === "loading" && data ? t("viewer.refreshing") : t("viewer.refresh")}
 					</button>
 				</div>
 				<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-ink-500">
 					<span className="min-w-0 break-all" title={props.path}>
-						{dir === "" ? "（工作区根目录）" : dir}
+						{dir === "" ? t("viewer.workspaceRoot") : dir}
 					</span>
 					{data && <span className="shrink-0">{formatBytes(data.size)}</span>}
 				</div>
 			</div>
 			{stale && (
 				<output className="flex shrink-0 flex-wrap items-center gap-2 bg-tianyi-50 px-3 py-1.5 text-xs text-tianyi-900">
-					<span>agent 修改了此文件，当前显示的内容可能已过期。</span>
+					<span>{t("viewer.stale")}</span>
 					<button
 						type="button"
 						className="focus-neko rounded-md border border-tianyi-300 px-2 py-0.5"
 						onClick={file.reload}
 					>
-						刷新内容
+						{t("viewer.reload")}
 					</button>
 				</output>
 			)}
 			{notFound ? (
 				<Notice
-					title="文件不存在"
-					detail="该文件可能已被删除或移出工作区。"
-					action={{ label: "重试", run: file.reload }}
+					title={t("viewer.missing")}
+					detail={t("viewer.missingDetail")}
+					action={{ label: t("common.retry"), run: file.reload }}
 				/>
 			) : file.status === "error" && !data ? (
-				<Notice tone="error" title={`读取失败：${file.error}`} action={{ label: "重试", run: file.reload }} />
-			) : !data ? (
-				<Notice title="加载中…" />
-			) : data.kind === "protected" ? (
 				<Notice
-					title="受保护文件，不提供查看"
-					detail="凭据类文件（如 .env、私钥）的内容不会通过浏览器下发，以免经网络泄露。"
+					tone="error"
+					title={t("viewer.readFailed", { error: file.error ?? "" })}
+					action={{ label: t("common.retry"), run: file.reload }}
 				/>
+			) : !data ? (
+				<Notice title={t("common.loadingEllipsis")} />
+			) : data.kind === "protected" ? (
+				<Notice title={t("viewer.protected")} detail={t("viewer.protectedDetail")} />
 			) : data.kind === "binary" ? (
-				<Notice title="二进制文件，不提供预览" detail={`大小 ${formatBytes(data.size)}`} />
+				<Notice title={t("viewer.binary")} detail={t("viewer.binarySize", { size: formatBytes(data.size) })} />
 			) : (
 				<>
 					{file.status === "error" && (
@@ -248,19 +252,19 @@ export function FileViewer(props: {
 							role="alert"
 							className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-1.5 text-xs text-sakura-800"
 						>
-							<span className="min-w-0 break-words">刷新失败：{file.error}</span>
+							<span className="min-w-0 break-words">{t("viewer.refreshFailed", { error: file.error ?? "" })}</span>
 							<button
 								type="button"
 								className="focus-neko rounded-md border border-sakura-300 px-2 py-0.5"
 								onClick={file.reload}
 							>
-								重试
+								{t("common.retry")}
 							</button>
 						</div>
 					)}
 					{data.truncated && (
 						<div role="note" className="shrink-0 bg-sakura-50 px-3 py-1.5 text-xs text-sakura-900">
-							已截断，仅显示开头部分，文件共 {formatBytes(data.size)}
+							{t("viewer.truncated", { size: formatBytes(data.size) })}
 						</div>
 					)}
 					<CodeView file={data} zoom={zoom} onZoom={adjustZoom} />

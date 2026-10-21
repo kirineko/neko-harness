@@ -1,5 +1,6 @@
 import { Container, MouseRegion, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { splitJobReport } from "@neko-harness/core/job-summary";
+import { t } from "../i18n/index.ts";
 import { sanitizeOutput } from "../jobs-ui.ts";
 import { theme } from "../theme/index.ts";
 
@@ -39,8 +40,9 @@ export class JobReportNotice extends Container {
 			if (this.#expanded) {
 				if (command !== undefined) text += theme.dim(`\n$ ${sanitizeOutput(command)}`);
 				text += `\n${theme.toolOutput(lines.slice(-MAX_LINES).join("\n"))}`;
-				if (lines.length > MAX_LINES) text += theme.dim(`\n… ${lines.length - MAX_LINES} earlier lines omitted`);
-			} else text += theme.dim(`  +${lines.length} lines`);
+				if (lines.length > MAX_LINES)
+					text += theme.dim(`\n${t("job.earlierOmitted", { count: lines.length - MAX_LINES })}`);
+			} else text += theme.dim(`  ${t("tool.lines", { count: lines.length })}`);
 		}
 		this.#text.setText(text);
 		return super.render(width);

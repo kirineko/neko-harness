@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { stripTerminalSequences, Text } from "@earendil-works/pi-tui";
 import { ImageTranscript } from "../src/components/history-image.ts";

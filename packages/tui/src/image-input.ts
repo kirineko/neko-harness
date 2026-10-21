@@ -6,6 +6,7 @@ import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { isKeyRelease, isKeyRepeat, matchesKey } from "@earendil-works/pi-tui";
 import type { ImageFile } from "@neko-harness/core/image-transfer";
+import { t } from "./i18n/index.ts";
 
 const exec = promisify(execFile);
 export function imagePaths(text: string, platform: string = process.platform): string[] | null {
@@ -48,11 +49,11 @@ export async function readImageFile(
 ): Promise<ImageFile> {
 	const full = resolve(cwd, expandHome(path, platform));
 	const info = await stat(full);
-	if (!info.isFile() || info.size > 20 * 1024 * 1024) throw new Error("Image must be a file no larger than 20 MiB");
+	if (!info.isFile() || info.size > 20 * 1024 * 1024) throw new Error(t("image.tooLarge"));
 	const bytes = await readFile(full);
 	const after = await stat(full);
 	if (bytes.length !== info.size || after.size !== info.size || after.mtimeMs !== info.mtimeMs)
-		throw new Error("Image changed while reading");
+		throw new Error(t("image.changed"));
 	const mimeType = /\.png$/i.test(full) ? "image/png" : /\.webp$/i.test(full) ? "image/webp" : "image/jpeg";
 	return { name: basename(full), mimeType, bytes };
 }

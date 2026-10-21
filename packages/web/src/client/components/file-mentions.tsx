@@ -1,6 +1,7 @@
 import { type FileCandidate, type FileCandidates, type Mention, mentionAt } from "@neko-harness/core/file-mentions";
 import { type KeyboardEvent, type RefObject, useEffect, useId, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { getT } from "../lib/i18n/index.ts";
 import { ComposerSuggestions } from "./composer-suggestions";
 
 export function useFileMentions(
@@ -31,7 +32,7 @@ export function useFileMentions(
 		if (token && next.start === token.start && next.end === token.end && next.query === token.query) return;
 		request.current++;
 		setResult({ entries: [], limited: false, incomplete: false });
-		setMessage("正在查找文件…");
+		setMessage(getT()("mention.searching"));
 		setFailed(false);
 		setToken(next);
 		setSelected(0);
@@ -49,20 +50,22 @@ export function useFileMentions(
 				.then((value) => {
 					if (controller.signal.aborted || version !== request.current) return;
 					setResult(value);
+					const t = getT();
 					setMessage(
 						value.incomplete
-							? "文件索引未完整，请输入子目录缩小范围"
+							? t("mention.incomplete")
 							: value.entries.length
 								? value.limited
-									? "结果较多，请继续输入路径缩小范围"
+									? t("mention.limited")
 									: ""
-								: "没有匹配的文件或目录",
+								: t("mention.empty"),
 					);
 				})
 				.catch((error) => {
 					if (!controller.signal.aborted && version === request.current) {
 						setFailed(true);
-						setMessage(error instanceof Error ? `查询失败：${error.message}` : "查询失败，请重试");
+						const t = getT();
+						setMessage(error instanceof Error ? t("mention.errorWith", { error: error.message }) : t("mention.error"));
 					}
 				});
 		}, 120);
@@ -101,7 +104,7 @@ export function useFileMentions(
 			<ComposerSuggestions
 				anchor={anchor}
 				id={id}
-				title="工作区文件"
+				title={getT()("mention.title")}
 				selected={selected}
 				onSelect={setSelected}
 				onAccept={(index) => {
@@ -119,7 +122,7 @@ export function useFileMentions(
 						? () => {
 								request.current++;
 								setFailed(false);
-								setMessage("正在查找文件…");
+								setMessage(getT()("mention.searching"));
 								setToken((current) => (current ? { ...current } : null));
 							}
 						: undefined

@@ -2,13 +2,14 @@ import type { CredentialStatus } from "@neko-harness/core";
 import type { CredentialProviderSpec } from "@neko-harness/core/credential-providers";
 import { useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { type PlainKey, useT } from "../lib/i18n/index.ts";
 
-export const credentialSources: Record<CredentialStatus["source"], string> = {
-	saved: "使用已保存密钥",
-	environment: "使用环境变量",
-	runtime: "使用运行时配置",
-	keyless: "keyless（限流）",
-	none: "尚未配置",
+export const credentialSources: Record<CredentialStatus["source"], PlainKey> = {
+	saved: "credential.source.saved",
+	environment: "credential.source.environment",
+	runtime: "credential.source.runtime",
+	keyless: "credential.source.keyless",
+	none: "credential.source.none",
 };
 
 export type EnableControl = {
@@ -28,6 +29,7 @@ export function ProviderCredentialCard(props: {
 }) {
 	const { spec, status, ready, enable, note } = props;
 	const name = spec.name;
+	const t = useT();
 	const [key, setKey] = useState("");
 	const [busy, setBusy] = useState(false);
 	const pending = useRef(false);
@@ -41,7 +43,7 @@ export function ProviderCredentialCard(props: {
 			await action();
 			setMessage(done);
 		} catch {
-			setMessage("操作失败，请检查连接后重试。");
+			setMessage(t("credential.failed"));
 		} finally {
 			pending.current = false;
 			setBusy(false);
@@ -54,7 +56,7 @@ export function ProviderCredentialCard(props: {
 				else await appActions.saveCredential(spec.id, key);
 				setKey("");
 			},
-			remove ? "已移除保存的密钥" : "已保存，下次请求生效",
+			remove ? t("credential.removed") : t("credential.saved"),
 		);
 	}
 	const disabled = busy || !ready || !status;
@@ -73,22 +75,32 @@ export function ProviderCredentialCard(props: {
 								type="checkbox"
 								checked={enable.enabled}
 								disabled={disabled || enable.locked}
-								aria-label={`启用 ${name}`}
+								aria-label={t("credential.enableAria", { name })}
 								onChange={(event) =>
-									void run(() => enable.onChange(event.target.checked), event.target.checked ? "已启用" : "已取消启用")
+									void run(
+										() => enable.onChange(event.target.checked),
+										event.target.checked ? t("credential.enabledDone") : t("credential.disabledDone"),
+									)
 								}
 							/>
-							{enable.locked ? "始终启用" : "启用"}
+							{enable.locked ? t("credential.alwaysOn") : t("credential.enable")}
 						</label>
 					)}
 					<span className="rounded-full bg-tianyi-50 px-3 py-1 text-xs text-tianyi-800">
-						{status ? credentialSources[status.source] : "读取中…"}
+						{status ? t(credentialSources[status.source]) : t("common.loading")}
 					</span>
 				</div>
 			</div>
 			<p className="mb-3 text-xs text-ink-500">
-				环境变量：{status ? (status.environmentConfigured ? "已配置" : "未配置") : "读取中…"}（{spec.envVar}）
-				{spec.keyless ? " · 未配置时以 keyless 限流模式运行" : ""}
+				{t("credential.envVar", {
+					state: status
+						? status.environmentConfigured
+							? t("credential.envConfigured")
+							: t("credential.envMissing")
+						: t("common.loading"),
+					envVar: spec.envVar,
+				})}
+				{spec.keyless ? t("credential.keylessNote") : ""}
 				{note ? ` · ${note}` : ""}
 			</p>
 			<form
@@ -98,7 +110,7 @@ export function ProviderCredentialCard(props: {
 				}}
 			>
 				<label className="sr-only" htmlFor={`${spec.id}-key`}>
-					{name} API Key
+					{t("credential.keyLabel", { name })}
 				</label>
 				<input
 					id={`${spec.id}-key`}
@@ -109,7 +121,7 @@ export function ProviderCredentialCard(props: {
 					maxLength={4096}
 					disabled={disabled}
 					onChange={(event) => setKey(event.target.value)}
-					placeholder={status?.savedConfigured ? "输入新密钥以替换" : "粘贴你的 API Key"}
+					placeholder={status?.savedConfigured ? t("credential.placeholderReplace") : t("credential.placeholderNew")}
 					className="focus-neko w-full min-w-0 rounded-xl border border-sakura-200 bg-base px-3 py-2.5 text-sm"
 				/>
 				<div className="mt-3 flex flex-wrap items-center gap-3">
@@ -118,7 +130,7 @@ export function ProviderCredentialCard(props: {
 						disabled={disabled || !key.trim()}
 						className="focus-neko rounded-full bg-sakura-100 px-4 py-1.5 text-sm font-semibold text-sakura-800 disabled:opacity-50"
 					>
-						{busy ? "处理中…" : "保存密钥"}
+						{busy ? t("credential.working") : t("credential.save")}
 					</button>
 					{status?.savedConfigured && (
 						<button
@@ -127,7 +139,7 @@ export function ProviderCredentialCard(props: {
 							onClick={() => void update(true)}
 							className="focus-neko rounded-full px-3 py-1.5 text-sm text-ink-500 disabled:opacity-50"
 						>
-							移除已保存密钥
+							{t("credential.remove")}
 						</button>
 					)}
 					<a
@@ -136,7 +148,7 @@ export function ProviderCredentialCard(props: {
 						rel="noreferrer"
 						className="focus-neko ml-auto inline-block rounded text-xs text-sakura-700"
 					>
-						获取 {name} API Key ↗
+						{t("credential.getKey", { name })}
 					</a>
 				</div>
 			</form>

@@ -16,21 +16,31 @@ import { shortcutHints } from "./components/shortcut-hints.ts";
 import { ThemedText } from "./components/themed-text.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
+import { t } from "./i18n/index.ts";
 import { theme } from "./theme/index.ts";
 
-const labels = { queued: "Queued", running: "Running", completed: "Done", failed: "Failed", cancelled: "Stopped" };
+const statusLabel = (status: Delegation["status"]): string => {
+	switch (status) {
+		case "queued":
+			return t("subagent.queued");
+		case "running":
+			return t("subagent.running");
+		case "completed":
+			return t("subagent.done");
+		case "failed":
+			return t("subagent.failed");
+		default:
+			return t("subagent.stopped");
+	}
+};
+const liveStatus = (status: SubagentSummary["status"]): string =>
+	status === "idle" ? t("subagent.idle") : status === "queued" ? t("subagent.queued") : t("subagent.running");
 export const subagentItems = (entries: readonly Delegation[], summaries = summarizeSubagents(entries)) =>
 	summaries.map((d) => ({
 		value: d.agentId,
 		label: `${d.role} · ${d.title}`,
-		description: `${d.historyThrough !== undefined ? "Snapshot · " : ""}${d.taskTitle} · ${d.roundCount} rounds`,
-		rightLabel: d.approvalCount
-			? `Approval ${d.approvalCount}`
-			: d.status === "idle"
-				? "Idle"
-				: d.status === "queued"
-					? "Queued"
-					: "Running",
+		description: `${d.historyThrough !== undefined ? t("subagent.snapshot") : ""}${d.taskTitle} · ${t("subagent.rounds", { count: d.roundCount })}`,
+		rightLabel: d.approvalCount ? t("footer.approval", { count: d.approvalCount }) : liveStatus(d.status),
 	}));
 export class SubagentDetail implements PickerDetail {
 	get help() {
@@ -39,10 +49,10 @@ export class SubagentDetail implements PickerDetail {
 			: this.entry?.historyThrough === undefined &&
 				(this.entry?.status === "running" || this.entry?.status === "queued");
 		return shortcutHints(
-			["←", "Main"],
-			["↑↓/Wheel", "Scroll"],
-			["E", "Expand"],
-			...(canStop ? [["S", "Stop"] as const] : []),
+			["←", t("action.main")],
+			["↑↓/Wheel", t("action.scroll")],
+			["E", t("action.expand")],
+			...(canStop ? [["S", t("action.stop")] as const] : []),
 		);
 	}
 	#view: ChatView | undefined;
@@ -173,8 +183,8 @@ export class SubagentDetail implements PickerDetail {
 		) {
 			const stopTaskId = this.identity?.activeRoundId ?? this.entry?.taskId;
 			this.#panel.showDetail({
-				help: shortcutHints(["Enter", "Stop"], ["Esc", "Back"]),
-				lines: () => [theme.warning("Stop this task? Existing changes will be kept.")],
+				help: shortcutHints(["Enter", t("action.stop")], ["Esc", t("action.back")]),
+				lines: () => [theme.warning(t("subagent.confirmStop"))],
 				handleKey: (key) => {
 					if (!matchesKey(key, "enter")) return false;
 					void this.#service
@@ -219,7 +229,7 @@ export class SubagentDetail implements PickerDetail {
 			? [
 					theme.accent(`${entry.role} · ${this.identity?.title ?? entry.title}`),
 					theme.dim(
-						`${entry.historyThrough !== undefined ? "Snapshot · " : ""}${this.identity ? (this.identity.status === "idle" ? "Idle" : this.identity.status === "queued" ? "Queued" : "Running") : labels[entry.status]} · ${Math.max(0, Math.round(((entry.endedAt ?? Date.now()) - entry.createdAt) / 1000))}s`,
+						`${entry.historyThrough !== undefined ? t("subagent.snapshot") : ""}${this.identity ? liveStatus(this.identity.status) : statusLabel(entry.status)} · ${Math.max(0, Math.round(((entry.endedAt ?? Date.now()) - entry.createdAt) / 1000))}s`,
 					),
 					"",
 				]
@@ -227,7 +237,11 @@ export class SubagentDetail implements PickerDetail {
 		if (this.#view)
 			rows.push(
 				theme.dim(
-					`Total In ${this.#view.usage.input} · Out ${this.#view.usage.output} · $${this.#view.usage.cost.toFixed(4)}`,
+					t("subagent.total", {
+						input: this.#view.usage.input,
+						output: this.#view.usage.output,
+						cost: `$${this.#view.usage.cost.toFixed(4)}`,
+					}),
 				),
 				"",
 			);
@@ -238,13 +252,23 @@ export class SubagentDetail implements PickerDetail {
 				const round = this.#view?.rounds?.find((r) => r.inputEntryId === item.id || r.taskId === item.subagentRoundId);
 				if (round?.taskId === this.#targetRound) targetOffset = rows.length;
 				if (round) {
-					rows.push(theme.accent(`Task ${round.round ?? ""} · ${round.title} · ${labels[round.status]}`));
+					rows.push(
+						theme.accent(
+							t("subagent.task", { round: round.round ?? "", title: round.title, status: statusLabel(round.status) }),
+						),
+					);
 					const u = round.roundUsage;
 					rows.push(
 						theme.dim(
 							u
-								? `Round In ${u.input} · Out ${u.output} · Cache ${u.cacheRead}/${u.cacheWrite} · $${u.cost.toFixed(4)}`
-								: "Round usage not recorded",
+								? t("subagent.roundUsage", {
+										input: u.input,
+										output: u.output,
+										cacheRead: u.cacheRead,
+										cacheWrite: u.cacheWrite,
+										cost: `$${u.cost.toFixed(4)}`,
+									})
+								: t("subagent.roundUsageNone"),
 						),
 					);
 				}
@@ -255,7 +279,14 @@ export class SubagentDetail implements PickerDetail {
 					if (approval.callId === item.callId && approval.status !== "pending")
 						rows.push(
 							theme.dim(
-								`Approval: ${approval.status === "allowed" ? "Allowed once" : approval.status === "denied" ? "Denied" : "Cancelled"}`,
+								t("subagent.approval", {
+									status:
+										approval.status === "allowed"
+											? t("subagent.allowedOnce")
+											: approval.status === "denied"
+												? t("subagent.denied")
+												: t("subagent.cancelled"),
+								}),
 							),
 						);
 			}
@@ -303,7 +334,7 @@ export class SubagentDetail implements PickerDetail {
 			}
 		}
 		if (this.#error) rows.push(theme.error(this.#error));
-		if (!rows.length) rows.push(theme.dim("Loading..."));
+		if (!rows.length) rows.push(theme.dim(t("common.loading")));
 		this.#maxOffset = Math.max(0, rows.length - height);
 		if (this.#prependOffset !== undefined) {
 			this.#offset += Math.max(0, this.#maxOffset - this.#prependOffset);

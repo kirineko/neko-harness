@@ -99,9 +99,11 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 | `/compact`、`/context` | 压缩、裁剪及其设置 |
 | `/copy`、`/export` | 复制上一条回答、导出会话 |
 | `/agents`、`/jobs`、`/todos`、`/question`、`/plan` | 委派、后台任务、待办、提问、规划模式 |
-| `/search`、`/skills`、`/theme`、`/version`、`/help` | 搜索服务、技能市场、主题、版本与更新、快捷键 |
+| `/search`、`/skills`、`/theme`、`/language`、`/version`、`/help` | 搜索服务、技能市场、主题、界面语言、版本与更新、快捷键 |
 
 终端主题可用 `--theme light|dark|auto`（默认 `auto`）、环境变量 `NEKO_THEME` 或 `/theme` 切换。
+
+界面语言（默认 `zh`，可选 `en`）可用 `--lang zh|en`、环境变量 `NEKO_LANG` 或 `/language` 切换，选择会被保存。Web（设置 → 语言）与移动端各自有独立的语言设置。
 
 **手机（测试版）**：Android 应用（[Flutter](../apps/mobile/README.md)），通过局域网控制电脑上的助手。Web「设置 → 手机配对」展示二维码，用应用扫码连接；手机需与电脑同一网络，系统防火墙放行所选端口（WSL 默认 NAT 会自动经 `powershell.exe` 转发）。应用只信任配对时取得的证书指纹，撤销设备、重新生成证书都在同一页完成。APK 附在 [GitHub Releases](https://github.com/kirineko/neko-harness/releases)（`NekoAI-v<版本>-<abi>.apk`，arm64-v8a / armeabi-v7a / x86_64）。测试版使用 debug 签名：升级需卸载重装并重新扫码配对，也没有应用内升级。
 
@@ -134,6 +136,7 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 | `--socket-path <path>` | tui、web、serve | Unix socket 路径（仅 POSIX） |
 | `--no-socket` | serve | 禁用 Unix socket 传输 |
 | `--theme <mode>` | tui | `light`、`dark`、`auto`（默认） |
+| `--lang <lang>` | tui | `zh`（默认）或 `en`；优先于 `NEKO_LANG` 与已保存的选择 |
 | `--credentials <path>` | serve | 凭据文件（默认 `~/.neko/credentials.json`） |
 | `--config <dir>` | serve | 配置文件查找起点 |
 
@@ -170,7 +173,7 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 - `~/.neko/neko.sqlite`：会话、消息、文档与设置，包括各界面保存的值（默认模型、已启用的服务、上下文设置、搜索服务）。
 - `~/.neko/credentials.json`：界面保存的 Key，以纯文本形式存给当前用户。要重置某个服务的 Key，从界面或该文件删除即可。
 - `~/.neko/gateway-server-id` 与 socket / 端口文件：界面用于发现网关，可自动重建；`~/.neko/update-check.json` 缓存上次更新检查。
-- 环境变量：每个服务一个（`DEEPSEEK_API_KEY`、`OPENROUTER_API_KEY`、`OPENCODE_API_KEY` 等）、`TAVILY_API_KEY` 用于联网搜索、`NEKO_THEME` 控制 TUI 主题。
+- 环境变量：每个服务一个（`DEEPSEEK_API_KEY`、`OPENROUTER_API_KEY`、`OPENCODE_API_KEY` 等）、`TAVILY_API_KEY` 用于联网搜索、`NEKO_THEME` 控制 TUI 主题、`NEKO_LANG` 控制 TUI 语言。
 
 ## 安全
 

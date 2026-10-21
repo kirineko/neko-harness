@@ -11,6 +11,7 @@ import type {
 	NekoWorkspaceSummary,
 } from "./contract.ts";
 import type { NekoSessionSummary } from "./gateway.ts";
+import { localizeCoreError } from "./i18n/core-text.ts";
 
 export type ConnPhase = "connecting" | "ready" | "reconnecting" | "error";
 
@@ -151,7 +152,7 @@ export const storeActions = {
 		emit({ ...state, view, retained });
 	},
 	notice(notice: NekoNotice): void {
-		emit({ ...state, notice });
+		emit({ ...state, notice: { ...notice, text: localizeCoreError(notice.text) } });
 	},
 	clearNotice(): void {
 		if (state.notice !== null) emit({ ...state, notice: null });

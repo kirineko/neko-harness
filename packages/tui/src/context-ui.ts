@@ -2,18 +2,19 @@ import { matchesKey } from "@earendil-works/pi-tui";
 import type { NekoContextSettingsPatch, NekoContextSettingsState } from "@neko-harness/gateway";
 import type { PickerDetail, PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
+import { type PlainKey, t } from "./i18n/index.ts";
 import { theme } from "./theme/index.ts";
 
-export const CONTEXT_EMPTY = "Context settings are unavailable.";
+export const contextEmpty = (): string => t("context.empty");
 
 type Kind = "bool" | "percent" | "tokens" | "count" | "chars";
 type Row = {
 	readonly key: string;
 	readonly group: "compaction" | "pruning";
 	readonly field: string;
-	readonly label: string;
+	readonly label: PlainKey;
 	readonly kind: Kind;
-	readonly description: string;
+	readonly description: PlainKey;
 	readonly presets: readonly (boolean | number)[];
 };
 
@@ -22,89 +23,92 @@ export const CONTEXT_ROWS: readonly Row[] = [
 		key: "compaction.enabled",
 		group: "compaction",
 		field: "enabled",
-		label: "Auto compaction",
+		label: "context.row.autoCompaction.label",
 		kind: "bool",
-		description: "Compact automatically near the limit. /compact always works.",
+		description: "context.row.autoCompaction.description",
 		presets: [true, false],
 	},
 	{
 		key: "compaction.triggerPercent",
 		group: "compaction",
 		field: "triggerPercent",
-		label: "Compact at",
+		label: "context.row.compactAt.label",
 		kind: "percent",
-		description: "Compact when context reaches this share of the smallest model window. Default is near the limit.",
+		description: "context.row.compactAt.description",
 		presets: [30, 40, 50, 60, 70, 80],
 	},
 	{
 		key: "compaction.keepRecentTokens",
 		group: "compaction",
 		field: "keepRecentTokens",
-		label: "Keep recent",
+		label: "context.row.keepRecent.label",
 		kind: "tokens",
-		description: "Recent context a compaction keeps verbatim.",
+		description: "context.row.keepRecent.description",
 		presets: [10_000, 20_000, 40_000, 80_000],
 	},
 	{
 		key: "pruning.enabled",
 		group: "pruning",
 		field: "enabled",
-		label: "Prune tool results",
+		label: "context.row.pruneResults.label",
 		kind: "bool",
-		description: "Replace old, large tool results with a short note in what the model sees. History is kept.",
+		description: "context.row.pruneResults.description",
 		presets: [true, false],
 	},
 	{
 		key: "pruning.triggerPercent",
 		group: "pruning",
 		field: "triggerPercent",
-		label: "Prune at",
+		label: "context.row.pruneAt.label",
 		kind: "percent",
-		description: "Prune when context reaches this share of the model window. Each prune invalidates the prompt cache.",
+		description: "context.row.pruneAt.description",
 		presets: [20, 30, 35, 45, 55],
 	},
 	{
 		key: "pruning.keepRecent",
 		group: "pruning",
 		field: "keepRecent",
-		label: "Keep recent results",
+		label: "context.row.keepRecentResults.label",
 		kind: "count",
-		description: "Newest tool results that are never pruned.",
+		description: "context.row.keepRecentResults.description",
 		presets: [5, 10, 20, 40],
 	},
 	{
 		key: "pruning.minChars",
 		group: "pruning",
 		field: "minChars",
-		label: "Min result size",
+		label: "context.row.minResultSize.label",
 		kind: "chars",
-		description: "Results shorter than this are never pruned.",
+		description: "context.row.minResultSize.description",
 		presets: [2000, 4000, 8000, 16000],
 	},
 	{
 		key: "pruning.minSavePercent",
 		group: "pruning",
 		field: "minSavePercent",
-		label: "Min release",
+		label: "context.row.minRelease.label",
 		kind: "percent",
-		description:
-			"A prune runs only if it frees at least this share of the model window. Each prune invalidates the prompt cache, so a larger share means fewer prunes.",
+		description: "context.row.minRelease.description",
 		presets: [2, 5, 10, 15],
 	},
 ];
 
-const SOURCES = { default: "Default", config: "Config", saved: "Saved" } as const;
+const SOURCES = {
+	default: "context.source.default",
+	config: "context.source.config",
+	saved: "context.source.saved",
+} as const;
 
 function format(kind: Kind, value: boolean | number | null): string {
-	if (value === null) return "Default";
-	if (typeof value === "boolean") return value ? "On" : "Off";
+	if (value === null) return t("context.value.default");
+	if (typeof value === "boolean") return value ? t("context.value.on") : t("context.value.off");
 	switch (kind) {
 		case "percent":
 			return `${value}%`;
 		case "tokens":
-			return value >= 1000 ? `${Math.round(value / 1000)}k tokens` : `${value} tokens`;
+			return t("context.value.tokens", { count: value >= 1000 ? `${Math.round(value / 1000)}k` : value });
 		case "chars":
-			return value >= 1000 ? `${Math.round(value / 1000)}k chars` : `${value} chars`;
+			return t("context.value.chars", { count: value >= 1000 ? `${Math.round(value / 1000)}k` : value });
 		default:
 			return String(value);
 	}
@@ -128,7 +132,7 @@ export function contextItems(state: NekoContextSettingsState | undefined): Picke
 			group = row.group;
 			items.push({
 				value: `header:${group}`,
-				label: group === "compaction" ? "Compaction" : "Tool result pruning",
+				label: group === "compaction" ? t("context.group.compaction") : t("context.group.pruning"),
 				header: true,
 			});
 		}
@@ -136,15 +140,15 @@ export function contextItems(state: NekoContextSettingsState | undefined): Picke
 		const custom = source !== "default" && value !== null && !row.presets.includes(value);
 		items.push({
 			value: row.key,
-			label: row.label,
-			rightLabel: `${format(row.kind, value)}  ${SOURCES[source]}${custom ? " · Custom" : ""}`,
-			description: row.description,
+			label: t(row.label),
+			rightLabel: `${format(row.kind, value)}  ${t(SOURCES[source])}${custom ? ` · ${t("context.custom")}` : ""}`,
+			description: t(row.description),
 		});
 	}
 	items.push({
 		value: RESET_VALUE,
-		label: "Reset to defaults",
-		description: "Clear every saved value. Config file values still apply.",
+		label: t("context.reset"),
+		description: t("context.resetDescription"),
 	});
 	return items;
 }
@@ -164,7 +168,9 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 /** Preset chooser for one setting; Enter saves, Esc returns to the list. */
 class PresetDetail implements PickerDetail {
-	readonly help = shortcutHints(["↑↓", "Select"], ["Enter", "Save"], ["Esc", "Back"]);
+	get help(): string {
+		return shortcutHints(["↑↓", t("action.select")], ["Enter", t("action.save")], ["Esc", t("action.back")]);
+	}
 	#index = 0;
 	#error = "";
 	#saving = false;
@@ -200,13 +206,13 @@ class PresetDetail implements PickerDetail {
 	lines(_width: number, height: number): readonly string[] {
 		const state = this.#client.contextSettings.state.value;
 		const current = state ? read(state, this.#row) : undefined;
-		const head = [theme.accent(this.#row.label), theme.dim(this.#row.description)];
-		if (this.#saving) head.push("Saving...");
-		if (this.#error) head.push(theme.error(`Error: ${this.#error}`));
+		const head = [theme.accent(t(this.#row.label)), theme.dim(t(this.#row.description))];
+		if (this.#saving) head.push(t("common.saving"));
+		if (this.#error) head.push(theme.error(t("common.error", { message: this.#error })));
 		const options = this.#options.map((option, i) => {
 			const custom = option !== null && !this.#row.presets.includes(option);
-			const text = `${format(this.#row.kind, option)}${custom ? " (Custom)" : ""}${
-				option === null && current ? ` - now ${SOURCES[current.source]}` : ""
+			const text = `${format(this.#row.kind, option)}${custom ? ` (${t("context.custom")})` : ""}${
+				option === null && current ? ` - ${t("context.now", { source: t(SOURCES[current.source]) })}` : ""
 			}`;
 			return i === this.#index ? theme.selection(`❯ ${text}`) : `  ${text}`;
 		});
@@ -227,7 +233,7 @@ class PresetDetail implements PickerDetail {
 			void this.#client.contextSettings.set(patch).then(
 				() => {
 					this.#saving = false;
-					this.#notify(`${this.#row.label} set to ${format(this.#row.kind, value)}.`);
+					this.#notify(t("context.setTo", { label: t(this.#row.label), value: format(this.#row.kind, value) }));
 					this.#panel.popDetail();
 				},
 				(error) => {
@@ -249,14 +255,14 @@ export function openContextPanel(
 ): () => void {
 	const items = () => contextItems(client.contextSettings.state.value);
 	const stop = client.contextSettings.state.subscribe(() => panel.update(items()));
-	panel.emptyText = CONTEXT_EMPTY;
+	panel.emptyText = contextEmpty();
 	void panel.show(
-		"Context settings",
+		t("context.title"),
 		async () => items(),
 		async (value) => {
 			if (value === RESET_VALUE) {
 				await client.contextSettings.reset({});
-				notify("Context settings reset to defaults.");
+				notify(t("context.resetDone"));
 				return;
 			}
 			const row = CONTEXT_ROWS.find((item) => item.key === value);

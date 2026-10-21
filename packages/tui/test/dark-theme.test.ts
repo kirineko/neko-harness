@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { afterEach, expect, it } from "bun:test";
 import {
 	backgroundAnsi,

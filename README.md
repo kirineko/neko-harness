@@ -99,9 +99,11 @@ Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTE
 | `/compact`, `/context` | compaction, pruning and their settings |
 | `/copy`, `/export` | copy the last answer, export the session |
 | `/agents`, `/jobs`, `/todos`, `/question`, `/plan` | delegated work, background jobs, todos, questions, plan mode |
-| `/search`, `/skills`, `/theme`, `/version`, `/help` | search provider, skill market, theme, version and updates, shortcuts |
+| `/search`, `/skills`, `/theme`, `/language`, `/version`, `/help` | search provider, skill market, theme, language, version and updates, shortcuts |
 
 The terminal theme comes from `--theme light|dark|auto` (default `auto`), the `NEKO_THEME` environment variable, or `/theme`.
+
+The interface language (`zh` by default, or `en`) comes from `--lang zh|en`, the `NEKO_LANG` environment variable, or `/language`; the choice is saved. The Web UI (Settings → Language) and the mobile app keep their own language setting.
 
 **Mobile (beta)** — an Android app ([Flutter](apps/mobile/README.md)) that drives the agent over your LAN. In web **设置 → 手机配对**, show the QR code and scan it with the app. The phone must be on the same network and the firewall must allow the port; under WSL's default NAT the port is forwarded through `powershell.exe` automatically. The app trusts only the certificate fingerprint it received while pairing, so revoke a device or regenerate the certificate on the same page when needed. APKs are attached to [GitHub Releases](https://github.com/kirineko/neko-harness/releases) as `NekoAI-v<version>-<abi>.apk` (arm64-v8a, armeabi-v7a, x86_64). This is a beta: builds use a debug signature, so upgrading means uninstalling, reinstalling and pairing again, and there is no in-app update.
 
@@ -134,6 +136,7 @@ CLI flags > config file > built-in defaults. `neko tui --help`, `neko web --help
 | `--socket-path <path>` | tui, web, serve | Unix socket path (POSIX only) |
 | `--no-socket` | serve | Disable the Unix transport |
 | `--theme <mode>` | tui | `light`, `dark` or `auto` (default) |
+| `--lang <lang>` | tui | `zh` (default) or `en`; overrides `NEKO_LANG` and the saved choice |
 | `--credentials <path>` | serve | Credentials file (default `~/.neko/credentials.json`) |
 | `--config <dir>` | serve | Where the config file lookup starts |
 
@@ -170,7 +173,7 @@ CLI flags > config file > built-in defaults. `neko tui --help`, `neko web --help
 - `~/.neko/neko.sqlite` — sessions, messages, documents and settings, including the values saved from the UIs (default model, enabled providers, context settings, search provider).
 - `~/.neko/credentials.json` — keys saved in the UI, in plain text for your user. Resetting a provider's key means removing it from the UI or this file.
 - `~/.neko/gateway-server-id`, socket and port files — gateway discovery used by the UIs; replaced automatically. `~/.neko/update-check.json` caches the last update check.
-- Environment variables: one per provider (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, …), `TAVILY_API_KEY` for web search, `NEKO_THEME` for the TUI theme.
+- Environment variables: one per provider (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, …), `TAVILY_API_KEY` for web search, `NEKO_THEME` for the TUI theme, `NEKO_LANG` for the TUI language.
 
 ## Security
 

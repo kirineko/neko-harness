@@ -9,79 +9,91 @@ import 'package:neko_mobile/core/pairing/pairing_text.dart';
 import 'package:neko_mobile/core/storage/key_value_store.dart';
 import 'package:uuid/uuid.dart';
 
-/// 配对失败类别。code 与 design D4 的稳定错误码一致；message 不得包含凭据。
+/// 配对失败类别。code 与 design D4 的稳定错误码一致；detail 与 params 是细分码与参数，不得包含凭据。
+/// 用户可见文案由界面层按语言映射。
 sealed class PairingException implements Exception {
-  const PairingException(this.message);
+  const PairingException([
+    this.detail = '',
+    this.params = const <String, Object>{},
+  ]);
 
-  final String message;
+  final String detail;
+  final Map<String, Object> params;
 
   String get code;
+
+  @override
+  String toString() =>
+      'PairingException($code${detail.isEmpty ? '' : ':$detail'}'
+      '${params.isEmpty ? '' : ' $params'})';
 }
 
 class InvalidPairingException extends PairingException {
-  const InvalidPairingException([super.message = '请求被电脑拒绝']);
+  const InvalidPairingException();
 
   @override
   String get code => 'invalid';
 }
 
 class WrongServerException extends PairingException {
-  const WrongServerException() : super('电脑标识与二维码不符');
+  const WrongServerException();
 
   @override
   String get code => 'wrong_server';
 }
 
 class CodeUsedException extends PairingException {
-  const CodeUsedException() : super('配对码已被使用');
+  const CodeUsedException();
 
   @override
   String get code => 'code_used';
 }
 
 class CodeExpiredException extends PairingException {
-  const CodeExpiredException() : super('配对码已过期');
+  const CodeExpiredException();
 
   @override
   String get code => 'code_expired';
 }
 
 class PayloadTooLargeException extends PairingException {
-  const PayloadTooLargeException() : super('请求体超过电脑限制');
+  const PayloadTooLargeException();
 
   @override
   String get code => 'payload_too_large';
 }
 
 class RateLimitedException extends PairingException {
-  const RateLimitedException() : super('尝试过于频繁，请稍后再试');
+  const RateLimitedException();
 
   @override
   String get code => 'rate_limited';
 }
 
-/// 响应不符合 D4 成功 schema。
+/// 响应不符合 D4 成功 schema。detail：unrecognized（缺省）、not_json、not_object、
+/// server_id_mismatch、device_id_mismatch、server_name_invalid、grant_revision_invalid、api_versions_invalid。
 class PairingResponseException extends PairingException {
-  const PairingResponseException([super.message = '电脑返回了无法识别的响应']);
+  const PairingResponseException([super.detail = 'unrecognized']);
 
   @override
   String get code => 'bad_response';
 }
 
 /// 网络层失败（连接中断、超时等）。pending 保留，可用相同参数重试。
+/// detail：failed（缺省）、unknown_status（params.status）、timeout、interrupted。
 class PairingNetworkException extends PairingException {
-  const PairingNetworkException([super.message = '网络连接失败，请重试']);
+  const PairingNetworkException([
+    super.detail = 'failed',
+    super.params = const <String, Object>{},
+  ]);
 
   @override
   String get code => 'network';
-
-  @override
-  String toString() => 'PairingNetworkException: $message';
 }
 
 /// TLS 证书校验失败（指纹/有效期/主机不符）。
 class PairingCertificateException extends PairingException {
-  const PairingCertificateException() : super('电脑证书与配对指纹不符');
+  const PairingCertificateException();
 
   @override
   String get code => 'certificate';
@@ -246,7 +258,9 @@ class LocalPairingService implements PairingService {
           throw const RateLimitedException();
         default:
           await response.drain<void>();
-          throw PairingNetworkException('电脑返回了未知状态 ${response.statusCode}');
+          throw PairingNetworkException('unknown_status', <String, Object>{
+            'status': response.statusCode,
+          });
       }
     } finally {
       // 响应体已读完/错误路径已 drain 后才关闭；异常路径同样释放。
@@ -264,20 +278,20 @@ class LocalPairingService implements PairingService {
     try {
       text = await utf8.decoder.bind(response).join().timeout(_requestTimeout);
     } on TimeoutException {
-      throw const PairingNetworkException('电脑响应超时，请重试');
+      throw const PairingNetworkException('timeout');
     } on HttpException {
       // 连接在响应体传输中断开：与响应丢失同语义，保留 pending 供重试。
-      throw const PairingNetworkException('电脑连接中断，请重试');
+      throw const PairingNetworkException('interrupted');
     } on SocketException {
-      throw const PairingNetworkException('电脑连接中断，请重试');
+      throw const PairingNetworkException('interrupted');
     }
     try {
       data = jsonDecode(text);
     } on FormatException {
-      throw const PairingResponseException('响应不是合法 JSON');
+      throw const PairingResponseException('not_json');
     }
     if (data is! Map<String, dynamic>) {
-      throw const PairingResponseException('响应不是 JSON 对象');
+      throw const PairingResponseException('not_object');
     }
     final serverId = data['serverId'];
     final serverName = data['serverName'];
@@ -285,19 +299,19 @@ class LocalPairingService implements PairingService {
     final grantRevision = data['grantRevision'];
     final apiVersions = data['apiVersions'];
     if (serverId is! String || serverId != target.serverId) {
-      throw const PairingResponseException('serverId 与请求不一致');
+      throw const PairingResponseException('server_id_mismatch');
     }
     if (deviceId is! String || deviceId != pending.deviceId) {
-      throw const PairingResponseException('deviceId 与请求不一致');
+      throw const PairingResponseException('device_id_mismatch');
     }
     if (serverName is! String || serverName.isEmpty || serverName.length > 64) {
-      throw const PairingResponseException('serverName 不合法');
+      throw const PairingResponseException('server_name_invalid');
     }
     if (grantRevision is! int || grantRevision < 1) {
-      throw const PairingResponseException('grantRevision 不合法');
+      throw const PairingResponseException('grant_revision_invalid');
     }
     if (apiVersions is! List || !apiVersions.contains(1)) {
-      throw const PairingResponseException('apiVersions 不含 1');
+      throw const PairingResponseException('api_versions_invalid');
     }
     final computer = PairedComputer(
       serverId: serverId,

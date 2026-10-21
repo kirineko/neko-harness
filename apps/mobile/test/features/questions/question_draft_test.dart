@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neko_mobile/l10n/l10n.dart';
 import 'package:neko_mobile/core/api/models.dart';
 import 'package:neko_mobile/features/questions/question_draft.dart';
 
@@ -133,7 +134,7 @@ void main() {
         _freeText(),
         QuestionDraft(text: 'a' * 4001),
       );
-      expect(problem, contains('4001'));
+      expect(resolveUiText(problem!, kLocaleZh), contains('4001'));
     });
 
     test('emoji 占 2 个码元：2000 个恰好满额，2001 个 rune 远低于 4000 仍被拒绝', () {
@@ -161,7 +162,7 @@ void main() {
       // 4000 个控制字符各转义为 6 字节（\u0001），码元数合规但 JSON 超过 16 KiB。
       final bloated = '\u0001' * 4000;
       final problem = draftProblem(_freeText(), QuestionDraft(text: bloated));
-      expect(problem, contains('16384'));
+      expect(resolveUiText(problem!, kLocaleZh), contains('16384'));
       // 2500 个控制字符（15000 字节 + 包装）仍在上限内。
       expect(
         draftProblem(_freeText(), QuestionDraft(text: '\u0001' * 2500)),

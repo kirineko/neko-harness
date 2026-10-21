@@ -1,3 +1,4 @@
+import "./support/lang-en.ts";
 import { expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -58,7 +59,7 @@ it("plans, approves through the panel and then executes with write tools back", 
 		const sessions = client.directory.state.value.sessions;
 		const workspace = sessions[0]!.workspaceRoot;
 		const blocked = sessionPickerItems(sessions, workspace, "other")[0]!;
-		expect(blocked.description).toContain("等待批准");
+		expect(blocked.description).toContain("Awaiting approval");
 
 		expect(dock.openPanel()).toBe(true);
 		const panel = plain(dock.render(100));

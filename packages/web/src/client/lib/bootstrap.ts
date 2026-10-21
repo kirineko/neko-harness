@@ -9,6 +9,7 @@ import type {
 	WireQuestionResponse,
 } from "./contract.ts";
 import { GatewayConnection } from "./gateway.ts";
+import { getT } from "./i18n/index.ts";
 import { storeActions } from "./store.ts";
 import { readUpgradeDraft } from "./upgrade-draft";
 
@@ -34,7 +35,7 @@ let infoGeneration = 0;
 export async function fetchGatewayInfo(): Promise<GatewayInfo> {
 	const generation = ++infoGeneration;
 	const response = await fetch("/api/info", { cache: "no-store", signal: AbortSignal.timeout(5000) });
-	if (!response.ok) throw new Error(`GET /api/info 失败（${response.status}）`);
+	if (!response.ok) throw new Error(getT()("gw.infoFailed", { status: response.status }));
 	const info = (await response.json()) as GatewayInfo;
 	if (info.protocolCompatible === false) throw new ApplicationProtocolError();
 	if (
@@ -44,7 +45,7 @@ export async function fetchGatewayInfo(): Promise<GatewayInfo> {
 		typeof info.workspaceRoot !== "string" ||
 		(info.installedVersion !== null && typeof info.installedVersion !== "string")
 	)
-		throw new Error("无效的网关信息");
+		throw new Error(getT()("gw.invalidInfo"));
 	if (generation === infoGeneration)
 		storeActions.setWebInfo({
 			serverId: info.serverId,
@@ -69,8 +70,8 @@ export function startNekoApp(): void {
 				level: "error",
 				text:
 					error instanceof ApplicationProtocolError
-						? "版本不兼容，请运行 neko update 后重新启动本地 neko。"
-						: `获取网关信息失败：${error instanceof Error ? error.message : String(error)}`,
+						? getT()("gw.incompatible")
+						: getT()("gw.infoLoadFailed", { error: error instanceof Error ? error.message : String(error) }),
 			});
 			return;
 		}
@@ -115,12 +116,12 @@ export function startNekoApp(): void {
 			{ once: true },
 		);
 		if (restored?.text && connection.currentSessionId !== restored.session)
-			storeActions.notice({ level: "info", text: "原会话不可用，升级草稿保留在关于与更新中" });
+			storeActions.notice({ level: "info", text: getT()("gw.sessionGone") });
 	})();
 }
 
 function notReady(): void {
-	storeActions.notice({ level: "error", text: "网关连接未就绪，请稍候或刷新页面。" });
+	storeActions.notice({ level: "error", text: getT()("gw.notReady") });
 }
 
 export const appActions = {
@@ -166,7 +167,7 @@ export const appActions = {
 	configure(change: NekoConversationChange, sessionId: string) {
 		const current = requireConnection();
 		if (current.currentSessionId !== sessionId || !current.ready)
-			return Promise.reject(new Error("会话已变化，请重试"));
+			return Promise.reject(new Error(getT()("gw.sessionChangedRetry")));
 		return current.configure(change);
 	},
 	submit(content: string, files: ImageFile[] = [], requestId?: string, sessionId?: string): Promise<void> {
@@ -260,7 +261,7 @@ export const appActions = {
 	},
 };
 function requireConnection(): GatewayConnection {
-	if (!connection) throw new Error("网关尚未连接");
+	if (!connection) throw new Error(getT()("gw.notStarted"));
 	return connection;
 }
 export function reportError(error: unknown): void {

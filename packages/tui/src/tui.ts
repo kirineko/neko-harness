@@ -5,7 +5,6 @@ import {
 	matchesKey,
 	ProcessTerminal,
 	ScrollView,
-	type SlashCommand,
 	type Text,
 	TuiAltScreen,
 } from "@earendil-works/pi-tui";
@@ -34,6 +33,7 @@ import {
 import type { NekoChat } from "@neko-harness/gateway/contract";
 import { ApprovalDock } from "./approval-dock.ts";
 import { copyLastAnswer } from "./clipboard-write.ts";
+import { compactionStatus } from "./compaction-status.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BoundedEditor } from "./components/editor.ts";
 import { StatusFooter, usageText } from "./components/footer.ts";
@@ -51,12 +51,16 @@ import { detectColorFgBgMode, followTerminalTheme } from "./detect-theme.ts";
 import { type ExportArgs, exportToFile, parseExportArgs } from "./export-command.ts";
 import { fileCompletion } from "./file-completion.ts";
 import { modelDisplayName } from "./format.ts";
-import { connectToGateway, type NekoTuiGateway } from "./gateway.ts";
+import { connectToGateway, type NekoTuiGateway, resolveDataDir } from "./gateway.ts";
 import { HelpDetail } from "./help-ui.ts";
+import { localizeCoreText, localizeError, localizeStatus } from "./i18n/core-text.ts";
+import { type Language, onLanguageChange, setLanguage, t } from "./i18n/index.ts";
 import { clipboard, clipboardShortcutKey, imagePaths, isClipboardShortcut, readImageFile } from "./image-input.ts";
 import { createInputRouter } from "./input-router.ts";
-import { confirmStop, JOBS_EMPTY, JobDetail, jobItems } from "./jobs-ui.ts";
+import { confirmStop, JobDetail, jobItems, jobsEmpty } from "./jobs-ui.ts";
 import { commands } from "./labels.ts";
+import { saveLanguage } from "./language-settings.ts";
+import { openLanguagePanel } from "./language-ui.ts";
 import { createAppLayout, usableSize } from "./layout.ts";
 import { plainText } from "./plain-text.ts";
 import { PlanDock } from "./plan-dock.ts";
@@ -91,6 +95,10 @@ export type NekoTuiOptions = {
 	readonly model?: NekoModelRef;
 	/** 主题：light / dark / auto（默认 auto，按终端背景自动选择）。 */
 	readonly theme?: ThemePreference;
+	/** 界面语言（已按 --lang > NEKO_LANG > 保存值 > zh 解析）；省略则沿用当前进程语言。 */
+	readonly language?: Language;
+	/** 数据目录：`/language` 把选择写入其中的 tui.json；省略则按存储路径与配置解析。 */
+	readonly dataDir?: string;
 };
 
 const EXIT_COMMANDS = new Set(["/exit", "/quit"]);
@@ -111,7 +119,9 @@ type ItemEntry =
  * neko.session-directory / neko.session-management。
  */
 class NekoTuiApp {
-	readonly #commands = [...commands];
+	readonly #commands = commands();
+	#languageStop?: () => void;
+	#refreshVersion: (() => void) | undefined;
 	readonly #gateway: NekoTuiGateway;
 	readonly #options: NekoTuiOptions;
 	readonly #ui: TuiAltScreen;
@@ -148,8 +158,8 @@ class NekoTuiApp {
 	#agentsPanel = false;
 	#jobsPanel = false;
 	#queueBusy = false;
-	/** Skill completions of the attached session, and which optional commands its gateway supports. */
-	#skillCommands: SlashCommand[] = [];
+	/** Skills of the attached session; completion entries are built per language when the list is synced. */
+	#skills: { name: string; description: string }[] = [];
 	#commandCaps = "";
 	#switching = false;
 	readonly #queueRow = new QueueRow();
@@ -204,7 +214,7 @@ class NekoTuiApp {
 		this.#question = new QuestionDock({
 			changed: () => this.#ui.requestRender(),
 			notify: (message, level) => this.addNotice(message, level),
-			aside: () => (this.#approval.visible ? "Approval waiting: Esc closes this panel to review it." : undefined),
+			aside: () => (this.#approval.visible ? t("approval.aside") : undefined),
 			opened: (open) => {
 				this.#ui.setFocus(open ? this.#question : this.#editor);
 				if (open) this.#queueRow.clear();
@@ -215,7 +225,7 @@ class NekoTuiApp {
 		this.#plan = new PlanDock({
 			changed: () => this.#ui.requestRender(),
 			notify: (message, level) => this.addNotice(message, level),
-			aside: () => (this.#approval.visible ? "Approval waiting: Esc closes this panel to review it." : undefined),
+			aside: () => (this.#approval.visible ? t("approval.aside") : undefined),
 			opened: (open) => {
 				this.#ui.setFocus(open ? this.#plan : this.#editor);
 				if (open) this.#queueRow.clear();
@@ -379,7 +389,7 @@ class NekoTuiApp {
 			this.#question.setOnline(false);
 			this.#plan.setOnline(false);
 			if (this.#lastView) this.applyView({ ...this.#lastView, busy: false, status: null, streaming: null });
-			this.addNotice("Gateway unavailable. Restart to reconnect.", "error");
+			this.addNotice(t("gateway.unavailable"), "error");
 		});
 		const picker = this.#panel,
 			login = this.#login;
@@ -438,6 +448,8 @@ class NekoTuiApp {
 			if (notice) this.#versionNotice.addChild(new ThemedTruncatedText(() => formatNotice(notice, "info"), 1, 0));
 			this.#ui.requestRender();
 		};
+		this.#refreshVersion = () => void refreshVersion();
+		this.#languageStop = onLanguageChange(() => this.#onLanguageChanged());
 		this.#versionStop = this.#gateway.client.application.info.subscribe(() => void refreshVersion());
 		const notifyShell = createShellNotifier((text) => this.addNotice(text, "warning", { wrap: true, ttlMs: 20_000 }));
 		const checkShell = () => notifyShell(this.#gateway.client.application.info.value?.shell);
@@ -454,6 +466,7 @@ class NekoTuiApp {
 		await this.#exited;
 		this.#versionStop?.();
 		this.#shellStop?.();
+		this.#languageStop?.();
 		clearInterval(this.#versionTimer);
 		this.#viewUnsubscribe?.();
 		this.#directoryUnsubscribe?.();
@@ -479,7 +492,7 @@ class NekoTuiApp {
 		if (trimmed === "/help") {
 			if (!this.#panel.open && !this.#login.open) {
 				void this.#panel.show(
-					"Help",
+					t("help.title"),
 					async () => [],
 					async () => {},
 				);
@@ -506,7 +519,7 @@ class NekoTuiApp {
 		}
 		if (trimmed === "/plan" || trimmed.startsWith("/plan ")) {
 			if (trimmed === "/plan") this.#togglePlan(text);
-			else this.addNotice("Usage: /plan (no arguments)", "warning");
+			else this.addNotice(t("plan.usage"), "warning");
 			return;
 		}
 		if (trimmed === "/search") {
@@ -517,6 +530,10 @@ class NekoTuiApp {
 			this.#showContext();
 			return;
 		}
+		if (trimmed === "/language") {
+			void this.openLanguageOverlay();
+			return;
+		}
 		const instructions = compactInstructions(trimmed);
 		if (instructions !== null) {
 			const chat = this.#chat;
@@ -525,7 +542,7 @@ class NekoTuiApp {
 				void chat.compact({ instructions }).catch((e) => {
 					if (session === this.#sessionId) {
 						this.#editor.setText(text);
-						this.addNotice(messageOf(e), isProviderRejection(messageOf(e)) ? "warning" : "error");
+						this.addNotice(messageOf(e), isProviderRejection(rawMessageOf(e)) ? "warning" : "error");
 					}
 				});
 			return;
@@ -543,7 +560,7 @@ class NekoTuiApp {
 			return;
 		}
 		if (trimmed.startsWith("/login ")) {
-			this.addNotice("Use /login, then paste your key in the protected field.", "warning");
+			this.addNotice(t("login.useLogin"), "warning");
 			return;
 		}
 		if (trimmed === "/model") {
@@ -609,7 +626,10 @@ class NekoTuiApp {
 	private async addImagePaths(paths: string[]): Promise<string> {
 		return paths
 			.map((path) =>
-				this.addImage(readImageFile(path, this.#options.cwd ?? process.cwd()), path.split(/[\\/]/).at(-1) ?? "Image"),
+				this.addImage(
+					readImageFile(path, this.#options.cwd ?? process.cwd()),
+					path.split(/[\\/]/).at(-1) ?? t("image.defaultName"),
+				),
 			)
 			.join(" ");
 	}
@@ -647,7 +667,7 @@ class NekoTuiApp {
 			this.#editor.insertTextAtCursor(text);
 			this.#ui.requestRender();
 		} catch (e) {
-			this.addNotice(`Clipboard unavailable. Use an image path: ${messageOf(e)}`, "warning");
+			this.addNotice(t("clipboard.unavailable", { message: rawMessageOf(e) }), "warning");
 		} finally {
 			this.#clipboardPending = false;
 		}
@@ -670,9 +690,8 @@ class NekoTuiApp {
 		try {
 			const models = await this.#gateway.client.models.list(null);
 			const model = models.find((m) => m.provider === modelRef?.provider && m.modelId === modelRef?.modelId);
-			if (refs.length && !model?.input.includes("image"))
-				throw new Error("This model does not support images. Switch model or remove the image references.");
-			if (refs.length > 4) throw new Error("At most four images per message");
+			if (refs.length && !model?.input.includes("image")) throw new Error(t("image.unsupported"));
+			if (refs.length > 4) throw new Error(t("image.tooMany"));
 			let content = text;
 			for (const [ref, promise] of refs) {
 				const file = await promise;
@@ -694,8 +713,8 @@ class NekoTuiApp {
 			this.#retryRequests.delete(session);
 		} catch (e) {
 			if (session === this.#sessionId) {
-				const message = messageOf(e);
-				this.addNotice(message, isProviderRejection(message) ? "warning" : "error");
+				const message = rawMessageOf(e);
+				this.addNotice(localizeError(message), isProviderRejection(message) ? "warning" : "error");
 			}
 		} finally {
 			for (const id of ids) await chat.releaseImage(id).catch(() => {});
@@ -718,7 +737,7 @@ class NekoTuiApp {
 		const chat = this.#chat;
 		const sessionId = this.#sessionId;
 		if (view === undefined || chat === undefined) {
-			this.addNotice("No session is open.", "warning");
+			this.addNotice(t("export.noSession"), "warning");
 			return;
 		}
 		let args: ExportArgs;
@@ -730,7 +749,7 @@ class NekoTuiApp {
 		}
 		const summary = this.#gateway.client.directory.state.value.sessions.find((s) => s.id === sessionId);
 		const title = summary ? sessionName(summary, "") : "";
-		this.addNotice("Exporting...");
+		this.addNotice(t("export.exporting"));
 		try {
 			const { path, skippedImages } = await exportToFile({
 				...args,
@@ -741,11 +760,11 @@ class NekoTuiApp {
 						chat.getImage({ entryId: image.entryId, contentIndex: image.contentIndex, offset }),
 					),
 			});
-			const other = sessionId !== this.#sessionId ? ` (session ${title || sessionId})` : "";
-			const skipped = skippedImages > 0 ? `; ${skippedImages} image(s) not embedded` : "";
-			this.addNotice(`Exported${other} to ${path}${skipped}`, "info", { wrap: true, ttlMs: 20000 });
+			const other = sessionId !== this.#sessionId ? t("export.otherSession", { name: title || sessionId }) : "";
+			const skipped = skippedImages > 0 ? t("export.skippedImages", { count: skippedImages }) : "";
+			this.addNotice(t("export.done", { other, path, skipped }), "info", { wrap: true, ttlMs: 20000 });
 		} catch (error) {
-			this.addNotice(`Export failed: ${messageOf(error)}`, "error", { wrap: true, ttlMs: 20000 });
+			this.addNotice(t("export.failed", { message: rawMessageOf(error) }), "error", { wrap: true, ttlMs: 20000 });
 		}
 	}
 
@@ -808,16 +827,12 @@ class NekoTuiApp {
 
 	/** 拉取当前会话的技能列表进补全命令表（数组与 fileCompletion 共享，原地更新即生效）。 */
 	async #refreshSkills(handle: NekoChat): Promise<void> {
-		this.#skillCommands = [];
+		this.#skills = [];
 		this.#syncCommands(this.#lastView);
 		try {
 			const skills = await handle.skills(null);
 			if (handle !== this.#chat) return;
-			this.#skillCommands = skills.map((skill) => ({
-				name: `skill:${skill.name}`,
-				description: skill.description,
-				argumentHint: "[args]",
-			}));
+			this.#skills = skills.map((skill) => ({ name: skill.name, description: skill.description }));
 			this.#syncCommands(this.#lastView);
 		} catch {
 			/* completion keeps the static commands */
@@ -831,8 +846,12 @@ class NekoTuiApp {
 		this.#commands.splice(
 			0,
 			this.#commands.length,
-			...commands.filter((c) => !hidden.has(c.name)),
-			...this.#skillCommands,
+			...commands().filter((c) => !hidden.has(c.name)),
+			...this.#skills.map((skill) => ({
+				name: `skill:${skill.name}`,
+				description: skill.description,
+				argumentHint: t("command.skillArgs"),
+			})),
 		);
 	}
 
@@ -842,7 +861,7 @@ class NekoTuiApp {
 		try {
 			await operation();
 		} catch (error) {
-			this.addNotice(`Session operation failed: ${messageOf(error)}`, "error");
+			this.addNotice(t("session.operationFailed", { message: messageOf(error) }), "error");
 		} finally {
 			this.#sessionOperation = false;
 		}
@@ -873,14 +892,14 @@ class NekoTuiApp {
 
 	private sessionItems() {
 		return [
-			{ value: NEW_SESSION_VALUE, label: "+ New session", description: this.#options.cwd },
+			{ value: NEW_SESSION_VALUE, label: t("session.new"), description: this.#options.cwd },
 			...sessionPickerItems(this.#gateway.client.directory.state.value.sessions, this.#options.cwd!, this.#sessionId),
 		];
 	}
 	openSessionsOverlay(): void {
 		if (this.#exitStarted || this.#panel.open || this.#login.open) return;
 		void this.#panel.show(
-			`Sessions · ${this.#options.cwd}`,
+			t("session.title", { cwd: this.#options.cwd ?? "" }),
 			async () => this.sessionItems(),
 			async (value) => {
 				if (value === NEW_SESSION_VALUE) await this.createSession();
@@ -916,20 +935,48 @@ class NekoTuiApp {
 		this.#ui.setFocus(this.#panel);
 	}
 
+	/** /language 浮层：中文 / English，即选即生效并保存为默认。 */
+	async openLanguageOverlay(): Promise<void> {
+		if (this.#exitStarted || this.#panel.open || this.#login.open) return;
+		const ready = openLanguagePanel(this.#panel, (language) => this.#chooseLanguage(language));
+		this.#ui.setFocus(this.#panel);
+		await ready;
+	}
+
+	/** 选定语言：先在进程内生效（保存失败也不回退），再写入 tui.json；只有这里写保存值。 */
+	#chooseLanguage(language: Language): void {
+		setLanguage(language);
+		const dir = this.#options.dataDir;
+		if (dir === undefined) return;
+		const result = saveLanguage(dir, language);
+		if (result.ok) this.addNotice(t("language.set", { name: t(`language.name.${language}`) }));
+		else this.addNotice(t("language.saveFailed", { message: result.error.message }), "warning", { wrap: true });
+	}
+
+	/** 语言切换后重建命令列表并按新语言重绘；草稿、附件、排队项、滚动位置与运行中的会话都不动。 */
+	#onLanguageChanged(): void {
+		if (this.#exitStarted) return;
+		this.#syncCommands(this.#lastView);
+		this.#refreshVersion?.();
+		if (this.#lastView !== undefined) this.applyView(this.#lastView);
+		this.#ui.invalidate();
+		this.#ui.requestRender();
+	}
+
 	/** /theme 浮层:进程内主题偏好(auto 跟随终端 / 明确明暗),即选即生效。 */
 	async openThemeOverlay(): Promise<void> {
 		if (this.#exitStarted || this.#panel.open || this.#login.open) return;
 		const options: Array<{ value: ThemePreference; label: string; description: string }> = [
-			{ value: "auto", label: "Auto", description: "Follow the terminal background" },
-			{ value: "light", label: "Light · sakura-day", description: "Brand light theme" },
-			{ value: "dark", label: "Dark", description: "Cool dark theme" },
+			{ value: "auto", label: t("theme.auto"), description: t("theme.autoDescription") },
+			{ value: "light", label: t("theme.light"), description: t("theme.lightDescription") },
+			{ value: "dark", label: t("theme.dark"), description: t("theme.darkDescription") },
 		];
 		const ready = this.#panel.show(
-			"Theme",
+			t("theme.title"),
 			async () =>
 				options.map((option) => ({
 					value: option.value,
-					label: `${option.label}${option.value === this.#themePreference ? " (Current)" : ""}`,
+					label: `${option.label}${option.value === this.#themePreference ? t("common.currentSuffix") : ""}`,
 					description: option.description,
 				})),
 			async (value) => {
@@ -965,24 +1012,24 @@ class NekoTuiApp {
 			);
 			if (chat !== this.#chat || this.#exitStarted || this.#panel.open || this.#login.open) return;
 			if (!model) {
-				this.addNotice("The current model is unavailable. Choose another with /model.", "warning");
+				this.addNotice(t("think.modelUnavailable"), "warning");
 				return;
 			}
 			if (raw) {
 				const level = model.supportedThinkingLevels.find((value) => value === raw);
 				if (!level) {
-					this.addNotice(`Available levels: ${model.supportedThinkingLevels.join(" / ")}`, "warning");
+					this.addNotice(t("think.available", { levels: model.supportedThinkingLevels.join(" / ") }), "warning");
 					return;
 				}
 				await chat.configure({ thinkingLevel: level });
 			} else {
 				this.#thinkingModel = keyOf(model);
 				void this.#panel.show(
-					"Thinking level",
+					t("think.title"),
 					async () =>
 						model.supportedThinkingLevels.map((level) => ({
 							value: level,
-							label: `${level}${level === this.#lastView?.agent.thinkingLevel ? " (Current)" : ""}`,
+							label: `${level}${level === this.#lastView?.agent.thinkingLevel ? t("common.currentSuffix") : ""}`,
 						})),
 					async (value) => {
 						await chat.configure({ thinkingLevel: value as ModelThinkingLevel });
@@ -991,7 +1038,7 @@ class NekoTuiApp {
 				this.#ui.setFocus(this.#panel);
 			}
 		} catch {
-			this.addNotice("Failed to configure thinking level. Try again.", "error");
+			this.addNotice(t("think.failed"), "error");
 		}
 	}
 
@@ -1001,7 +1048,7 @@ class NekoTuiApp {
 		this.#panel.pointerSelection = true;
 		this.#panel.agentNavigation = true;
 		void this.#panel.show(
-			"Agents",
+			t("agents.title"),
 			async () => subagentItems(this.#lastView?.subagents ?? [], this.#lastView?.agents),
 			async (value) => this.#agentDetail(value),
 		);
@@ -1028,7 +1075,7 @@ class NekoTuiApp {
 			this.addNotice(QUESTIONS_UNSUPPORTED, "warning");
 			return;
 		}
-		if (!this.#question.openPanel()) this.addNotice("No question is waiting for your answer.");
+		if (!this.#question.openPanel()) this.addNotice(t("question.none"));
 	}
 	/**
 	 * A new question opens by itself only when nothing else holds the keys: empty editor without completion, no
@@ -1063,7 +1110,7 @@ class NekoTuiApp {
 		};
 		const chat = this.#chat;
 		if (chat === undefined) {
-			this.addNotice("Gateway unavailable. Restart to reconnect.", "error");
+			this.addNotice(t("gateway.unavailable"), "error");
 			keep();
 			return;
 		}
@@ -1082,12 +1129,7 @@ class NekoTuiApp {
 		void client
 			.setMode(next)
 			.then(() => {
-				if (session === this.#sessionId)
-					this.addNotice(
-						next === "plan"
-							? "Plan mode on: the assistant can only read and plan. /plan or Shift+Tab to leave."
-							: "Plan mode off.",
-					);
+				if (session === this.#sessionId) this.addNotice(next === "plan" ? t("plan.modeOn") : t("plan.modeOff"));
 			})
 			.catch((error) => {
 				if (session !== this.#sessionId) return;
@@ -1107,7 +1149,7 @@ class NekoTuiApp {
 		const changed = () => this.#ui.requestRender();
 		this.#jobsPanel = true;
 		this.#panel.pointerSelection = true;
-		this.#panel.emptyText = JOBS_EMPTY;
+		this.#panel.emptyText = jobsEmpty();
 		this.#panel.listKey = (data, value) => {
 			if (matchesKey(data, "left")) {
 				this.#panel.close();
@@ -1119,7 +1161,7 @@ class NekoTuiApp {
 			return true;
 		};
 		void this.#panel.show(
-			"Jobs",
+			t("jobs.title"),
 			async () => jobItems(jobs.list()),
 			async (value) => new JobDetail(jobs, value, this.#panel, changed).open(),
 		);
@@ -1148,7 +1190,7 @@ class NekoTuiApp {
 		const item = this.#queueRow.current;
 		if (!chat || !item) return { consume: true };
 		if (action === "steer" && item.mode === "steer") {
-			this.addNotice("That message already steers the current run.", "info");
+			this.addNotice(t("queue.alreadySteers"), "info");
 			return { consume: true };
 		}
 		const queue = queueClient(chat);
@@ -1300,10 +1342,7 @@ class NekoTuiApp {
 						(m) => m.provider === view.agent.model?.provider && m.modelId === view.agent.model?.modelId,
 					);
 					if (this.#imageWarningModel === imageModel && model && !model.input.includes("image"))
-						this.addNotice(
-							"Text-only model: previous images are unavailable to the model; written analysis is retained.",
-							"warning",
-						);
+						this.addNotice(t("image.textOnlyModel"), "warning");
 				})
 				.catch(() => {});
 		}
@@ -1324,7 +1363,7 @@ class NekoTuiApp {
 		}
 		if (this.#thinkingModel && this.#thinkingModel !== `${view.agent.model?.provider}/${view.agent.model?.modelId}`) {
 			this.#panel.close();
-			this.addNotice("Model changed. Open /think to choose its supported levels.");
+			this.addNotice(t("think.modelChanged"));
 		}
 		this.#syncItems(view);
 		const waiting = this.#question.pendingCount > 0;
@@ -1510,11 +1549,11 @@ class NekoTuiApp {
 				.length ?? 0;
 		this.#busyText =
 			view.busy && this.#question.pendingCount > 0
-				? "Waiting for your answer"
+				? t("busy.waitingAnswer")
 				: active
-					? `Agents ${active} running`
+					? t("busy.agentsRunning", { count: active })
 					: view.busy
-						? (view.status ?? "Thinking...")
+						? localizeStatus(view.status ?? "Thinking...")
 						: undefined;
 		if (this.#busyText !== undefined) {
 			this.#busyLoader.setMessage(this.#busyText);
@@ -1550,6 +1589,7 @@ class NekoTuiApp {
 	#syncFooter(view: ChatView): void {
 		const usage = view.taskUsage ?? view.usage;
 		const todoProgress = todoProgressText(view.todos);
+		const compaction = compactionStatus(view.compaction);
 		this.#footer.setStats({
 			subagentCount: view.agents?.length ?? 0,
 			jobCount: view.jobs?.filter((job) => job.status === "running").length ?? 0,
@@ -1564,26 +1604,7 @@ class NekoTuiApp {
 			thinkingLevel: view.agent.thinkingLevel,
 			busy: this.#busyText,
 			canAbort: view.compaction?.active.some((c) => c.reason === "manual" || c.blocking),
-			compaction: view.compaction?.active.length
-				? view.compaction.active.some((c) => c.retry)
-					? "Retrying compaction"
-					: view.compaction.active.some((c) => c.blocking)
-						? "Waiting for compaction"
-						: "Compacting context"
-				: view.compaction?.failure
-					? `Compaction failed: ${view.compaction.failure.error}`
-					: view.compaction?.latest &&
-							(view.compaction.latest.phase === "waiting-to-apply" || Date.now() - view.compaction.latest.at < 10000)
-						? {
-								applied: "Context compacted",
-								nothing: "Nothing to compact",
-								skipped: "Summary skipped",
-								cancelled: "Compaction cancelled",
-								failed: "Compaction failed",
-								summarizing: "Compacting context",
-								"waiting-to-apply": "Applying summary",
-							}[view.compaction.latest.phase]
-						: undefined,
+			...(compaction !== undefined ? { compaction: compaction.text, compactionTone: compaction.tone } : {}),
 			contextUsage: view.contextUsage,
 			usageText: usageText(usage.input, usage.output, usage.cacheRead, usage.cost),
 			cwd: view.cwd,
@@ -1627,7 +1648,7 @@ class NekoTuiApp {
 
 /** A plan decision carries the user's feedback, possibly from another client: shown as plain text. */
 function systemText(item: Extract<ChatItem, { type: "system" }>): string {
-	return item.planDecision ? plainText(item.text) : item.text;
+	return item.planDecision ? plainText(item.text) : localizeCoreText(item.text);
 }
 
 function assistantContent(item: Extract<ChatItem, { type: "assistant" }>): {
@@ -1677,8 +1698,13 @@ function streamingCardState(call: {
 	};
 }
 
-function messageOf(error: unknown): string {
+function rawMessageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+/** Error text for display: core's `CODE:` messages are shown in the interface language. */
+function messageOf(error: unknown): string {
+	return localizeError(rawMessageOf(error));
 }
 
 /** Commands a gateway without the matching optional capability cannot serve; they stay out of completion. */
@@ -1695,6 +1721,20 @@ const keyOf = modelKey;
 /** 打开 neko 终端界面；用户退出（/exit 或 Ctrl+C）后 resolve。 */
 export async function runTui(options: NekoTuiOptions = {}): Promise<void> {
 	options = { ...options, cwd: normalizeWorkspace(options.cwd) };
+	if (options.language !== undefined) setLanguage(options.language);
+	if (options.dataDir === undefined) {
+		try {
+			options = {
+				...options,
+				dataDir: resolveDataDir({
+					...(options.storagePath !== undefined ? { storagePath: options.storagePath } : {}),
+					configDir: options.cwd,
+				}),
+			};
+		} catch {
+			// 配置读取失败会在下面的 connectToGateway 中报告。
+		}
+	}
 	const gateway = await connectToGateway({
 		...(options.socketPath !== undefined ? { socketPath: options.socketPath } : {}),
 		...(options.storagePath !== undefined ? { storagePath: options.storagePath } : {}),

@@ -1,4 +1,5 @@
 import { type Component, Text, VStack } from "@earendil-works/pi-tui";
+import { t } from "./i18n/index.ts";
 import { PLAN_MAX_ROWS } from "./plan-dock.ts";
 import { QUESTION_MAX_ROWS } from "./question-dock.ts";
 
@@ -64,7 +65,7 @@ export function createAppLayout(parts: {
 	};
 	return new VStack([
 		{
-			component: new Text("Terminal too small. Resize to 40x10. Ctrl+C Exit", 0, 0),
+			component: { invalidate() {}, render: (width: number) => new Text(t("layout.tooSmall"), 0, 0).render(width) },
 			visible: (v) => !normal(v),
 			grow: 1,
 		},

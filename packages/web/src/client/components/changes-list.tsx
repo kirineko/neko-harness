@@ -1,12 +1,10 @@
 import type { WireChangeDetail, WireChangeList } from "@neko-harness/gateway/contract";
 import { useMemo } from "react";
+import { useT } from "../lib/i18n/index.ts";
 import { useResource } from "../lib/use-resource.ts";
 import { agentLabel, splitPath } from "../lib/workspace.ts";
 import { DiffView } from "./diff-view";
 import type { WorkspaceApi } from "./file-tree";
-
-export const CHANGES_SCOPE_NOTE =
-	"仅列出 agent 通过 edit / write 工具造成的改动，不含命令行（如 bash）造成的改动，也不代表磁盘或 git 的实际差异。";
 
 const counts = (added: number, removed: number) => (
 	<span className="shrink-0 font-mono text-xs">
@@ -24,26 +22,29 @@ export function ChangesList(props: {
 	onRetry(): void;
 	onSelect(path: string): void;
 }) {
+	const t = useT();
 	const { list } = props;
 	return (
 		<div className="flex min-h-0 flex-1 flex-col" data-testid="changes-list">
 			<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1.5">
 				{props.status === "error" && (
 					<div role="alert" className="flex flex-wrap items-center gap-2 p-2 text-xs text-sakura-800">
-						<span className="min-w-0 break-words">读取改动列表失败：{props.error}</span>
+						<span className="min-w-0 break-words">{t("changes.listFailed", { error: props.error ?? "" })}</span>
 						<button
 							type="button"
 							className="focus-neko rounded-md border border-sakura-300 px-2 py-0.5"
 							onClick={props.onRetry}
 						>
-							重试
+							{t("common.retry")}
 						</button>
 					</div>
 				)}
-				{!list && props.status === "loading" && <output className="block p-2 text-xs text-ink-500">加载中…</output>}
+				{!list && props.status === "loading" && (
+					<output className="block p-2 text-xs text-ink-500">{t("common.loadingEllipsis")}</output>
+				)}
 				{list && list.files.length === 0 && (
 					<div data-testid="changes-empty" className="p-3 text-sm text-ink-700">
-						<p className="font-medium">本会话还没有 agent 的 edit / write 改动。</p>
+						<p className="font-medium">{t("changes.empty")}</p>
 					</div>
 				)}
 				{list?.files.map((file) => {
@@ -60,14 +61,16 @@ export function ChangesList(props: {
 							<span className="flex min-w-0 items-center gap-2 text-sm text-ink-800">
 								<span className="min-w-0 flex-1 truncate font-medium">{name}</span>
 								{counts(file.added, file.removed)}
-								<span className="shrink-0 text-xs text-ink-500">{file.ops} 次</span>
+								<span className="shrink-0 text-xs text-ink-500">{t("changes.ops", { count: file.ops })}</span>
 							</span>
 							<span className="flex min-w-0 flex-wrap items-center gap-1 text-xs text-ink-500">
 								{file.outside && (
-									<span className={`${badge} border-sakura-300 bg-sakura-50 text-sakura-900`}>工作区外</span>
+									<span className={`${badge} border-sakura-300 bg-sakura-50 text-sakura-900`}>
+										{t("changes.outside")}
+									</span>
 								)}
 								<span className="min-w-0 max-w-full truncate" dir="ltr">
-									{dir === "" ? "（根目录）" : dir}
+									{dir === "" ? t("changes.root") : dir}
 								</span>
 								{file.agents.map((agent) => (
 									<span key={agent} className={`${badge} border-tianyi-200 bg-tianyi-50 text-tianyi-900`}>
@@ -80,16 +83,19 @@ export function ChangesList(props: {
 				})}
 				{list?.truncated && (
 					<p role="note" className="p-2 text-xs text-sakura-800">
-						列表不完整：改动文件过多，已超出上限，仅显示部分。
+						{t("changes.listIncomplete")}
 					</p>
 				)}
 			</div>
-			<p className="shrink-0 border-t border-sakura-100 px-3 py-1.5 text-[11px] text-ink-500">{CHANGES_SCOPE_NOTE}</p>
+			<p className="shrink-0 border-t border-sakura-100 px-3 py-1.5 text-[11px] text-ink-500">
+				{t("changes.scopeNote")}
+			</p>
 		</div>
 	);
 }
 
 function Ops({ detail }: { detail: WireChangeDetail }) {
+	const t = useT();
 	const ops = useMemo(() => [...detail.ops].sort((a, b) => a.seq - b.seq), [detail.ops]);
 	return (
 		<ol className="flex flex-col gap-3 p-3">
@@ -100,7 +106,11 @@ function Ops({ detail }: { detail: WireChangeDetail }) {
 						<span>{agentLabel(op.agent)}</span>
 						<span className="font-mono text-tianyi-800">{op.tool}</span>
 						{counts(op.added, op.removed)}
-						{op.truncated && <span className={`${badge} border-sakura-300 bg-sakura-50 text-sakura-900`}>已截断</span>}
+						{op.truncated && (
+							<span className={`${badge} border-sakura-300 bg-sakura-50 text-sakura-900`}>
+								{t("changes.truncated")}
+							</span>
+						)}
 					</div>
 					<DiffView
 						diff={op.diff}
@@ -125,6 +135,7 @@ export function ChangeDetail(props: {
 	onBack(): void;
 	onView(path: string): void;
 }) {
+	const t = useT();
 	const detail = useResource(
 		`change:${props.path}`,
 		props.active,
@@ -143,7 +154,7 @@ export function ChangeDetail(props: {
 						className="focus-neko shrink-0 rounded-lg border border-sakura-300 px-2 py-0.5 text-sakura-800 hover:bg-sakura-50"
 						onClick={props.onBack}
 					>
-						← 改动列表
+						{t("changes.backToList")}
 					</button>
 					<strong className="min-w-0 flex-1 truncate text-sm text-ink-800" title={props.path}>
 						{name}
@@ -154,37 +165,41 @@ export function ChangeDetail(props: {
 							className="focus-neko shrink-0 rounded-lg border border-sakura-300 px-2 py-0.5 text-sakura-800 hover:bg-sakura-50"
 							onClick={() => props.onView(props.path)}
 						>
-							查看当前内容
+							{t("changes.viewCurrent")}
 						</button>
 					)}
 				</div>
 				<div className="flex min-w-0 flex-wrap items-center gap-2 text-ink-500">
-					{outside && <span className={`${badge} border-sakura-300 bg-sakura-50 text-sakura-900`}>工作区外</span>}
+					{outside && (
+						<span className={`${badge} border-sakura-300 bg-sakura-50 text-sakura-900`}>{t("changes.outside")}</span>
+					)}
 					<span className="min-w-0 break-all" title={props.path}>
-						{dir === "" ? "（工作区根目录）" : dir}
+						{dir === "" ? t("viewer.workspaceRoot") : dir}
 					</span>
 				</div>
 			</div>
 			<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
 				{detail.status === "error" && (
 					<div role="alert" className="flex flex-wrap items-center gap-2 p-3 text-xs text-sakura-800">
-						<span className="min-w-0 break-words">读取改动详情失败：{detail.error}</span>
+						<span className="min-w-0 break-words">{t("changes.detailFailed", { error: detail.error ?? "" })}</span>
 						<button
 							type="button"
 							className="focus-neko rounded-md border border-sakura-300 px-2 py-0.5"
 							onClick={detail.reload}
 						>
-							重试
+							{t("common.retry")}
 						</button>
 					</div>
 				)}
-				{!data && detail.status === "loading" && <output className="block p-3 text-xs text-ink-500">加载中…</output>}
-				{data === null && <p className="p-3 text-sm text-ink-600">该文件没有可显示的改动记录。</p>}
+				{!data && detail.status === "loading" && (
+					<output className="block p-3 text-xs text-ink-500">{t("common.loadingEllipsis")}</output>
+				)}
+				{data === null && <p className="p-3 text-sm text-ink-600">{t("changes.noRecords")}</p>}
 				{data && (
 					<>
 						{data.truncated && (
 							<p role="note" className="px-3 pt-2 text-xs text-sakura-800">
-								改动记录不完整：该文件的操作过多，已超出上限，仅显示部分。
+								{t("changes.detailIncomplete")}
 							</p>
 						)}
 						<Ops detail={data} />

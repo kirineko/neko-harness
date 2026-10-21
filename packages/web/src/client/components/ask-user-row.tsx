@@ -1,5 +1,6 @@
 import type { ChatItem } from "@neko-harness/core";
-import { interactionAnswer, plainText, QUESTION_STATUS_LABEL } from "../lib/interactions";
+import { type Translate, useT } from "../lib/i18n/index.ts";
+import { interactionAnswer, plainText, questionStatusLabel } from "../lib/interactions";
 import { Icon } from "./primitives";
 
 type AskUser = Extract<NonNullable<Extract<ChatItem, { type: "tool" }>["interaction"]>, { kind: "ask_user" }>;
@@ -11,10 +12,11 @@ const STATUS_STYLE: Record<AskUser["status"], string> = {
 	cancelled: "border-sakura-300 bg-sakura-50 text-sakura-800",
 };
 
-function outcome(interaction: AskUser): string | null {
-	if (interaction.status === "answered") return `回答：${plainText(interactionAnswer(interaction))}`;
-	if (interaction.status === "skipped") return "已跳过，未提供答案";
-	if (interaction.status === "cancelled") return "问题已取消，没有收到回答";
+function outcome(interaction: AskUser, t: Translate): string | null {
+	if (interaction.status === "answered")
+		return t("askUser.answer", { answer: plainText(interactionAnswer(interaction)) });
+	if (interaction.status === "skipped") return t("askUser.skipped");
+	if (interaction.status === "cancelled") return t("askUser.cancelled");
 	return null;
 }
 
@@ -23,10 +25,11 @@ function outcome(interaction: AskUser): string | null {
  * structured details. It has no answer controls; those live only in the question card above the composer.
  */
 export function AskUserRow({ interaction, onLocate }: { interaction: AskUser; onLocate?: () => void }) {
-	const result = outcome(interaction);
+	const t = useT();
+	const result = outcome(interaction, t);
 	return (
 		<section
-			aria-label="助手提问记录"
+			aria-label={t("askUser.record")}
 			data-ask-user-row
 			data-status={interaction.status}
 			className="rounded-card border border-tianyi-200 bg-surface px-3 py-2 text-sm shadow-soft"
@@ -34,12 +37,12 @@ export function AskUserRow({ interaction, onLocate }: { interaction: AskUser; on
 			<div className="flex flex-wrap items-center gap-2">
 				<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tianyi-700 px-2 py-0.5 text-xs font-semibold text-on-accent">
 					<Icon name="sparkles" size={12} />
-					助手提问
+					{t("askUser.badge")}
 				</span>
 				<span
 					className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[interaction.status]}`}
 				>
-					{QUESTION_STATUS_LABEL[interaction.status]}
+					{questionStatusLabel(interaction.status)}
 				</span>
 				{onLocate && (
 					<button
@@ -47,7 +50,7 @@ export function AskUserRow({ interaction, onLocate }: { interaction: AskUser; on
 						className="focus-neko ml-auto shrink-0 rounded-full border border-tianyi-300 px-3 py-1 text-xs text-tianyi-900 hover:bg-tianyi-50"
 						onClick={onLocate}
 					>
-						定位到问题
+						{t("askUser.locate")}
 					</button>
 				)}
 			</div>

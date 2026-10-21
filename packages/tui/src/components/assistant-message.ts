@@ -1,7 +1,9 @@
 import { Container, Markdown, MouseRegion, Spacer, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { localizeCoreText } from "../i18n/core-text.ts";
+import { getLanguage, t } from "../i18n/index.ts";
 import { getActiveThemeMode, getMarkdownTheme, theme } from "../theme/index.ts";
 
-const THINKING_COLLAPSED_LABEL = "✧ Thinking… (click to expand)";
+const thinkingCollapsedLabel = () => `✧ ${t("assistant.thinkingCollapsed")}`;
 
 export type AssistantContent = {
 	readonly thinking: string;
@@ -16,6 +18,7 @@ export type AssistantContent = {
  */
 export class AssistantMessageComponent extends Container {
 	#renderTheme = getActiveThemeMode();
+	#renderLanguage = getLanguage();
 	#lastContent: AssistantContent | undefined;
 	#isStreaming = false;
 	#thinkingExpanded = false;
@@ -28,8 +31,9 @@ export class AssistantMessageComponent extends Container {
 	}
 
 	override render(width: number): string[] {
-		if (this.#renderTheme !== getActiveThemeMode()) {
+		if (this.#renderTheme !== getActiveThemeMode() || this.#renderLanguage !== getLanguage()) {
 			this.#renderTheme = getActiveThemeMode();
+			this.#renderLanguage = getLanguage();
 			this.#rebuild();
 		}
 
@@ -71,7 +75,7 @@ export class AssistantMessageComponent extends Container {
 							italic: true,
 						},
 					)
-				: new Text(theme.thinking(THINKING_COLLAPSED_LABEL), 1, 0);
+				: new Text(theme.thinking(thinkingCollapsedLabel()), 1, 0);
 			this.addChild(
 				new MouseRegion(thinkingComponent, (event: TuiMouseEvent) => {
 					if (event.type !== "click" || event.button !== "left") return undefined;
@@ -92,7 +96,7 @@ export class AssistantMessageComponent extends Container {
 		}
 		if (content.note !== null) {
 			this.addChild(new Spacer(1));
-			this.addChild(new Text(theme.error(content.note), 1, 0));
+			this.addChild(new Text(theme.error(localizeCoreText(content.note)), 1, 0));
 		}
 	}
 }

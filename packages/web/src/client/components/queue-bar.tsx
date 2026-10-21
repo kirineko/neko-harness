@@ -1,4 +1,5 @@
 import type { WireQueuedInput } from "@neko-harness/gateway/contract";
+import { useT } from "../lib/i18n/index.ts";
 
 type Props = {
 	queued: readonly WireQueuedInput[];
@@ -8,49 +9,52 @@ type Props = {
 	onWithdraw(item: WireQueuedInput): void;
 };
 
-const modeLabel = { steer: "引导", followUp: "排队" } as const;
-
 /** Messages accepted while the run is busy and not yet in the transcript; the host is the source of truth. */
 export function QueueBar({ queued, busy, onSteer, onWithdraw }: Props) {
+	const t = useT();
 	if (!queued.length) return null;
+	const modeLabel = (mode: WireQueuedInput["mode"]) => t(`queue.mode.${mode}`);
 	return (
-		<section aria-label="排队消息" className="mb-2 rounded-2xl border border-sakura-200 bg-base/90 px-2 py-1.5">
+		<section
+			aria-label={t("queue.section")}
+			className="mb-2 rounded-2xl border border-sakura-200 bg-base/90 px-2 py-1.5"
+		>
 			<ul className="flex max-h-32 flex-col gap-1 overflow-y-auto">
 				{queued.map((item) => {
-					const label = item.preview || (item.images ? "图片" : "");
+					const label = item.preview || (item.images ? t("queue.image") : "");
 					return (
 						<li key={item.id} className="flex min-w-0 items-center gap-1 text-sm">
 							<span
 								className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${item.mode === "steer" ? "bg-sakura-100 text-sakura-700" : "bg-tianyi-50 text-ink-600"}`}
 							>
-								{modeLabel[item.mode]}
+								{modeLabel(item.mode)}
 							</span>
 							<span className="min-w-0 flex-1 truncate text-ink-700" title={item.preview}>
-								{item.preview || (item.images ? "（仅图片）" : "")}
+								{item.preview || (item.images ? t("queue.imageOnly") : "")}
 							</span>
 							{item.images > 0 && item.preview && (
-								<span className="shrink-0 text-xs text-ink-500">{item.images} 图</span>
+								<span className="shrink-0 text-xs text-ink-500">{t("queue.images", { count: item.images })}</span>
 							)}
 							{item.mode === "followUp" && (
 								<button
 									type="button"
 									disabled={busy}
-									aria-label={`引导消息：${label}`}
-									title="改为引导：在当前工具轮结束后加入进行中的工作"
+									aria-label={t("queue.steerAria", { label })}
+									title={t("queue.steerTitle")}
 									onClick={() => onSteer(item)}
 									className="focus-neko h-8 shrink-0 rounded-full px-2 text-xs text-sakura-700 hover:bg-sakura-50 disabled:opacity-50"
 								>
-									引导
+									{t("queue.steer")}
 								</button>
 							)}
 							<button
 								type="button"
 								disabled={busy}
-								aria-label={`撤回${modeLabel[item.mode]}消息：${label}`}
+								aria-label={t("queue.withdrawAria", { mode: modeLabel(item.mode), label })}
 								onClick={() => onWithdraw(item)}
 								className="focus-neko h-8 shrink-0 rounded-full px-2 text-xs text-ink-600 hover:bg-sakura-50 disabled:opacity-50"
 							>
-								撤回
+								{t("queue.withdraw")}
 							</button>
 						</li>
 					);

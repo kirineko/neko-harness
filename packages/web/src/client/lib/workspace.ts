@@ -1,5 +1,7 @@
 /** DOM-free helpers shared by the workspace sidebar components. */
 
+import { getT } from "./i18n/index.ts";
+
 export const MAIN_AGENT = "main";
 
 export const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -19,7 +21,7 @@ export function formatBytes(bytes: number): string {
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
-export const agentLabel = (agent: string): string => (agent === MAIN_AGENT ? "主 agent" : agent);
+export const agentLabel = (agent: string): string => (agent === MAIN_AGENT ? getT()("agent.main") : agent);
 
 /** Number of displayed lines: a trailing newline does not add an empty last line. */
 export function lineCount(text: string): number {

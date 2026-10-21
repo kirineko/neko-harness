@@ -1,6 +1,7 @@
 import type { WireChangeSummary } from "@neko-harness/gateway/contract";
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
+import { useT } from "../lib/i18n/index.ts";
 import { clampWorkspaceWidth, WORKSPACE_WIDTH } from "../lib/layout";
 import { useResource } from "../lib/use-resource.ts";
 import { ancestorDirs } from "../lib/workspace.ts";
@@ -30,6 +31,7 @@ export function WorkspacePanel({
 	width: number;
 	onWidth: (width: number) => void;
 }) {
+	const t = useT();
 	const api = useCallback(() => appActions.workspace(sessionId), [sessionId]);
 	const [tab, setTab] = useState<Tab>("files");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
@@ -134,7 +136,7 @@ export function WorkspacePanel({
 			ref={panel}
 			role={narrow ? "dialog" : "complementary"}
 			aria-modal={narrow && open ? true : undefined}
-			aria-label="工作区"
+			aria-label={t("common.workspace")}
 			data-workspace-panel
 			style={{ "--workspace-w": `${width}px` } as CSSProperties}
 			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:relative lg:z-auto lg:w-[var(--workspace-w)] lg:max-w-[60vw] lg:shrink-0`}
@@ -166,7 +168,7 @@ export function WorkspacePanel({
 			<div
 				role="separator"
 				aria-orientation="vertical"
-				aria-label="调整工作区栏宽度"
+				aria-label={t("wspanel.resize")}
 				aria-valuemin={WORKSPACE_WIDTH.min}
 				aria-valuemax={WORKSPACE_WIDTH.max}
 				aria-valuenow={width}
@@ -188,18 +190,22 @@ export function WorkspacePanel({
 				}}
 			/>
 			<div className="flex items-center justify-between border-b border-sakura-200 px-4 py-1.5">
-				<strong className="text-sm text-ink-800">工作区</strong>
+				<strong className="text-sm text-ink-800">{t("common.workspace")}</strong>
 				<button
 					ref={closeButton}
 					type="button"
 					className="focus-neko rounded-lg px-2 py-1 text-sm text-ink-600 hover:bg-sakura-50"
-					aria-label="关闭工作区栏"
+					aria-label={t("wspanel.close")}
 					onClick={onClose}
 				>
-					关闭
+					{t("common.close")}
 				</button>
 			</div>
-			<div role="tablist" aria-label="工作区视图" className="flex shrink-0 gap-1 border-b border-sakura-100 px-2 pt-1">
+			<div
+				role="tablist"
+				aria-label={t("wspanel.views")}
+				className="flex shrink-0 gap-1 border-b border-sakura-100 px-2 pt-1"
+			>
 				<button
 					type="button"
 					role="tab"
@@ -211,7 +217,7 @@ export function WorkspacePanel({
 					onClick={() => setTab("files")}
 					onKeyDown={onTabKey}
 				>
-					文件
+					{t("wspanel.files")}
 				</button>
 				<button
 					type="button"
@@ -224,7 +230,7 @@ export function WorkspacePanel({
 					onClick={() => setTab("changes")}
 					onKeyDown={onTabKey}
 				>
-					改动 {fileCount}
+					{t("wspanel.changes", { count: fileCount })}
 				</button>
 			</div>
 			<div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)} className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -247,7 +253,7 @@ export function WorkspacePanel({
 						path={openFile}
 						active={viewerVisible}
 						changes={list.data}
-						backLabel="← 文件树"
+						backLabel={t("wspanel.backToTree")}
 						onBack={() => {
 							restoreFocus.current = openFile;
 							setOpenFile(null);

@@ -3,6 +3,8 @@
  * admin-token 永不下发浏览器；调用方用请求序号防迟到结果覆盖。
  */
 
+import { getT } from "./i18n/index.ts";
+
 export type MobileListenerState =
 	| { readonly status: "disabled" }
 	| { readonly status: "starting" }
@@ -60,7 +62,8 @@ export function resetMobileAdminSession(): void {
 async function fetchSession(): Promise<Session> {
 	sessionPromise ??= fetch("/api/mobile/session", { cache: "no-store" })
 		.then(async (response) => {
-			if (!response.ok) throw new Error(`GET /api/mobile/session 失败（${response.status}）`);
+			if (!response.ok)
+				throw new Error(getT()("pairing.getFailed", { path: "/api/mobile/session", status: response.status }));
 			return (await response.json()) as Session;
 		})
 		.catch((error: unknown) => {
@@ -84,7 +87,7 @@ async function write<T>(path: string, params: unknown, retry = true): Promise<T>
 		return write<T>(path, params, false);
 	}
 	if (!response.ok) {
-		let message = `请求失败（${response.status}）`;
+		let message = getT()("pairing.requestFailed", { status: response.status });
 		try {
 			const body = (await response.json()) as { message?: string };
 			if (typeof body.message === "string" && body.message !== "") message = body.message;
@@ -99,7 +102,7 @@ async function write<T>(path: string, params: unknown, retry = true): Promise<T>
 async function read<T>(path: string): Promise<T> {
 	const response = await fetch(path, { cache: "no-store" });
 	if (response.status === 501) throw new GatewayUnsupportedError();
-	if (!response.ok) throw new Error(`GET ${path} 失败（${response.status}）`);
+	if (!response.ok) throw new Error(getT()("pairing.getFailed", { path, status: response.status }));
 	return (await response.json()) as T;
 }
 
