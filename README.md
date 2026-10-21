@@ -1,81 +1,226 @@
 # neko-harness
 
-在终端或浏览器中使用的本地 AI 编程助手。支持文件读写、命令执行、图片输入、网页搜索、技能调用与子 agent，会话自动保存。
+**English** | [简体中文](docs/README.zh-CN.md)
 
-## 安装
+A local AI coding assistant for the terminal, the browser and your phone: it reads and edits files in your project, runs commands, accepts images, searches the web, calls skills and delegates to subagents. Sessions are saved automatically.
 
-支持 Windows、macOS 和 Linux，需要 **Bun 1.4.2 或更新的 1.4.x 版本**。按 [Bun 安装说明](https://bun.sh/docs/installation)装好后运行：
+> The Chinese version is the master copy. If this page and [`docs/README.zh-CN.md`](docs/README.zh-CN.md) disagree, the Chinese page is correct.
+
+## Contents
+
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [First run](#first-run)
+- [Features](#features)
+- [Plan mode](#plan-mode)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Upgrade](#upgrade)
+- [Development](#development)
+- [Documentation](#documentation)
+- [License](#license)
+
+## Requirements
+
+- **Bun 1.4.2** (any 1.4.x release) — see the [Bun installation guide](https://bun.sh/docs/installation). If `neko` is not found afterwards, add Bun's bin directory to `PATH` (`~/.bun/bin`, on Windows `%USERPROFILE%\.bun\bin`).
+- macOS, Linux or Windows. **Windows also needs [Git for Windows](https://git-scm.com/download/win)**: the bash tool, background jobs and subagents run through Git Bash, which neko finds automatically (`shell.path` overrides the lookup).
+- A model API key. DeepSeek works out of the box; 31 other API-key providers can be enabled.
+
+## Quick start
 
 ```bash
 bun add --global neko-harness
-```
 
-找不到 `neko` 命令时，请将 Bun 的 bin 目录加入 `PATH`（`~/.bun/bin`，Windows 为 `%USERPROFILE%\.bun\bin`）。
-
-Windows 还需要安装 [Git for Windows](https://git-scm.com/download/win)，助手执行命令（bash 工具与后台任务）依赖它提供的 Git Bash。neko 会自动查找。
-
-## 开始使用
-
-进入项目目录启动界面，两种界面可以同时使用，无需额外启动服务：
-
-```bash
 cd /path/to/your/project
-neko tui   # 终端界面
-neko web   # 浏览器界面，自动打开
+neko tui   # terminal UI
+neko web   # browser UI
 ```
 
-首次使用在 TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepSeek API Key](https://platform.deepseek.com/api_keys)。默认使用 DeepSeek V4.1 Flash，可在界面中切换模型。也可用环境变量提供：
+`neko` starts the interface you asked for and, when no gateway is running yet, a gateway — the process that owns sessions, tools and the mobile endpoint.
+
+| Command | What it starts |
+| --- | --- |
+| `neko tui` | Terminal UI; starts a gateway on demand. The TUI talks to it over a Unix socket on POSIX and over a local WebSocket on Windows. |
+| `neko web` | Web UI on `http://127.0.0.1:8322` with a gateway WebSocket on `127.0.0.1:8321`; reuses a gateway another UI already started, and opens the browser unless `--no-open` is given. |
+| `neko serve` | Gateway only: WebSocket on `127.0.0.1:8321` plus a Unix socket on POSIX. Keeps sessions, background jobs and the phone endpoint available without any UI. |
+
+Both UIs can run at the same time and share one gateway. The process that started the gateway stops it when it exits, so use `neko serve` when the gateway should outlive the UI — for example to keep a paired phone connected after closing the browser page.
+
+## First run
+
+In the TUI run `/login`; in the web UI open **设置 → 模型服务** (settings → model providers). Paste a [DeepSeek API key](https://platform.deepseek.com/api_keys) and save it. The default model is `deepseek/deepseek-flash` (DeepSeek V4.1 Flash); pick another from the model picker, and change the thinking level with `/think` in the TUI.
+
+Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `TAVILY_API_KEY`, …). A key saved in the UI wins over the environment, and keys stay on this machine.
+
+**Other providers.** Besides DeepSeek there are 31 API-key providers (OpenRouter, OpenCode Go / Zen, OpenAI, Google, Groq, Mistral, xAI, Together, …). Enable one in `/login` (space toggles it) or in **设置 → 模型服务**, then save its key or export its environment variable — the provider card in the web settings shows the exact name. Enabled providers appear in `/model` and in the composer's model picker. Disabling a provider keeps its saved key but blocks sending in sessions that use it, until you re-enable the provider or switch those sessions to another model. `--model` takes `provider/modelId`, for example `openrouter/anthropic/claude-haiku-4.5`.
+
+**Default model.** Choose a model and set it as the default for new sessions: the ☆ action in the web picker (设为默认) or `d` in the TUI `/model` list, pressing `d` again to clear it. Precedence: `--model` > saved default > `defaultModel` in the config file > built-in DeepSeek Flash. Only sessions created afterwards are affected.
+
+## Features
+
+### Workspace and files
+
+- The workspace is the directory neko was started in (`--cwd` overrides it). The assistant is not sandboxed to it.
+- Web sidebar: add and switch projects, browse the file tree, list the changes this session produced (with diffs), and open the folder in VS Code or the file manager — opening it works only from the machine running the web server.
+- Type `@` to reference a file or directory. Images: `Ctrl+V` in the TUI (`Alt+V` on Windows and WSL, where the terminal handles paste itself); paste, drop or pick files in the web UI. Whether a model accepts images depends on the model.
+- Sessions: `/new` and `/sessions` in the TUI, the sidebar in the web UI; `/fork` and `/archive` in the TUI, archive from the web sidebar.
+
+### Conversation and queue
+
+- Sending while a run is busy queues the message instead of interrupting it. The queue bar (above the composer in the web UI, `Alt+↑` in the TUI) lists what is waiting, and every entry can be **steered** (引导) into the running work after the current tool round or **withdrawn** (撤回) back into the editor.
+- TUI queue keys: `Alt+↑` selects, `↑`/`↓` moves, `Enter` steers the selected message, `Esc` withdraws it without stopping the run.
+- `Esc` on the running session stops the current run.
+
+### Context and export
+
+- `/compact` compacts the conversation and accepts optional instructions. Automatic compaction follows pi-durable's native policy — it triggers close to the model window; tune the trigger percentage, the keep-recent budget and on/off in TUI `/context`, in web **设置 → 上下文**, or in the config file (`context.compaction`). A value saved in the UI wins over the config file.
+- Tool result pruning is off by default. With `context.pruning` enabled, old tool results become placeholders in the model context once usage crosses a threshold; the transcript, projections and exports keep the originals, and the model re-runs a tool when it needs the data again. `/context` and the settings page expose the knobs.
+- Copy and export: the web UI copies an answer without its reasoning and exports Markdown, HTML or JSON from the top bar (thinking included on request). TUI: `/copy` and `/export [path] [--thinking]`; without a path the file goes into the workspace, and an existing file is never overwritten.
+
+### Agent capabilities
+
+- **Skills.** `/skill:` completes installed skills; browse and install them from the market in the web sidebar (**技能市场**) or with TUI `/skills`. The prompt carries only the skill list — a body is read when the skill is invoked.
+- **Subagents.** The assistant delegates exploration, planning or coding work, waits for the result and integrates it. Delegation cards and the sidebar in the web UI, `/agents` in the TUI; stop the current round without losing the agent's context. Bash commands from an explore subagent need one approval each.
+- **Background jobs.** The `job` tool moves long commands (`npm run dev`, `uv run …`) to the background, up to 4 at a time. When one finishes the assistant is told and keeps going; live output and manual stops live in the web top bar **任务** and TUI `/jobs`. Jobs still running when the gateway restarts are marked lost and never re-run.
+- **Todos.** For multi-step work the assistant keeps an ordered, read-only todo list. Web top bar **待办 n/m**, TUI `/todos`, progress entry on the mobile chat page. It is saved with the session and survives restarts and compaction; subagents cannot use it.
+- **Questions.** When a decision is missing, the assistant asks with `ask_user`: single or multiple choice — a recommended option is marked but never preselected — with optional text, or skip. Answer above the composer in the web UI, with `Ctrl+O` or `/question` in the TUI, or on the mobile chat page. The answer counts only once submitted (`Enter` in the TUI); the assistant stays paused meanwhile and messages you send queue behind the answer. Questions and options are plain text.
+- **Web search.** Tavily by default — keyless mode is rate-limited until you add a key — or DeepSeek search and fetch, reusing your DeepSeek key. Pick the provider in web **设置 → 联网搜索**, TUI `/search`, or `webSearch.provider` in the config file. DeepSeek search bills per successful request (CNY 5 per 1000).
+
+### Clients
+
+**Web** — chat, workspace sidebar (files, changes, open in editor), skill market (技能市场), and settings (设置): `/settings` 模型服务, `/settings/search` 联网搜索, `/settings/context` 上下文, `/settings/mobile` 手机配对, `/about` 版本与更新. The web UI ships Chinese labels; they are quoted as shown, with a short gloss where it helps.
+
+**TUI** — `/` completes commands, `@` files and `/skill:` skills; `/help` lists every shortcut and command.
+
+| Commands | What they do |
+| --- | --- |
+| `/login`, `/model`, `/think` | providers and keys, model, thinking level |
+| `/new`, `/sessions`, `/fork`, `/archive` | sessions |
+| `/compact`, `/context` | compaction, pruning and their settings |
+| `/copy`, `/export` | copy the last answer, export the session |
+| `/agents`, `/jobs`, `/todos`, `/question`, `/plan` | delegated work, background jobs, todos, questions, plan mode |
+| `/search`, `/skills`, `/theme`, `/version`, `/help` | search provider, skill market, theme, version and updates, shortcuts |
+
+The terminal theme comes from `--theme light|dark|auto` (default `auto`), the `NEKO_THEME` environment variable, or `/theme`.
+
+**Mobile (beta)** — an Android app ([Flutter](apps/mobile/README.md)) that drives the agent over your LAN. In web **设置 → 手机配对**, show the QR code and scan it with the app. The phone must be on the same network and the firewall must allow the port; under WSL's default NAT the port is forwarded through `powershell.exe` automatically. The app trusts only the certificate fingerprint it received while pairing, so revoke a device or regenerate the certificate on the same page when needed. APKs are attached to [GitHub Releases](https://github.com/kirineko/neko-harness/releases) as `NekoAI-v<version>-<abi>.apk` (arm64-v8a, armeabi-v7a, x86_64). This is a beta: builds use a debug signature, so upgrading means uninstalling, reinstalling and pairing again, and there is no in-app update.
+
+## Plan mode
+
+Read-only planning with an explicit approval step.
+
+- **Enter and leave.** TUI: `/plan` or `Shift+Tab` — idle sessions only. Web: `/plan` in the composer. While the mode is on, the composer shows a **规划模式（只读）** badge.
+- **What the assistant may do.** Read files, search the code base, use the web, keep todos, ask questions and run read-only bash (listing, searching, `git log`/`diff`/`status`, version checks). `edit`, `write`, `job` and any command that changes files, installs packages or starts processes are rejected — the tools are removed from the agent, a `beforeTool` guard checks the rest, and bash is checked again when it executes (a guard rail, not a sandbox). Explore and plan subagents are allowed; the coder subagent is not.
+- **Submitting.** Once it understands the task the assistant calls `submit_plan` once, alone in its turn, with a short title, ordered steps and an optional note (risks, assumptions, verification). The round ends and the session goes idle, waiting for your decision.
+- **Deciding.** The plan card sits above the composer in the web UI; in the TUI a panel opens by itself. **批准并执行** (approve and execute) leaves plan mode and submits the plan as the next input, so execution starts immediately. **要求修改** (request changes) takes a note, keeps plan mode, and the assistant revises and submits again. **取消并退出计划模式** (cancel and leave plan mode) cancels the waiting plan (web button, TUI `X`). TUI keys: `↑`/`↓` choose, `A` approves, `R` writes changes, `X` cancels and exits, `Esc` closes the panel without deciding.
+- **Edge cases.** Sending a normal message while a plan waits replaces that plan. Stopping the session or leaving plan mode cancels it; a restart keeps it. The mode and the last 5 plans are saved with the session, and a forked session inherits them.
+- **Mobile.** A paired phone can read a plan and approve, request changes, or cancel and exit; it cannot enter plan mode. Mode changes and decisions are accepted only while the session is idle.
+
+## Configuration
+
+### Command line
+
+CLI flags > config file > built-in defaults. `neko tui --help`, `neko web --help` and `neko serve --help` list every option.
+
+| Flag | Applies to | Meaning |
+| --- | --- | --- |
+| `--cwd <dir>` | tui, web, serve | Workspace for the session's tools (default: the current directory). Not a sandbox. |
+| `--model <ref>` | tui, web, serve | Model as `provider/modelId`; overrides the saved default for this launch |
+| `--storage <path>` | tui, web, serve | SQLite file (default `~/.neko/neko.sqlite`) |
+| `--port <n>` | web, serve | Web UI port (default 8322) or gateway WebSocket port (default 8321; Windows picks a random port) |
+| `--gateway-port <n>` | web | Gateway WebSocket port when the web UI starts the gateway |
+| `--host <ip>` | web, serve | Web server address, or gateway WebSocket address (default `127.0.0.1`) |
+| `--no-open` | web | Do not open the browser |
+| `--socket-path <path>` | tui, web, serve | Unix socket path (POSIX only) |
+| `--no-socket` | serve | Disable the Unix transport |
+| `--theme <mode>` | tui | `light`, `dark` or `auto` (default) |
+| `--credentials <path>` | serve | Credentials file (default `~/.neko/credentials.json`) |
+| `--config <dir>` | serve | Where the config file lookup starts |
+
+### Config file
+
+`neko.config.json` is looked up from the working directory upward to the filesystem root; if nothing is found, `~/.neko/neko.config.json` is used. It holds one JSON object; `$NAME` and `${NAME}` in string values are replaced from the environment, and a reference to an unset variable is an error.
+
+```json
+{
+	"defaultModel": { "provider": "deepseek", "modelId": "deepseek-flash" },
+	"thinkingLevel": "high",
+	"webSearch": { "provider": "tavily" },
+	"context": {
+		"compaction": { "enabled": true, "triggerPercent": 80, "keepRecentTokens": 20000 },
+		"pruning": { "enabled": false, "triggerPercent": 35, "keepRecent": 10 }
+	}
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `defaultModel` | `{ provider, modelId }` for new sessions, below `--model` and the default saved in the UI |
+| `thinkingLevel` | Thinking level for new sessions (default `high`, adjusted to what the model supports) |
+| `storagePath` | SQLite file, same as `--storage` |
+| `gateway.host`, `gateway.port`, `gateway.socketPath` | Gateway listen address, WebSocket port and Unix socket path (`socketPath: null` disables the Unix transport) |
+| `skills.marketUrl` | Skill market base URL (default `https://skill.kirineko.tech`) |
+| `webSearch.provider` | Initial search provider, `tavily` or `deepseek`; a choice saved in the UI wins |
+| `context.compaction` | `enabled`, `triggerPercent` (1–99), `keepRecentTokens`; unset fields keep the native policy |
+| `context.pruning` | `enabled`, `triggerPercent` (1–99), `keepRecent`, `minChars`, `minSavePercent`; off by default |
+| `shell.path` | Git Bash `bash.exe` on Windows (a WSL `bash.exe` is rejected) |
+
+### Data and environment
+
+- `~/.neko/neko.sqlite` — sessions, messages, documents and settings, including the values saved from the UIs (default model, enabled providers, context settings, search provider).
+- `~/.neko/credentials.json` — keys saved in the UI, in plain text for your user. Resetting a provider's key means removing it from the UI or this file.
+- `~/.neko/gateway-server-id`, socket and port files — gateway discovery used by the UIs; replaced automatically. `~/.neko/update-check.json` caches the last update check.
+- Environment variables: one per provider (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, …), `TAVILY_API_KEY` for web search, `NEKO_THEME` for the TUI theme.
+
+## Security
+
+The assistant runs commands and edits files: use it in projects you trust, and remember the workspace is not a sandbox for its file access. The web UI and the gateway listen on loopback by default; phone pairing, opening a workspace in an editor and the mobile API are only available from the machine itself, and remote access is refused. Keys never leave the machine except to the provider they belong to. Exports and backups can contain code, prompts and keys — quit every neko process before copying `~/.neko/`, and treat the copy as sensitive.
+
+## Upgrade
+
+Finish your work, quit every neko UI and service, run `neko update`, then start again. On Windows, `neko update` prints the manual steps: quit neko and run `bun add --global neko-harness@latest`.
+
+`/version` in the TUI and web **关于与更新** show the running version, check for updates and explain how to restart or reload. If the running version has no `neko update` command, reinstall with `bun add --global neko-harness`.
+
+## Development
+
+Source development needs Bun 1.4.2 (see `.bun-version`) and, on Windows, Git for Windows.
 
 ```bash
-export DEEPSEEK_API_KEY='你的 API Key'
+bun install --frozen-lockfile
+bun run neko tui        # TUI from source (starts a gateway)
+bun run neko web        # Web UI from source
+bun run neko serve      # gateway only
 ```
 
-界面保存的 Key 优先于环境变量，仅保存在本机，请勿分享。
+| Command | What it does |
+| --- | --- |
+| `bun run build` | tsc build of every workspace package (the web package also runs vite) |
+| `bun run test` | Bun test (`--conditions=neko-source --isolate`) |
+| `bun run check` | biome check plus type checks for the root and the web client |
+| `bun run check:write` | biome fixes plus the same type checks |
+| `bun run build:release` | build the `dist/` release bundle |
+| `bun run test:package` | pack into `artifacts/`, install in a temp directory and smoke test |
 
-默认只启用 DeepSeek。如需使用其他模型服务（OpenRouter、OpenCode Go / Zen、OpenAI、Google、Groq、Mistral、xAI、Together 等 32 个纯 API Key 服务），在 TUI `/login`（空格勾选）或 Web「设置 → 模型服务」中启用并配置 Key，也可用对应环境变量（如 `OPENROUTER_API_KEY`、`OPENCODE_API_KEY`，各服务的变量名显示在配置页中）。启用后模型会出现在 `/model` 与输入框的模型选择器里；取消启用不会删除已保存的 Key，但使用该服务的会话将无法发送新消息，直到重新启用或切换模型。`--model` 的格式为 `provider/modelId`，例如 `openrouter/anthropic/claude-haiku-4.5`。
+Layout:
 
-新会话的默认模型可在模型选择器中「设为默认」（Web 选择器行内操作、TUI `/model` 列表按 `d`，再操作一次取消），设置按用户保存、重启保留。优先级：`--model` > 保存的默认模型 > 配置文件 `defaultModel` > 内置 DeepSeek Flash。只影响之后新建的会话。
+- `packages/core` — session runtime, system prompt, tools and the provider catalog
+- `packages/gateway` — Chord / WebSocket gateway and the mobile API
+- `packages/tui`, `packages/web`, `packages/cli` — the two frontends and the `neko` command
+- `apps/mobile` — Flutter app (beta)
+- `openspec/` changes and specs, `docs/` protocol docs, `scripts/` build and release scripts
 
-## 日常操作
+Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `bun run check` and `bun run test` before handing work over.
 
-- **工作区**：默认使用启动目录。Web 侧栏可添加、切换项目，浏览文件、查看本次由助手产生的改动，并可在本机用 VS Code 或文件管理器打开。
-- **会话**：TUI 用 `/new` 新建、`/sessions` 切换；Web 使用侧栏。
-- **模型与思考强度**：TUI 用 `/model`（按服务分组、可输入过滤）和 `/think`；Web 点击输入框中的模型入口（按服务分组、可搜索）。
-- **文件与图片**：输入 `@` 引用文件或目录；TUI 用 `Ctrl+V` 粘贴图片（Windows 与 WSL 为 `Alt+V`，避免与终端自带粘贴冲突）；Web 支持粘贴、拖放和选择。识图能力取决于所选模型。
-- **上下文**：`/compact` 整理较长对话。默认沿用 pi-durable 的自动压缩策略（接近模型窗口上限才触发），可在 TUI `/context`、Web 设置页「上下文」或配置文件 `context.compaction` 调整触发百分比、保留量与开关，保存值优先。
-- **工具结果裁剪**（默认关闭）：配置 `context.pruning`，上下文占用过高时把较旧的工具结果在模型上下文中替换为占位，界面与导出仍显示原始结果，模型需要时会重新执行工具。阈值与保留量可在 `/context` 与设置页修改。
-- **复制与导出**：Web 在消息下方复制回答（不含思考过程），顶栏「导出」可选 Markdown、HTML、JSON 及是否包含思考过程；TUI 用 `/copy` 与 `/export [path] [--thinking]`，省略路径时写入工作区目录，不覆盖已有文件。
-- **技能**：输入 `/skill:` 选择；Web 可从侧栏进入技能市场，浏览和安装技能。
-- **子 agent**：助手会按任务需要委派探索、规划或编码工作，并等待结果后整合。Web 点委派卡片或侧栏、TUI 用 `/agents` 查看过程；可单独停止当前任务，保留后续接续能力。探索子 agent 的 Bash 命令需逐次批准。
-- **后台任务**：`npm run dev`、`uv run` 等长命令可由 `job` 工具转入后台（同时最多 4 个），结束时助手会收到回报并继续处理。Web 顶栏「任务」、TUI `/jobs` 查看实时输出或手动停止。重启后运行中的任务标记为已丢失，不会自动重跑。
-- **待办列表**：多步骤任务中，助手用 `todo` 工具维护一份有序待办，用户只读。Web 顶栏「待办 n/m」、TUI `/todos`、手机聊天页进度入口查看。列表随会话保存，重启与压缩后仍在，子 agent 不能使用。
-- **向你提问**：缺少必要决策时，助手用 `ask_user` 提问：可单选或多选（带「推荐」提示但不预选），可附加文字，也可只回文字或跳过。Web 在输入区上方、TUI 按 `Ctrl+O` 或 `/question`、手机在聊天页回答；选择需点「提交回答」（TUI 按 Enter）才生效。等待期间助手暂停，期间发送的消息仍排队到回答之后；问题与选项按纯文本显示。
-- **网页搜索**：默认使用 Tavily（无 Key 时为有限流的 keyless 模式，可在 Web「设置 → 联网搜索」或 TUI `/login` 中配置自己的 Key），也可改用 DeepSeek 搜索与抓取，复用你的 DeepSeek Key：TUI 用 `/search`、Web 在设置页「联网搜索」选择，或用配置 `webSearch.provider` 设置初始值。DeepSeek 搜索按成功请求计费（5 元 / 千次）。
-- **手机配对**：Web 设置页「手机配对」开启后用 App 扫码连接。手机需与电脑同一网络，系统防火墙放行所选端口；撤销设备、重新生成证书也在设置页完成。gateway 由 `neko web` 启动时，退出页面会同时停止手机入口，需要长期连接请改用 `neko serve` 或保持 TUI 运行。WSL 默认 NAT 网络下会自动经 `powershell.exe` 转发，无需 portproxy。
+## Documentation
 
-助手可以执行命令和修改文件，请在可信项目中使用；工作区目录不限制助手的文件访问范围。
+- [AGENTS.md](AGENTS.md) — architecture, modules and development conventions
+- [docs/README.zh-CN.md](docs/README.zh-CN.md) — this documentation in Chinese
+- [docs/mobile-api-v1.md](docs/mobile-api-v1.md) — mobile JSON-RPC protocol
+- [apps/mobile/README.md](apps/mobile/README.md) — building and releasing the Flutter app
+- [.github/RELEASING.md](.github/RELEASING.md) — release process
+- [openspec/](openspec/) — change proposals and specs
 
-## 常用设置
+## License
 
-```bash
-neko tui --cwd /path/to/project  # 指定项目目录，Web 也支持
-neko tui --theme dark            # 使用深色终端主题
-neko web --port 8333             # 更换网页端口
-neko web --no-open               # 启动后不自动打开浏览器
-```
-
-更多选项见 `neko tui --help` 和 `neko web --help`。
-
-会话与设置保存在 `~/.neko/`，退出不会删除。备份前请先退出所有 neko 界面及服务；备份可能包含 API Key，请妥善保管。
-
-## 升级
-
-先完成任务，退出正在运行的 neko 界面及服务，然后执行 `neko update`，完成后重新启动。
-
-Windows 上的 `neko update` 会显示手动升级指引：先退出 neko，再运行 `bun add --global neko-harness@latest`。
-
-TUI 输入 `/version`，或打开 Web「设置 → 关于与更新」，可查看版本、检查更新，并按提示重启或刷新。若当前版本没有 `neko update` 命令，可重新运行 `bun add --global neko-harness`。
-
-## 许可证
-
-[MIT](LICENSE)。基于 [Pi](https://github.com/earendil-works/pi) 生态构建。
+[MIT](LICENSE). Built on the [Pi](https://github.com/earendil-works/pi) ecosystem.
