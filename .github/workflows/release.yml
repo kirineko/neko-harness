@@ -81,21 +81,11 @@ jobs:
       # 包含读取 gateway 协议 fixtures 的 Dart 对拍测试。
       - run: flutter test
 
-  # NekoAI Android 测试版：每个 ABI 一个 job 并行构建。
+  # NekoAI Android 测试版：一次构建三个 ABI 的 release APK。
   # 暂无签名资料时 Gradle 退回 debug 签名，只用于测试安装，不同次构建的签名不一致，不能覆盖升级；
   # 后续接入 keystore（android/key.properties 由 CI secret 生成）与升级机制时在此处扩展。
   android-build:
     needs: preflight
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - abi: arm64-v8a
-            platform: android-arm64
-          - abi: armeabi-v7a
-            platform: android-arm
-          - abi: x86_64
-            platform: android-x64
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     env:
@@ -116,22 +106,28 @@ jobs:
           flutter-version: 3.47.7
           cache: true
       - run: flutter pub get --enforce-lockfile
-      - name: Build release APK
+      # Gradle 首次会下载 NDK，下载偶尔损坏（"Error reading Zip content"），重试即可。
+      - name: Build release APKs
         run: |
           IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
-          flutter build apk --release --split-per-abi \
-            --target-platform "${{ matrix.platform }}" \
-            --build-name="$VERSION" \
-            --build-number="$((MAJOR * 10000 + MINOR * 100 + PATCH))"
-      - name: Name the APK
+          for attempt in 1 2 3; do
+            flutter build apk --release --split-per-abi \
+              --build-name="$VERSION" \
+              --build-number="$((MAJOR * 10000 + MINOR * 100 + PATCH))" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "build attempt $attempt failed; retrying"
+            sleep 10
+          done
+      - name: Name the APKs
         working-directory: .
         run: |
           mkdir -p apk
-          cp "apps/mobile/build/app/outputs/flutter-apk/app-${{ matrix.abi }}-release.apk" \
-            "apk/NekoAI-v$VERSION-${{ matrix.abi }}.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "apps/mobile/build/app/outputs/flutter-apk/app-$abi-release.apk" "apk/NekoAI-v$VERSION-$abi.apk"
+          done
       - uses: actions/upload-artifact@v7
         with:
-          name: apk-${{ matrix.abi }}
+          name: apk
           path: apk/*.apk
           if-no-files-found: error
 
@@ -187,8 +183,7 @@ jobs:
           sparse-checkout: docs/releases
       - uses: actions/download-artifact@v8
         with:
-          pattern: apk-*
-          merge-multiple: true
+          name: apk
           path: apk
       - name: Create or update the GitHub Release
         run: |

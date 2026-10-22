@@ -6,6 +6,15 @@ import { Connection } from "@earendil-works/pi-env";
 import { rm } from "../../../test/temp-dir.ts";
 import { FILE_CACHE_LIMITS, WorkspaceFiles } from "../src/workspace-files.ts";
 
+function isAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 it("restarts a lost helper, invalidates other cached directories and keeps shared queries usable", async () => {
 	const root = await realpath(await mkdtemp(join(tmpdir(), "neko-helper-restart-")));
 	const files = new WorkspaceFiles();
@@ -27,6 +36,8 @@ it("restarts a lost helper, invalidates other cached directories and keeps share
 		expect(pids).toHaveLength(calls);
 		expect(new Set(pids).size).toBe(1);
 		process.kill(pids[0]!, "SIGTERM");
+		// Windows terminates the helper asynchronously; a request sent before the exit is seen fails once with "connection lost".
+		for (let n = 0; n < 100 && isAlive(pids[0]!); n++) await Bun.sleep(20);
 		await Bun.sleep(20);
 		await writeFile(join(root, "a/after.ts"), "");
 		await files.search(root, "b/", signal);
@@ -64,7 +75,17 @@ it("discovers files without fd, shares scans, refreshes and exposes incomplete t
 		expect((await files.search(root, "z/target", new AbortController().signal)).entries[0]?.path).toBe("z/target.ts");
 		await writeFile(join(root, "z/new.ts"), "new");
 		await Bun.sleep(50);
-		expect((await files.search(root, "z/new", new AbortController().signal)).entries[0]?.path).toBe("z/new.ts");
+		// The watcher can report the write while this refresh scan runs, which asks the caller to retry.
+		const fresh = async () => {
+			for (let n = 0; ; n++) {
+				try {
+					return await files.search(root, "z/new", new AbortController().signal);
+				} catch (error) {
+					if (n >= 5 || !(error instanceof Error) || !error.message.includes("changed")) throw error;
+				}
+			}
+		};
+		expect((await fresh()).entries[0]?.path).toBe("z/new.ts");
 		await expect(files.search(root, "../escape", new AbortController().signal)).rejects.toThrow();
 		const controller = new AbortController();
 		controller.abort();

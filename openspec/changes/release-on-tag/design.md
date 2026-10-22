@@ -48,7 +48,7 @@ on:
 ```
 preflight ─┬─ verify (ubuntu-26.04 | macos-latest | windows-latest)
            ├─ android-check
-           └─ android-build (arm64-v8a | armeabi-v7a | x86_64)
+           └─ android-build
                     └──────────── 全部成功 ──► publish (npm) ──► github-release
 ```
 
@@ -90,10 +90,9 @@ preflight 失败时其余 job 全部不执行，几秒内反馈。校验逻辑�
 ### D6 Android
 
 - `android-check`：`flutter pub get --enforce-lockfile` → `dart format --output=none --set-exit-if-changed .` → `flutter analyze` → `flutter test`。
-- `android-build`：按 ABI 拆成三个并行 job（`--split-per-abi --target-platform android-arm|android-arm64|android-x64`），各自只编一个 ABI 的 Dart AOT，产物文件名仍是 `app-<abi>-release.apk`。`--build-name` 取 preflight 版本，`--build-number = MAJOR*10000 + MINOR*100 + PATCH`（与现状一致）。Flutter 对 split APK 的 versionCode 偏移按 ABI 固定，与是否只编一个 ABI 无关。
-- 每个 build job 把 `NekoAI-v$VERSION-<abi>.apk` 上传为 artifact `apk-<abi>`。
-- 缓存：`setup-java` 开启 `cache: gradle`，`flutter-action` 保持 `cache: true`。注意缓存按 ref 隔离，tag 运行读不到别的 tag 保存的缓存，只能读到默认分支上保存的；因此缓存收益有限，不能当作提速依据。真正的提速来自 ABI 并行与测试并行，缓存只是可能的额外收益，是否保留由演练数据决定。
-- 备选：保持单个 job 串行构建三个 ABI。放弃：这是关键路径（约 345 秒），拆开是最大的单项提速。代价是多 2 个 runner 和 3 次 Gradle 启动。
+- `android-build`：单个 job 一次构建三个 ABI（`--split-per-abi`），产物重命名为 `NekoAI-v$VERSION-<abi>.apk` 后作为 artifact `apk` 上传。`--build-name` 取 preflight 版本，`--build-number = MAJOR*10000 + MINOR*100 + PATCH`（与现状一致）。构建步骤最多重试 3 次：演练中 Gradle 首次下载 NDK 时出现过一次 `Error reading Zip content`（下载损坏），重试即可恢复。
+- 曾尝试按 ABI 拆成三个并行 job：演练实测每个 job 仍要 260–360 秒，与串行构建三个 ABI 的约 345 秒相当。耗时主要是每个 job 的固定开销（Flutter 引擎产物与 NDK 28.2 下载、Gradle 依赖解析），而不是各 ABI 的编译，所以拆分没有收益，还让下载失败的概率乘以三。已改回单 job。
+- 缓存：`setup-java` 开启 `cache: gradle`，`flutter-action` 保持 `cache: true`。缓存按 ref 隔离，tag 运行读不到别的 tag 保存的缓存，只能读到默认分支上保存的；因此缓存收益有限，不能当作提速依据。Android 构建的关键路径（约 5–6 分钟）主要是上述固定开销，不在本变更内进一步优化。
 - Java 固定 Temurin 17（`setup-java@v6`），不使用镜像默认的 Java 25。
 
 ### D7 `publish`
@@ -131,8 +130,7 @@ preflight 失败时其余 job 全部不执行，几秒内反馈。校验逻辑�
 - [tag 已存在但验证失败，tag 指向的提交含问题] → 流程中写明：删 tag 重打（尚未发布过），或升补丁号；已发布到 npm 的版本不可覆盖。
 - [Windows 首次运行红] → 演练到全绿再打第一个 tag；D5 给出处置顺序与拆分条件。
 - [Ubuntu 26.04 镜像上工具链不兼容] → 单点回退到 `ubuntu-24.04`。
-- [缓存按 ref 隔离，tag 运行命中率低] → 不依赖缓存提速；ABI 并行才是主要手段。
-- [三个 ABI 并行 job 增加 runner 用量] → 公开仓库的 GitHub-hosted runner 免费；总墙钟时间下降。
+- [缓存按 ref 隔离，tag 运行命中率低] → 不依赖缓存提速；提速主要来自并行测试，以及 Android 与 verify 并行运行。
 - [`gh workflow run --ref <分支>` 对新旧文件差异的行为] → 演练的第一步就验证；若分支上的新文件未生效，退而求其次把 workflow 合入默认分支后再演练（合入本身不会触发任何发布，因为 tag 才触发）。
 - [演练无法验证 `publish` 与 `github-release`] → 这两个 job 的逻辑短且幂等；首次真实发版即其首次运行，所以 `preflight` 校验与 `publish` 的幂等保护要写得保守，RELEASING.md 说明失败后的恢复方式。不为此搭建一次性仓库或本地模拟环境。
 

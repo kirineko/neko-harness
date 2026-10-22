@@ -14,12 +14,12 @@ GitHub Actions 现在有三个 workflow，职责重叠、发版流程靠人工�
 
 - **只保留 `release.yml`**：删除 `ci.yml` 与 `mobile.yml`。文件名 `release.yml`、`npm` environment、`concurrency: npm-release` 保持不变（npm Trusted Publisher 绑定它们，不需要重新配置）。
 - **由 tag push 触发**：`push: tags: v*.*.*`，不再依赖手动创建 GitHub Release；移除 `release: published` 触发。保留 `workflow_dispatch`，语义改为「演练」：跑完整验证与 Android 构建，但不发布 npm、不创建 Release。验证逻辑只有一份，演练与正式发版走同一套 job。
-- **流水线结构**：`preflight`（tag 与 `package.json` 版本一致且为稳定版 `X.Y.Z`、tag 提交在 `main` 上、`docs/releases/vX.Y.Z.md` 存在）→ 并行的 `verify`（ubuntu / macOS / Windows 矩阵：`build:release`、`test`、`test:package`；`check` 只在 ubuntu 跑一次；ubuntu 上传 npm tarball）与 Android（`android-check`：format、analyze、test；`android-build`：按 ABI 三个并行 job 构建 release APK，APK 作为 artifact）→ 全部成功后 `publish`（npm，不可逆，放在验证之后）→ `github-release`（创建 Release 并上传 APK，幂等、可单独重跑）。
+- **流水线结构**：`preflight`（tag 与 `package.json` 版本一致且为稳定版 `X.Y.Z`、tag 提交在 `main` 上、`docs/releases/vX.Y.Z.md` 存在）→ 并行的 `verify`（ubuntu / macOS / Windows 矩阵：`build:release`、`test`、`test:package`；`check` 只在 ubuntu 跑一次；ubuntu 上传 npm tarball）与 Android（`android-check`：format、analyze、test；`android-build`：构建三个 ABI 的 release APK，APK 作为 artifact）→ 全部成功后 `publish`（npm，不可逆，放在验证之后）→ `github-release`（创建 Release 并上传 APK，幂等、可单独重跑）。
 - **发布说明进仓库**：每个版本提交 `docs/releases/vX.Y.Z.md`（沿用历史 Release 的结构化中文写法），`preflight` 缺文件即失败，`github-release` 用 `--notes-file` 使用它。
 - **新增 Windows 验证**：`windows-latest` 加入 `verify` 矩阵，直接作为发布门禁。先用 `workflow_dispatch` 演练到全绿，再打第一个 tag；演练中在 Windows 上暴露的测试或代码问题，在本变更内修复。演练只是本次接入的一次性动作，之后每次发版直接推 tag，Windows 验证随 tag 自动运行。
 - **消除 Node 20 警告**：`checkout` → v7、`setup-java` → v6、`upload-artifact` → v7、`download-artifact` → v8、`setup-node` → v7（均为 node24 运行时）；`setup-bun@v2` 与 `flutter-action@v2` 无警告，不动。
 - **Linux 镜像升级**：Linux job 显式使用 `ubuntu-26.04`，不用 `ubuntu-latest`；演练在 26.04 上出现工具链问题时回退 `ubuntu-24.04`。
-- **提速**：CI 使用 `bun run test` 的并行模式；Android 拆成「format + analyze + test」与按 ABI 并行的 APK 构建（关键路径从约 345 秒的串行三 ABI 构建缩短为单 ABI 构建）；Gradle 缓存按 ref 隔离，tag 运行命中率有限，不作为提速依据。效果用演练实测，不预设数字。
+- **提速**：CI 使用 `bun run test` 的并行模式；Android 拆成「format + analyze + test」与「APK 构建」两个并行 job（演练实测：按 ABI 再拆分没有收益，单个 job 的固定开销就占了大部分构建时间，故不拆）；Gradle 缓存按 ref 隔离，tag 运行命中率有限，不作为提速依据。效果用演练实测，不预设数字。
 - **配套**：新增 `.gitattributes`（`* text=auto eol=lf`），避免 Windows checkout 的 CRLF 使 `biome check` 失败；更新 `.github/RELEASING.md`（新发版流程、验证失败后删 tag 重打或升补丁号、演练用法、不再靠手动建 Release）与 `AGENTS.md` 中涉及 CI 的描述。
 
 不做：不改生产代码与应用协议；不加 push / PR 触发的检查（本地以 `bun run check`、`bun run test` 为准）；不发布 Windows 专用产物（npm 包与 APK 之外没有新产物）；不做 iOS 构建；不改 npm 发布方式（仍是 Trusted Publisher + provenance）；不改 Android 签名（仍用 debug 签名的测试版）；不固定 action 到 commit SHA。

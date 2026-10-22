@@ -45,7 +45,7 @@ armeabi-v7a 22.4MB → 23.9MB，x86_64 28.9MB → 30.3MB。
 ## 测试版 APK 与 CI 发版
 
 应用名 NekoAI（applicationId 仍为 `dev.neko.harness.mobile`，改名不影响已配对数据）。推送 tag `vX.Y.Z`（须与根
-`package.json` 版本一致）时，`.github/workflows/release.yml` 的 `android-check` 做格式、分析与测试，`android-build` 按 ABI 并行构建
+`package.json` 版本一致）时，`.github/workflows/release.yml` 的 `android-check` 做格式、分析与测试，`android-build` 构建
 `--release --split-per-abi`；全部验证通过后，`github-release` 把 `NekoAI-vX.Y.Z-<abi>.apk`（arm64-v8a / armeabi-v7a / x86_64）附到该
 Release。`versionName` 取自根版本，`versionCode` 为 `major*10000 + minor*100 + patch`（split APK 再按 ABI 加偏移）。
 

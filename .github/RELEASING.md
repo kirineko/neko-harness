@@ -20,7 +20,7 @@
 3. 提交到 `main`，然后 `git tag vX.Y.Z && git push origin main vX.Y.Z`。
 4. 流水线自动执行：
    - `preflight`：tag 等于 `v<package.json 版本>`、版本是稳定版、tag 提交在 `origin/main` 上、发布说明文件存在且非空。任何一条不满足，后续 job 都不运行。
-   - `verify`（Linux / macOS / Windows）：构建、`bun run test`、安装冒烟；`bun run check` 只在 Linux 跑。`android-check` 与三个并行的 `android-build`（每个 ABI 一个 job）同时运行。
+   - `verify`（Linux / macOS / Windows）：构建、`bun run test`、安装冒烟；`bun run check` 只在 Linux 跑。`android-check`（格式、分析、测试）与 `android-build`（三个 ABI 的 release APK）同时运行。
    - 以上全部通过后 `publish` 才上传 Linux 上验证过的同一份 tarball 到 npm `latest`（附 provenance）；版本已在 npm 上则跳过。
    - `github-release` 用发布说明创建 GitHub Release（标题 `neko-harness X.Y.Z`），附 `NekoAI-vX.Y.Z-<abi>.apk`；Release 已存在则更新说明并覆盖同名 APK。
 
