@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { clampWorkspaceWidth, WORKSPACE_WIDTH } from "../src/client/lib/layout.ts";
+import { clampSidePanelWidth, SIDE_PANEL_WIDTH } from "../src/client/lib/layout.ts";
 import {
 	agentLabel,
 	ancestorDirs,
@@ -9,12 +9,12 @@ import {
 	splitPath,
 } from "../src/client/lib/workspace.ts";
 
-it("clamps the sidebar width to its bounds", () => {
-	expect(clampWorkspaceWidth(100)).toBe(WORKSPACE_WIDTH.min);
-	expect(clampWorkspaceWidth(5000)).toBe(WORKSPACE_WIDTH.max);
-	expect(clampWorkspaceWidth(480.4)).toBe(480);
-	expect(WORKSPACE_WIDTH.min).toBeLessThan(WORKSPACE_WIDTH.initial);
-	expect(WORKSPACE_WIDTH.initial).toBeLessThan(WORKSPACE_WIDTH.max);
+it("clamps the side panel width to its bounds", () => {
+	expect(clampSidePanelWidth(100)).toBe(SIDE_PANEL_WIDTH.min);
+	expect(clampSidePanelWidth(5000)).toBe(SIDE_PANEL_WIDTH.max);
+	expect(clampSidePanelWidth(480.4)).toBe(480);
+	expect(SIDE_PANEL_WIDTH.min).toBeLessThan(SIDE_PANEL_WIDTH.initial);
+	expect(SIDE_PANEL_WIDTH.initial).toBeLessThan(SIDE_PANEL_WIDTH.max);
 });
 
 it("splits paths, lists ancestors and labels agents", () => {

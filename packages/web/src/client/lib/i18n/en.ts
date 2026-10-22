@@ -756,7 +756,7 @@ export const en: { readonly [K in keyof typeof zh]: string } = {
 	"topbar.jobsCount": " {count}",
 	"topbar.workspaceAria": "Workspace, {count} changed files",
 	"topbar.workspaceTitle": "Workspace: browse files and agent changes (read-only)",
-	"wspanel.resize": "Resize workspace panel",
+	"panel.resize": "Resize panel",
 	"wspanel.close": "Close workspace panel",
 	"wspanel.views": "Workspace views",
 	"wspanel.files": "Files",

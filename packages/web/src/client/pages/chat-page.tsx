@@ -17,7 +17,7 @@ import { useAwaitingTitle } from "../lib/awaiting-title";
 import { appActions, reportError } from "../lib/bootstrap";
 import { useT } from "../lib/i18n/index.ts";
 import { questionState, todoState } from "../lib/interactions";
-import { MOBILE_QUERY, WORKSPACE_WIDTH } from "../lib/layout";
+import { MOBILE_QUERY } from "../lib/layout";
 import { planState } from "../lib/plan-ui";
 import { storeActions, useNekoState } from "../lib/store";
 
@@ -88,7 +88,6 @@ export function ChatPage() {
 	useEffect(() => {
 		if (currentSessionId && view?.changes !== undefined) setWorkspaceSession(currentSessionId);
 	}, [currentSessionId, view?.changes]);
-	const [workspaceWidth, setWorkspaceWidth] = useState<number>(WORKSPACE_WIDTH.initial);
 	// The todo list opens in the page flow for the session it was opened in; an empty list has no panel at all.
 	const todoPanelId = useId();
 	const [todosOpenFor, setTodosOpenFor] = useState<string | null>(null);
@@ -249,8 +248,6 @@ export function ChatPage() {
 					open={workspaceOpen}
 					onClose={() => setRightFor(null)}
 					changes={view?.changes}
-					width={workspaceWidth}
-					onWidth={setWorkspaceWidth}
 				/>
 			)}
 		</div>

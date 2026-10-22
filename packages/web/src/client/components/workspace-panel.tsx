@@ -2,12 +2,13 @@ import type { WireChangeSummary } from "@neko-harness/gateway/contract";
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
 import { useT } from "../lib/i18n/index.ts";
-import { clampWorkspaceWidth, WORKSPACE_WIDTH } from "../lib/layout";
+import { usePanelWidth } from "../lib/panel-width.ts";
 import { useResource } from "../lib/use-resource.ts";
 import { ancestorDirs } from "../lib/workspace.ts";
 import { ChangeDetail, ChangesList } from "./changes-list";
 import { FileTree } from "./file-tree";
 import { FileViewer } from "./file-viewer";
+import { ResizeHandle } from "./resize-handle";
 
 type Tab = "files" | "changes";
 
@@ -21,17 +22,14 @@ export function WorkspacePanel({
 	open,
 	onClose,
 	changes,
-	width,
-	onWidth,
 }: {
 	sessionId: string;
 	open: boolean;
 	onClose: () => void;
 	changes: WireChangeSummary | undefined;
-	width: number;
-	onWidth: (width: number) => void;
 }) {
 	const t = useT();
+	const panelWidth = usePanelWidth();
 	const api = useCallback(() => appActions.workspace(sessionId), [sessionId]);
 	const [tab, setTab] = useState<Tab>("files");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
@@ -113,16 +111,6 @@ export function WorkspacePanel({
 		selectTab(event.key === "ArrowLeft" || event.key === "Home" ? "files" : "changes");
 	};
 
-	const drag = useRef<number | null>(null);
-	const onSeparatorKey = (event: KeyboardEvent) => {
-		const step =
-			event.key === "ArrowLeft" ? WORKSPACE_WIDTH.step : event.key === "ArrowRight" ? -WORKSPACE_WIDTH.step : 0;
-		if (step === 0) return;
-		event.preventDefault();
-		event.stopPropagation();
-		onWidth(clampWorkspaceWidth(width + step));
-	};
-
 	const fileCount = changes?.files ?? 0;
 	const tabClass = (name: Tab) =>
 		`focus-neko rounded-t-lg border-b-2 px-3 py-1.5 text-sm ${
@@ -138,8 +126,8 @@ export function WorkspacePanel({
 			aria-modal={narrow && open ? true : undefined}
 			aria-label={t("common.workspace")}
 			data-workspace-panel
-			style={{ "--workspace-w": `${width}px` } as CSSProperties}
-			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:relative lg:z-auto lg:w-[var(--workspace-w)] lg:max-w-[60vw] lg:shrink-0`}
+			style={{ "--panel-w": `${panelWidth.width}px` } as CSSProperties}
+			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:relative lg:z-auto lg:w-[var(--panel-w)] lg:max-w-[60vw] lg:shrink-0`}
 			onKeyDown={(e) => {
 				if (!e.currentTarget.contains(e.target as Node)) return;
 				if (e.key === "Tab" && window.innerWidth < 1024) {
@@ -164,30 +152,11 @@ export function WorkspacePanel({
 				}
 			}}
 		>
-			{/* biome-ignore lint/a11y/useSemanticElements: A focusable window splitter is the ARIA pattern for a resize handle. */}
-			<div
-				role="separator"
-				aria-orientation="vertical"
-				aria-label={t("wspanel.resize")}
-				aria-valuemin={WORKSPACE_WIDTH.min}
-				aria-valuemax={WORKSPACE_WIDTH.max}
-				aria-valuenow={width}
-				tabIndex={0}
-				className="focus-neko absolute inset-y-0 -left-1 z-10 hidden w-2 cursor-col-resize touch-none hover:bg-sakura-200 lg:block"
-				onKeyDown={onSeparatorKey}
-				onPointerDown={(e) => {
-					drag.current = e.pointerId;
-					e.currentTarget.setPointerCapture?.(e.pointerId);
-				}}
-				onPointerMove={(e) => {
-					if (drag.current === e.pointerId) onWidth(clampWorkspaceWidth(window.innerWidth - e.clientX));
-				}}
-				onPointerUp={() => {
-					drag.current = null;
-				}}
-				onPointerCancel={() => {
-					drag.current = null;
-				}}
+			<ResizeHandle
+				width={panelWidth.width}
+				onChange={panelWidth.set}
+				onCommit={panelWidth.commit}
+				onReset={panelWidth.reset}
 			/>
 			<div className="flex items-center justify-between border-b border-sakura-200 px-4 py-1.5">
 				<strong className="text-sm text-ink-800">{t("common.workspace")}</strong>

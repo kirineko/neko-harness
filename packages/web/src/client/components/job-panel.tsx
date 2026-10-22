@@ -1,9 +1,11 @@
 import { JobTail, summarizeJobs } from "@neko-harness/core/job-summary";
 import type { WireJobSummary } from "@neko-harness/gateway/contract";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
 import { useT } from "../lib/i18n/index.ts";
 import { atBottom, jobStatusText, sanitizeJobOutput } from "../lib/job-output";
+import { usePanelWidth } from "../lib/panel-width.ts";
+import { ResizeHandle } from "./resize-handle";
 
 const POLL_MS = 1000;
 
@@ -151,6 +153,7 @@ export function JobPanel({
 	const t = useT();
 	const [selected, setSelected] = useState<string | null>(null);
 	const [now, setNow] = useState(Date.now);
+	const panelWidth = usePanelWidth();
 	const closeButton = useRef<HTMLButtonElement>(null);
 	const panel = useRef<HTMLElement>(null);
 	const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 1023px)").matches);
@@ -196,7 +199,8 @@ export function JobPanel({
 			role={narrow ? "dialog" : "complementary"}
 			aria-modal={narrow && open ? true : undefined}
 			aria-label={t("job.panel")}
-			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:static lg:z-auto lg:w-[min(42vw,40rem)] lg:shrink-0`}
+			style={{ "--panel-w": `${panelWidth.width}px` } as CSSProperties}
+			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:relative lg:z-auto lg:w-[var(--panel-w)] lg:max-w-[60vw] lg:shrink-0`}
 			onKeyDown={(e) => {
 				if (!e.currentTarget.contains(e.target as Node)) return;
 				if (e.key === "Tab" && window.innerWidth < 1024) {
@@ -219,6 +223,12 @@ export function JobPanel({
 				}
 			}}
 		>
+			<ResizeHandle
+				width={panelWidth.width}
+				onChange={panelWidth.set}
+				onCommit={panelWidth.commit}
+				onReset={panelWidth.reset}
+			/>
 			<div className="flex items-center justify-between border-b border-sakura-200 px-4 py-1.5">
 				<strong className="text-sm text-ink-800">{t("job.panel")}</strong>
 				<button

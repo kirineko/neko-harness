@@ -1,12 +1,14 @@
 import type { ChatView, SubagentSummary } from "@neko-harness/core";
 import { downloadImage } from "@neko-harness/core/image-transfer";
 import { mergeTranscriptItems } from "@neko-harness/core/transcript-items";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appActions } from "../lib/bootstrap";
 import { useT } from "../lib/i18n/index.ts";
+import { usePanelWidth } from "../lib/panel-width.ts";
 import { useNekoState } from "../lib/store";
 import { ImageReaderContext } from "./image-gallery";
 import { MessageList } from "./message-list";
+import { ResizeHandle } from "./resize-handle";
 
 function Detail({
 	entry,
@@ -164,6 +166,7 @@ export function SubagentPanel({
 	target?: { taskId: number; nonce: number };
 }) {
 	const t = useT();
+	const panelWidth = usePanelWidth();
 	const [visited, setVisited] = useState<string[]>([]);
 	const closeButton = useRef<HTMLButtonElement>(null);
 	const panel = useRef<HTMLElement>(null);
@@ -205,7 +208,8 @@ export function SubagentPanel({
 			role={narrow ? "dialog" : "complementary"}
 			aria-modal={narrow && open ? true : undefined}
 			aria-label={t("subagent.title")}
-			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:static lg:z-auto lg:w-[min(42vw,40rem)] lg:shrink-0`}
+			style={{ "--panel-w": `${panelWidth.width}px` } as CSSProperties}
+			className={`${open ? "flex" : "hidden"} fixed inset-0 z-30 min-w-0 flex-col border-l border-sakura-200 bg-base lg:relative lg:z-auto lg:w-[var(--panel-w)] lg:max-w-[60vw] lg:shrink-0`}
 			onKeyDown={(e) => {
 				if (!e.currentTarget.contains(e.target as Node)) return;
 				if (e.key === "Tab" && window.innerWidth < 1024) {
@@ -228,6 +232,12 @@ export function SubagentPanel({
 				}
 			}}
 		>
+			<ResizeHandle
+				width={panelWidth.width}
+				onChange={panelWidth.set}
+				onCommit={panelWidth.commit}
+				onReset={panelWidth.reset}
+			/>
 			<div className="flex items-center justify-between border-b border-sakura-200 px-4 py-1.5">
 				<strong className="text-sm text-ink-800">{t("subagent.title")}</strong>
 				<button

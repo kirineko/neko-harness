@@ -93,6 +93,12 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 三套主题共用 `styles.css` 的同一批 token 名，只换值：`[data-theme]` 块覆盖色阶（深色主题色阶反相）、派生 token（渐变、`--on-accent`、`--focus-ring`、diff 色、阴影等）。组件里不要写 `text-white`、`bg-white` 等字面量色（二维码除外），用 token。阴影 token 在每个主题块写字面量（`var()` 会在 `:root` 上提前解析）。sakura 色阶在 `@theme` 与 `[data-theme="sakura"]` 各有一份，由 `theme-contrast.test.ts` 对拍；该测试同时按主题守护关键色对 WCAG 对比度，改色值时以它为准。
 - 聊天排版只作用于 `.bubble-user` / `.bubble-assistant` / `.md` 正文 / `.composer-input`，经 `--chat-*` 变量；代码块、工具卡、侧栏不变。字体只用系统字体栈，不打包字体文件。
 
+## Web 右侧面板宽度
+
+- 工作区栏、后台任务（jobs）、子 agent 三个右侧面板互斥、占同一位置，**共用一个宽度**：`SIDE_PANEL_WIDTH`（`lib/layout.ts`，320–960、默认 560、步进 24），任何情况下 CSS 另有 `lg:max-w-[60vw]` 兜底。偏好只存浏览器 localStorage `neko.panelWidth`，不经 gateway、不提升应用协议、不影响 TUI/移动端。
+- 权威是 `lib/panel-width.ts`（`parsePanelWidth` 逐项回落与夹取、`createPanelWidthStore`、`usePanelWidth`）：拖拽中 `set` 只改内存，结束才 `commit` 写盘（默认值删除存储项），`storage` 事件跨标签页同步，存储不可用时只在内存生效。
+- 调整柄是共用的 `components/resize-handle.tsx`（ARIA separator，指针拖拽 / ←→ / Home·End / 双击恢复默认，拖拽期间给 `<body>` 加 `is-resizing-panel`）；面板根元素必须是 `lg:relative` 且贴右缘，柄只在 `lg` 以上显示，窄屏抽屉不使用该宽度。新增右侧面板时复用它，不要另写拖拽逻辑。
+
 ## 界面语言
 
 - Web / TUI / 移动端各自支持 `zh`（默认）与 `en`，偏好互相独立，不经 gateway、不提升应用协议、core 不感知语言。Web：localStorage `neko.language`（`lib/language.ts`），设置页 `/settings/language`；TUI：`~/.neko/tui.json`（`language-settings.ts`），优先级 `--lang` > `NEKO_LANG` > 已保存 > `zh`，`/language` 即时切换，`neko tui --help` 随语言输出；移动端：`PrefsStore` 持久化 + Flutter gen-l10n（`apps/mobile/lib/l10n/app_zh.arb` / `app_en.arb`，生成物提交入库），选择器与主题选择器同处。

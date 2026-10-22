@@ -405,6 +405,52 @@ button {
 	color: inherit;
 }
 
+/* ---- 右侧面板调整柄（components/resize-handle.tsx）：8px 命中区，状态线只在悬停 / 聚焦 / 拖拽时出现 ---- */
+.resize-handle {
+	position: absolute;
+	inset-block: 0;
+	left: -4px;
+	z-index: 10;
+	width: 8px;
+	cursor: col-resize;
+	touch-action: none;
+	outline: none;
+}
+
+.resize-handle::after {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	left: 3px;
+	width: 2px;
+	background: transparent;
+	transition: background-color 120ms;
+}
+
+.resize-handle:hover::after {
+	background: var(--color-sakura-300);
+}
+
+.resize-handle:focus-visible::after,
+.resize-handle[data-dragging="true"]::after {
+	background: var(--focus-ring);
+}
+
+@media (forced-colors: active) {
+	.resize-handle:hover::after,
+	.resize-handle:focus-visible::after,
+	.resize-handle[data-dragging="true"]::after {
+		background: Highlight;
+	}
+}
+
+/* 拖拽期间指针可能划过任何内容：禁止选中并保持调宽光标。 */
+body.is-resizing-panel,
+body.is-resizing-panel * {
+	cursor: col-resize !important;
+	user-select: none !important;
+}
+
 /* ---- 聊天排版（外观设置，lib/appearance.ts）：只作用于气泡正文、Markdown 正文与输入框 ----
  * <html data-chat-font|size|weight|leading="…"> 选档；缺省 = 下面的默认值（与引入设置前一致）。
  * 字体仅用系统字体栈，不打包字体文件；代码块、工具卡、侧栏等不读这些变量。

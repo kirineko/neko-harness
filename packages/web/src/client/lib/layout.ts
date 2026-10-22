@@ -9,10 +9,12 @@ export const MOBILE_BREAKPOINT = 768;
 export const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT}px)`;
 export const MESSAGE_COLUMN_REM = 48;
 
-/** 右侧工作区栏桌面宽度（px）；窄屏（≤1023px）为抽屉，不使用该宽度。 */
-export const WORKSPACE_WIDTH = { min: 320, max: 720, initial: 480, step: 24 } as const;
-export const clampWorkspaceWidth = (width: number): number =>
-	Math.min(WORKSPACE_WIDTH.max, Math.max(WORKSPACE_WIDTH.min, Math.round(width)));
+/** 右侧面板（工作区 / 后台任务 / 子 agent）共用的桌面宽度（px）；窄屏（≤1023px）为抽屉，不使用该宽度。 */
+export const SIDE_PANEL_WIDTH = { min: 320, max: 960, initial: 560, step: 24 } as const;
+/** 面板在任何视口下都不超过视口宽度的这一比例（与面板 className 的 max-w-[60vw] 对拍）。 */
+export const SIDE_PANEL_MAX_VIEWPORT = 0.6;
+export const clampSidePanelWidth = (width: number): number =>
+	Math.min(SIDE_PANEL_WIDTH.max, Math.max(SIDE_PANEL_WIDTH.min, Math.round(width)));
 
 /**
  * 宽屏分层宽度分档（与 styles.css 的 .chat-column 媒体查询对拍，

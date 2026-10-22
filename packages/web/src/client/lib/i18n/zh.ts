@@ -725,7 +725,7 @@ export const zh = {
 	"topbar.jobsCount": " {count}",
 	"topbar.workspaceAria": "工作区，{count} 个改动文件",
 	"topbar.workspaceTitle": "工作区：浏览文件与 agent 的改动（只读）",
-	"wspanel.resize": "调整工作区栏宽度",
+	"panel.resize": "调整面板宽度",
 	"wspanel.close": "关闭工作区栏",
 	"wspanel.views": "工作区视图",
 	"wspanel.files": "文件",

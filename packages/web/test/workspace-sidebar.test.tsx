@@ -366,6 +366,39 @@ it("shares one right-hand slot between the workspace, jobs and subagent panels",
 	);
 });
 
+it("gives the workspace, jobs and subagent panels one shared, resizable width", async () => {
+	connect({ changes: summary(1, 0), jobs: [job] as never, agents: [subagent] as never });
+	const host = await mount();
+	const panels = () => [panel(host), panel(host, "子智能体"), panel(host, "后台任务")];
+	const widths = () => panels().map((aside) => aside?.style.getPropertyValue("--panel-w"));
+	for (const aside of panels()) {
+		expect(aside).not.toBeNull();
+		expect(aside!.querySelectorAll("[role=separator]")).toHaveLength(1);
+		expect(aside!.className).toContain("lg:w-[var(--panel-w)]");
+		expect(aside!.className).toContain("lg:max-w-[60vw]");
+		expect(aside!.className).toContain("lg:relative");
+	}
+	// The subagent panel holds the slot first; resizing it moves all three together.
+	expect(isOpen(panel(host, "子智能体"))).toBe(true);
+	const separator = panel(host, "子智能体")!.querySelector<HTMLElement>("[role=separator]")!;
+	await key(separator, "End");
+	expect(widths()).toEqual(["960px", "960px", "960px"]);
+	await openWorkspace(host);
+	expect(panel(host)!.querySelector("[role=separator]")!.getAttribute("aria-valuenow")).toBe("960");
+	await click(byText(host.querySelector("header"), "button", "任务 1"));
+	const jobSeparator = panel(host, "后台任务")!.querySelector<HTMLElement>("[role=separator]")!;
+	expect(jobSeparator.getAttribute("aria-valuenow")).toBe("960");
+	await key(jobSeparator, "Home");
+	expect(widths()).toEqual(["320px", "320px", "320px"]);
+	await key(jobSeparator, "ArrowLeft");
+	expect(widths()).toEqual(["344px", "344px", "344px"]);
+	// Double click restores the default for every panel.
+	await act(async () => {
+		jobSeparator.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+	});
+	expect(widths()).toEqual(["560px", "560px", "560px"]);
+});
+
 it("restores the previous tab and browsing position when the workspace panel is reopened after another panel", async () => {
 	connect({ changes: summary(1, 1), jobs: [job] as never });
 	handlers.changes = async () => ({
@@ -904,14 +937,18 @@ it("exposes tab semantics, an accessible entry and keyboard-resizable desktop wi
 	expect(entryButton(host)!.getAttribute("aria-expanded")).toBe("true");
 	// Width: bounded, adjustable from the keyboard.
 	const separator = aside.querySelector<HTMLElement>("[role=separator]")!;
-	const width = () => aside.style.getPropertyValue("--workspace-w");
-	expect(width()).toBe("480px");
+	const width = () => aside.style.getPropertyValue("--panel-w");
+	expect(width()).toBe("560px");
 	await key(separator, "ArrowLeft");
-	expect(width()).toBe("504px");
+	expect(width()).toBe("584px");
 	for (let i = 0; i < 20; i++) await key(separator, "ArrowLeft");
-	expect(width()).toBe("720px");
-	expect(separator.getAttribute("aria-valuenow")).toBe("720");
+	expect(width()).toBe("960px");
+	expect(separator.getAttribute("aria-valuenow")).toBe("960");
 	for (let i = 0; i < 40; i++) await key(separator, "ArrowRight");
+	expect(width()).toBe("320px");
+	await key(separator, "End");
+	expect(width()).toBe("960px");
+	await key(separator, "Home");
 	expect(width()).toBe("320px");
 	expect(isOpen(aside)).toBe(true);
 });
