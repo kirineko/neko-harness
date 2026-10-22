@@ -21,6 +21,8 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 # 或构建后：bun packages/cli/dist/main.js tui|web|serve（bin 名 neko）
 ```
 
+发版：推送 `vX.Y.Z` tag 触发唯一的 `.github/workflows/release.yml`（没有 push / PR CI），流程与发布说明（`docs/releases/vX.Y.Z.md`）见 `.github/RELEASING.md`。
+
 单个示例（需要 `DEEPSEEK_API_KEY`）：`bun --conditions=neko-source packages/core/examples/chat.ts`
 
 ## 约定

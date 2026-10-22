@@ -1,80 +1,72 @@
 name: Release
+# 推送 vX.Y.Z tag 即发版：验证（Linux/macOS/Windows + Android）全部通过后才发布 npm 并创建 GitHub Release。
+# 手动运行（workflow_dispatch）是演练：只验证和构建，不发布任何东西。
+# npm Trusted Publisher 绑定本文件名与 `npm` environment，二者不要改名。
 on:
-  release:
-    types: [published]
-  # 仅补构建 Android APK：用所选分支代码构建，并上传到已存在的 tag 对应的 Release。
+  push:
+    tags: ['v*.*.*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag to attach the Android APKs to (e.g. v0.4.0)'
-        required: true
 permissions:
   contents: read
 concurrency:
-  group: npm-release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  verify:
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
+  preflight:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.4.x'
-      - name: Verify stable release tag
-        run: |
-          bun -e 'const p = await Bun.file("package.json").json(); if (!/^\d+\.\d+\.\d+$/.test(p.version) || process.env.GITHUB_REF_NAME !== `v${p.version}`) process.exit(1)'
+      - id: check
+        run: bun scripts/release-preflight.ts
+
+  verify:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.x'
       - run: bun install --frozen-lockfile
       - run: bun run build:release
-      - run: bun run check
+      # 格式与类型检查不随平台变化，只在 Linux 上跑一次。
+      - if: matrix.os == 'ubuntu-26.04'
+        run: bun run check
       - run: bun run test
       - run: bun run test:package
-      - uses: actions/upload-artifact@v4
+      - if: matrix.os == 'ubuntu-26.04'
+        uses: actions/upload-artifact@v7
         with:
           name: npm-package
           path: artifacts/*.tgz
           if-no-files-found: error
-  publish:
-    if: github.event_name == 'release'
-    needs: verify
-    runs-on: ubuntu-latest
-    environment: npm
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-          path: artifacts
-      # Node/npm is only the registry uploader; builds/tests/runtime use Bun 1.4.x.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm publish ./artifacts/*.tgz --access public --tag latest --provenance
-  # NekoAI Android 测试版：发版时构建 release 变体并附到该 GitHub Release。
-  # 暂无签名资料时 Gradle 退回 debug 签名，只用于测试安装，不同次构建的签名不一致，不能覆盖升级；
-  # 后续接入 keystore（android/key.properties 由 CI secret 生成）与升级机制时在此处扩展。
-  android:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+  android-check:
+    needs: preflight
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - name: Verify stable release tag
-        working-directory: .
-        run: |
-          VERSION="$(node -p 'require("./package.json").version')"
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$RELEASE_TAG" == "v$VERSION" ]] || { echo "tag $RELEASE_TAG does not match package version $VERSION"; exit 1; }
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -86,19 +78,125 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
+      # 包含读取 gateway 协议 fixtures 的 Dart 对拍测试。
       - run: flutter test
-      - name: Build release APKs
+
+  # NekoAI Android 测试版：每个 ABI 一个 job 并行构建。
+  # 暂无签名资料时 Gradle 退回 debug 签名，只用于测试安装，不同次构建的签名不一致，不能覆盖升级；
+  # 后续接入 keystore（android/key.properties 由 CI secret 生成）与升级机制时在此处扩展。
+  android-build:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            platform: android-arm64
+          - abi: armeabi-v7a
+            platform: android-arm
+          - abi: x86_64
+            platform: android-x64
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.7
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Build release APK
         run: |
           IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
           flutter build apk --release --split-per-abi \
+            --target-platform "${{ matrix.platform }}" \
             --build-name="$VERSION" \
             --build-number="$((MAJOR * 10000 + MINOR * 100 + PATCH))"
-      - name: Upload APKs to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Name the APK
+        working-directory: .
         run: |
-          mkdir -p dist
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            cp "build/app/outputs/flutter-apk/app-$abi-release.apk" "dist/NekoAI-v$VERSION-$abi.apk"
-          done
-          gh release upload "$RELEASE_TAG" dist/*.apk --clobber --repo "$GITHUB_REPOSITORY"
+          mkdir -p apk
+          cp "apps/mobile/build/app/outputs/flutter-apk/app-${{ matrix.abi }}-release.apk" \
+            "apk/NekoAI-v$VERSION-${{ matrix.abi }}.apk"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apk-${{ matrix.abi }}
+          path: apk/*.apk
+          if-no-files-found: error
+
+  # 不可逆步骤：只在所有验证都通过后才执行。
+  publish:
+    if: github.event_name == 'push'
+    needs: [preflight, verify, android-check, android-build]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    environment: npm
+    concurrency:
+      group: npm-release
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: artifacts
+      # Node/npm is only the registry uploader; builds/tests/runtime use Bun 1.4.x.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
+      # 版本已在 npm 上（例如整条流水线被重跑）时跳过，避免把已成功的发布变成失败。
+      - name: Publish to npm
+        run: |
+          if npm view "neko-harness@$VERSION" version >/dev/null 2>&1; then
+            echo "neko-harness@$VERSION is already on npm; skipping publish"
+            exit 0
+          fi
+          npm publish ./artifacts/*.tgz --access public --tag latest --provenance
+
+  # 可单独重跑：只依赖 artifact 与已提交的发布说明。
+  github-release:
+    if: github.event_name == 'push'
+    needs: [preflight, publish]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: docs/releases
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: apk
+      - name: Create or update the GitHub Release
+        run: |
+          TAG="v$VERSION"
+          NOTES="docs/releases/$TAG.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "neko-harness $VERSION" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" --verify-tag --title "neko-harness $VERSION" --notes-file "$NOTES"
+          fi
+          gh release upload "$TAG" apk/*.apk --clobber

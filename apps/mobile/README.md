@@ -44,14 +44,14 @@ armeabi-v7a 22.4MB → 23.9MB，x86_64 28.9MB → 30.3MB。
 
 ## 测试版 APK 与 CI 发版
 
-应用名 NekoAI（applicationId 仍为 `dev.neko.harness.mobile`，改名不影响已配对数据）。发布 GitHub Release（标签 `vX.Y.Z`，须与根
-`package.json` 版本一致）时，`.github/workflows/release.yml` 的 `android` 任务会构建 `--release --split-per-abi` 并把
-`NekoAI-vX.Y.Z-<abi>.apk`（arm64-v8a / armeabi-v7a / x86_64）附到该 Release；`versionName` 取自根版本，`versionCode` 为
-`major*10000 + minor*100 + patch`。
+应用名 NekoAI（applicationId 仍为 `dev.neko.harness.mobile`，改名不影响已配对数据）。推送 tag `vX.Y.Z`（须与根
+`package.json` 版本一致）时，`.github/workflows/release.yml` 的 `android-check` 做格式、分析与测试，`android-build` 按 ABI 并行构建
+`--release --split-per-abi`；全部验证通过后，`github-release` 把 `NekoAI-vX.Y.Z-<abi>.apk`（arm64-v8a / armeabi-v7a / x86_64）附到该
+Release。`versionName` 取自根版本，`versionCode` 为 `major*10000 + minor*100 + patch`（split APK 再按 ABI 加偏移）。
 
 当前是**测试版**：没有签名资料时用 debug 签名构建，每次 CI 构建的签名不同，不能覆盖升级，新版本需卸载重装并重新扫码配对；也没有应用内升级机制。
-后续在 `android` 任务中用 CI secret 生成 `android/key.properties`（见下文「发布签名」）并接入升级机制。`mobile.yml` 仍在 PR/main 上做
-格式、分析、测试和 release 变体编译验证。
+后续在 `android-build` 任务中用 CI secret 生成 `android/key.properties`（见下文「发布签名」）并接入升级机制。仓库没有 push / PR 的
+CI，本机改动 `apps/mobile` 后自行运行 `dart format`、`flutter analyze`、`flutter test`。
 
 ## TLS 信任与发版
 
