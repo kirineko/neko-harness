@@ -16,17 +16,17 @@
 
 ## 3. 演练（需要推送分支，开始前向用户确认）
 
-- [ ] 3.1 在新分支（如 `ci/release-on-tag`）提交以上改动，经用户确认后推送，执行 `gh workflow run release.yml --ref ci/release-on-tag`；验证：`gh run list --workflow release.yml` 出现该运行，且使用的是分支上的新 workflow（含 `preflight` job）。若旧文件被采用，改走设计 Risks 中的备选路径
-- [ ] 3.2 修复 Linux（ubuntu-26.04）与 macOS 上暴露的问题；若 26.04 上出现 Bun / Flutter / Android 工具链问题，整体回退到 `ubuntu-24.04` 并在 design.md D9 记录原因。验证：这两个平台 `verify`、`android-check`、`android-build` 全绿，APK artifact 三个文件名正确
-- [ ] 3.3 修复 Windows 上暴露的问题，按设计 D5 的顺序处置（改测试 → 修源码并加回归测试 → 修复量过大则暂停询问是否拆分）；每次修复在本机跑相关测试及 `bun run check`。验证：`verify` 的 windows-latest 全绿，且在 macOS / ubuntu 上无回归
-- [ ] 3.4 记录演练数据：各 job 耗时、`bun run test` 在各 runner 上的耗时、并行测试是否稳定（至少连续两次绿）、artifact 上传下载（v7/v8）正常；写入 `openspec/changes/release-on-tag/baseline.md`，与旧流程（verify 182s/201s、android 482s）对比。验证：文件存在并含上述数字
-- [ ] 3.5 `verify` 与 Android job 中确认没有 Node 20 弃用警告；验证：`gh run view <id> --json jobs` 对应的 annotations 中不再出现 "Node.js 20" 与 `ubuntu-latest` 迁移提示
+- [x] 3.1 在新分支（如 `ci/release-on-tag`）提交以上改动，经用户确认后推送，执行 `gh workflow run release.yml --ref ci/release-on-tag`；验证：`gh run list --workflow release.yml` 出现该运行，且使用的是分支上的新 workflow（含 `preflight` job）。若旧文件被采用，改走设计 Risks 中的备选路径
+- [x] 3.2 修复 Linux（ubuntu-26.04）与 macOS 上暴露的问题；若 26.04 上出现 Bun / Flutter / Android 工具链问题，整体回退到 `ubuntu-24.04` 并在 design.md D9 记录原因。验证：这两个平台 `verify`、`android-check`、`android-build` 全绿，APK artifact 三个文件名正确
+- [x] 3.3 修复 Windows 上暴露的问题，按设计 D5 的顺序处置（改测试 → 修源码并加回归测试 → 修复量过大则暂停询问是否拆分）；每次修复在本机跑相关测试及 `bun run check`。验证：`verify` 的 windows-latest 全绿，且在 macOS / ubuntu 上无回归
+- [x] 3.4 记录演练数据：各 job 耗时、`bun run test` 在各 runner 上的耗时、并行测试是否稳定（至少连续两次绿）、artifact 上传下载（v7/v8）正常；写入 `openspec/changes/release-on-tag/baseline.md`，与旧流程（verify 182s/201s、android 482s）对比。验证：文件存在并含上述数字
+- [x] 3.5 `verify` 与 Android job 中确认没有 Node 20 弃用警告；验证：`gh run view <id> --json jobs` 对应的 annotations 中不再出现 "Node.js 20" 与 `ubuntu-latest` 迁移提示
 
 ## 4. 合入与收尾
 
-- [ ] 4.1 `bun run check` 通过（仓库内如有代码/测试改动），并在改动涉及测试时跑一次 `bun run test`；验证：命令退出 0
+- [x] 4.1 `bun run check` 通过（仓库内如有代码/测试改动），并在改动涉及测试时跑一次 `bun run test`；验证：命令退出 0
 - [ ] 4.2 经用户确认后合入 main（含此前未推送的提交）并推送；验证：推送后不触发任何 workflow（tag 才触发），`gh workflow list` 只有 Release
-- [ ] 4.3 自查发版路径：对照 RELEASING.md 走一遍「发布说明 → tag → 推送」的前置条件，确认 `preflight` 的每条校验在文档里都有对应说明；验证：文档与 `release.yml` 逐项对应
+- [x] 4.3 自查发版路径：对照 RELEASING.md 走一遍「发布说明 → tag → 推送」的前置条件，确认 `preflight` 的每条校验在文档里都有对应说明；验证：文档与 `release.yml` 逐项对应
 
 ## Workflow follow-up
 

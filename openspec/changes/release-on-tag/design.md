@@ -111,6 +111,8 @@ preflight 失败时其余 job 全部不执行，几秒内反馈。校验逻辑�
 
 - 版本：`actions/checkout@v7`、`setup-java@v6`、`upload-artifact@v7`、`download-artifact@v8`、`setup-node@v7`；`setup-bun@v2`、`flutter-action@v2` 不变。均已确认为当前最新大版本；v4→v7/v8 的 artifact 行为（命名唯一、隐藏文件默认不上传、`merge-multiple`）由演练确认。
 - Linux 使用 `ubuntu-26.04` 标签。已知不确定项：Bun 1.4.2、Flutter 3.47.7 / Android toolchain 在新镜像上的表现。出现镜像相关失败时，把文件内的 `ubuntu-26.04` 整体替换为 `ubuntu-24.04`（纯文本替换，不引入条件逻辑）。
+- 演练结果：`ubuntu-26.04` 上 Bun、Flutter、Android 工具链均正常，不需要回退。
+- `setup-bun` 的 `bun-version: 1.4.x` 会随上游补丁版本浮动（演练当天解析为刚发布的 1.4.4，暴露了 node:http upgrade socket 的行为变化）。保持浮动：发版前能及早发现上游变化，且仓库 `engines` 允许 `>=1.4.2 <1.5.0`；问题出现时在测试侧适配或临时收紧版本。
 - 暂不固定 action 的 commit SHA，沿用主版本标签（proposal 的不做项）。
 
 ### D10 `.gitattributes` 与发布说明
