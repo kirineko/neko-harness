@@ -210,11 +210,11 @@ it(
 			const runtime = await open(
 				dir,
 				[
-					call({ action: "start", command: "sleep 1.5; echo boom; exit 2" }),
+					call({ action: "start", command: "sleep 0.9; echo boom; exit 2" }),
 					answer(`${"waiting ".repeat(40)}`),
 					answer("handled the report"),
 				],
-				40,
+				80,
 			);
 			try {
 				const first = await runtime.submit("go");

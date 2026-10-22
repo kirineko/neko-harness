@@ -209,7 +209,7 @@ it("reclaims a stale lock but never a fresh one", async () => {
 	paths.push(dir);
 	const path = join(dir, "credentials.json");
 	const lockPath = `${path}.lock`;
-	const store = new FileCredentialStore(path);
+	const store = new FileCredentialStore(path, {}, { lockAttempts: 3, lockRetryMs: 5 });
 	await writeFile(lockPath, "");
 	const old = new Date(Date.now() - 60_000);
 	await utimes(lockPath, old, old);

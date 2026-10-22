@@ -11,7 +11,8 @@
 		"build": "bun run --cwd packages/core build && bun run --cwd packages/gateway build && bun run --cwd packages/tui build && bun run --cwd packages/web build && bun run --cwd packages/cli build",
 		"check": "bun --bun run biome check . && bun --bun run tsc --noEmit && bun run --cwd packages/web check:client",
 		"check:write": "bun --bun run biome check --write . && bun --bun run tsc --noEmit && bun run --cwd packages/web check:client",
-		"test": "bun test --conditions=neko-source --isolate",
+		"test": "bun test --conditions=neko-source --parallel",
+		"test:serial": "bun test --conditions=neko-source --isolate",
 		"neko": "bun --conditions=neko-source packages/cli/src/main.ts",
 		"build:release": "bun run build && bun scripts/build-release.ts",
 		"test:package": "bun scripts/test-package.ts"

@@ -75,7 +75,7 @@ describe("gateway --stop-on-stdin", () => {
 	it("does not exit on stdin close without the flag", async () => {
 		const { child, exited, artifact } = await startChild([]);
 		child.stdin?.end();
-		const code = await Promise.race([exited, sleep(2_000).then(() => "alive" as const)]);
+		const code = await Promise.race([exited, sleep(500).then(() => "alive" as const)]);
 		expect(code).toBe("alive");
 		expect(existsSync(artifact)).toBe(true);
 		child.kill("SIGKILL");

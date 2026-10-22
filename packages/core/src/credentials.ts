@@ -5,6 +5,11 @@ import type { Credential, CredentialStore } from "@earendil-works/pi-ai";
 import { type RenameWithRetryDeps, renameWithRetry } from "./rename-with-retry.ts";
 
 const STALE_LOCK_MS = 30_000;
+const LOCK_ATTEMPTS = 100;
+const LOCK_RETRY_MS = 25;
+
+/** Lock-wait overrides; production uses the defaults, tests shrink them to avoid real waiting. */
+export type CredentialLockOptions = { lockAttempts?: number; lockRetryMs?: number };
 
 export {
 	CREDENTIAL_PROVIDERS,
@@ -32,9 +37,13 @@ export const DEFAULT_CREDENTIALS_PATH = join(homedir(), ".neko", "credentials.js
 export class FileCredentialStore implements CredentialStore {
 	readonly path: string;
 	readonly #renameDeps: RenameWithRetryDeps;
-	constructor(path = DEFAULT_CREDENTIALS_PATH, renameDeps: RenameWithRetryDeps = {}) {
+	readonly #lockAttempts: number;
+	readonly #lockRetryMs: number;
+	constructor(path = DEFAULT_CREDENTIALS_PATH, renameDeps: RenameWithRetryDeps = {}, lock: CredentialLockOptions = {}) {
 		this.path = path;
 		this.#renameDeps = renameDeps;
+		this.#lockAttempts = lock.lockAttempts ?? LOCK_ATTEMPTS;
+		this.#lockRetryMs = lock.lockRetryMs ?? LOCK_RETRY_MS;
 	}
 	async #read(): Promise<Record<string, Credential>> {
 		try {
@@ -67,7 +76,7 @@ export class FileCredentialStore implements CredentialStore {
 				lock = await open(lockPath, "wx", 0o600);
 				break;
 			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempt >= 100)
+				if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempt >= this.#lockAttempts)
 					throw new Error("Credential storage is busy or unavailable.");
 				// A holder that died mid-write leaves the lock behind; a live write finishes in milliseconds.
 				if (!reclaimed) {
@@ -78,7 +87,7 @@ export class FileCredentialStore implements CredentialStore {
 						continue;
 					}
 				}
-				await new Promise((resolve) => setTimeout(resolve, 25));
+				await new Promise((resolve) => setTimeout(resolve, this.#lockRetryMs));
 			}
 		}
 		const temporary = `${this.path}.${crypto.randomUUID()}.tmp`;

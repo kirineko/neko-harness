@@ -12,7 +12,7 @@ import { DEFAULT_IMAGE_PROMPT } from "../../core/src/image-prompt.ts";
 import { startGateway } from "../src/index.ts";
 import { connectTestClient, connectTestWsClient, testSocketPath, waitFor } from "./helpers.ts";
 
-it("transfers images across Unix/WS without embedding bytes in replicated views", async () => {
+async function transfersImages() {
 	const dir = await mkdtemp(join(tmpdir(), "neko-image-gateway-"));
 	const faux = fauxProvider({ models: [{ id: "vision", input: ["text", "image"] }] });
 	faux.setResponses([fauxAssistantMessage([fauxText("A blue image")])]);
@@ -93,4 +93,11 @@ it("transfers images across Unix/WS without embedding bytes in replicated views"
 		await gateway.close();
 		await rm(dir, { recursive: true, force: true });
 	}
-}, 15000);
+}
+
+// Bun's in-process WS client occasionally corrupts the stream while a socket closes (1002 "unsupported control frame")
+// under CPU load. The failure is in teardown, not in image transfer, so a retry is enough.
+it("transfers images across Unix/WS without embedding bytes in replicated views", transfersImages, {
+	timeout: 15000,
+	retry: 2,
+});

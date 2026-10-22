@@ -9,7 +9,9 @@ neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui 1
 ```bash
 bun install --frozen-lockfile # 安装（按 bun.lock 安装）
 bun run build              # tsc 构建全部 workspace 包（web 含 vite build）
-bun run test               # Bun test（源码条件 + 文件隔离）
+bun run test               # Bun test（源码条件 + 多 worker 并行，隐含文件隔离）
+bun run test:serial        # 原顺序执行（--isolate）；怀疑并行引入的失败或时序问题时先用它复现
+                           # 不要在同一台机器上同时跑两套完整测试：部分用例用 ps 按固定标记判断进程，会互相干扰
 bun run check              # biome check + 根/Web 客户端类型检查
 bun run check:write        # biome 修复 + 根/Web 客户端类型检查
 
