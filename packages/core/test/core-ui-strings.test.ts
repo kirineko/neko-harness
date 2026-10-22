@@ -7,6 +7,7 @@ import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/index.ts";
 import { PLAN_BUSY } from "../src/plan.ts";
 import { projectChatView } from "../src/projection.ts";
+import { WORKSPACE_BUSY, WORKSPACE_LAST, WORKSPACE_UNKNOWN } from "../src/workspace.ts";
 
 interface Sample {
 	id: string;
@@ -18,6 +19,7 @@ const fixture = JSON.parse(readFileSync(new URL("./fixtures/core-ui-strings.json
 	systemRows: Sample[];
 	toolNotes: Sample[];
 	errors: { code: string; text: string }[];
+	webErrors: { code: string; text: string }[];
 };
 
 const USAGE = { totalTokens: 10, input: 8, output: 2, cacheRead: 0, cacheWrite: 0 };
@@ -100,7 +102,10 @@ describe("core UI strings contract", () => {
 			await disabled.close();
 		}
 		messages.set("PLAN_BUSY", PLAN_BUSY);
-		for (const { code, text } of fixture.errors) {
+		messages.set("WORKSPACE_UNKNOWN", WORKSPACE_UNKNOWN);
+		messages.set("WORKSPACE_LAST", WORKSPACE_LAST);
+		messages.set("WORKSPACE_BUSY", WORKSPACE_BUSY);
+		for (const { code, text } of [...fixture.errors, ...fixture.webErrors]) {
 			expect(messages.get(code)).toBe(text);
 			expect(text.startsWith(`${code}:`)).toBe(true);
 		}

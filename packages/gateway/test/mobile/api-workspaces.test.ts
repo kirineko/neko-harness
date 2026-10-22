@@ -189,6 +189,30 @@ describe("mobile api v1 workspaces and sessions", () => {
 		}
 	});
 
+	it("drops a removed workspace from the list and notifies the device", async () => {
+		const { gateway, port } = await startEnabledGateway(dir);
+		try {
+			const desktop = await connectTestClient(gateway);
+			await desktop.workspaces.add({ path: workspaceA });
+			await desktop.workspaces.add({ path: workspaceB });
+			const device = await pairDevice(gateway, port);
+			const client = await connectMobileHello(port, device);
+			const changed = nextNotification(client, "workspaces.changed");
+			await desktop.workspaces.remove({ path: workspaceB });
+			await changed;
+			const result = await rpc<{ workspaces: Array<{ root: string }> }>(client, "workspaces.list", null);
+			const roots = result.workspaces.map((workspace) => workspace.root);
+			expect(roots).toContain(workspaceA);
+			expect(roots).not.toContain(workspaceB);
+			await expect(rpc(client, "sessions.list", { workspace: workspaceB })).rejects.toThrow("invalid_params");
+			client.close(1000, "done");
+			await client.waitForClose();
+			await desktop.close();
+		} finally {
+			await gateway.close();
+		}
+	});
+
 	it("rejects unknown workspaces for list and create without falling back", async () => {
 		const { gateway, port } = await startEnabledGateway(dir);
 		try {

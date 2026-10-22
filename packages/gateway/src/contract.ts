@@ -670,13 +670,14 @@ const page = Type.Object({
 	next: nullableString,
 });
 export const NekoWorkspaces = contract("neko.workspaces", {
-	version: 1,
+	version: 2,
 	input: Type.Object({}, { additionalProperties: false }),
 	variants: {
 		ready: {
 			state: { state: WorkspaceStateSchema },
 			methods: {
 				add: rpc(Type.Object({ path: str }, { additionalProperties: false }), WorkspaceSummarySchema),
+				remove: rpc(Type.Object({ path: str }, { additionalProperties: false }), Type.Null()),
 				browse: rpc(browse, page),
 			},
 		},

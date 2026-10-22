@@ -8,6 +8,7 @@ type Fixture = {
 	systemRows: { id: string; text: string }[];
 	toolNotes: { id: string; text: string }[];
 	errors: { code: string; text: string }[];
+	webErrors: { code: string; text: string }[];
 };
 
 const fixture = JSON.parse(
@@ -48,7 +49,7 @@ it("keeps tool names with unusual characters intact", () => {
 });
 
 it("maps every error code of the core fixture and keeps the code prefix", () => {
-	for (const { code, text } of fixture.errors) {
+	for (const { code, text } of [...fixture.errors, ...fixture.webErrors]) {
 		for (const t of [zh, en]) {
 			const mapped = localizeCoreError(text, t);
 			expect(mapped.startsWith(`${code}: `)).toBe(true);

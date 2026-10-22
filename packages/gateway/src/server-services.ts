@@ -234,6 +234,7 @@ export async function createNekoServerServices(options: {
 										"app.neko.activity",
 										"app.neko.conversation",
 										"app.neko.workspaces",
+										"app.neko.workspaces-removed",
 										"pi.agent",
 									].includes(change.record.kind)),
 						)
@@ -274,6 +275,11 @@ export async function createNekoServerServices(options: {
 		state: shared(self).workspaces,
 		browse: (input) => browseWorkspaces(input),
 		add: (input) => serialize(() => runtime.addWorkspace(input.path)),
+		remove: (input) =>
+			serialize(async () => {
+				await runtime.removeWorkspace(input.path);
+				return null;
+			}),
 	}));
 	host.serve(NekoCredentials, (_input, _principal, self) => {
 		const hub = shared(self);

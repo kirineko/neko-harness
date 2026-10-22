@@ -1,5 +1,5 @@
 {
-	"$comment": "Exact English strings core sends to the frontends. Pinned by packages/core/test/core-ui-strings.test.ts; Web, TUI and Mobile map them to the UI language.",
+	"$comment": "Exact English strings core sends to the frontends (webErrors: only the Web client shows and maps them). Pinned by packages/core/test/core-ui-strings.test.ts; Web, TUI and Mobile map them to the UI language.",
 	"status": [
 		{ "id": "thinking", "text": "Thinking..." },
 		{ "id": "running", "text": "Running bash...", "params": { "tool": "bash" } },
@@ -14,5 +14,10 @@
 		{ "code": "PROVIDER_DISABLED", "text": "PROVIDER_DISABLED: OpenRouter is not enabled. Enable it in /login or Web settings, or switch model." },
 		{ "code": "PROVIDER_KEY_REQUIRED", "text": "PROVIDER_KEY_REQUIRED: Configure a DeepSeek API key in /login or Web settings." },
 		{ "code": "PLAN_BUSY", "text": "PLAN_BUSY: Wait for the current run to finish or stop it first." }
+	],
+	"webErrors": [
+		{ "code": "WORKSPACE_UNKNOWN", "text": "WORKSPACE_UNKNOWN: This workspace is not in the list." },
+		{ "code": "WORKSPACE_LAST", "text": "WORKSPACE_LAST: Keep at least one workspace." },
+		{ "code": "WORKSPACE_BUSY", "text": "WORKSPACE_BUSY: Stop or finish the running sessions of this workspace first." }
 	]
 }

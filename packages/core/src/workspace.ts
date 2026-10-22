@@ -43,3 +43,8 @@ export function accessibleWorkspace(directory: string): string {
 	}
 	return path;
 }
+
+/** Rejections of `removeWorkspace`; `CODE: text` like the other core errors, mapped to the UI language by the frontends. */
+export const WORKSPACE_UNKNOWN = "WORKSPACE_UNKNOWN: This workspace is not in the list.";
+export const WORKSPACE_LAST = "WORKSPACE_LAST: Keep at least one workspace.";
+export const WORKSPACE_BUSY = "WORKSPACE_BUSY: Stop or finish the running sessions of this workspace first.";

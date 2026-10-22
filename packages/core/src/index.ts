@@ -169,7 +169,14 @@ export {
 	type WindowsShellSummary,
 	windowsShellMessage,
 } from "./windows-shell.ts";
-export { accessibleWorkspace, type NekoWorkspace, normalizeWorkspace } from "./workspace.ts";
+export {
+	accessibleWorkspace,
+	type NekoWorkspace,
+	normalizeWorkspace,
+	WORKSPACE_BUSY,
+	WORKSPACE_LAST,
+	WORKSPACE_UNKNOWN,
+} from "./workspace.ts";
 export {
 	BROWSE_LIMITS,
 	type DirChildren,

@@ -105,3 +105,75 @@ it("shares independent workspace additions over Unix and WS and keeps them after
 		await cleanup(target);
 	}
 });
+
+it("removes a workspace for every client, hides its sessions and rejects invalid removals", async () => {
+	const target = await makeGateway();
+	const unix = await connectTestClient(target);
+	const ws = await connectTestWsClient(target);
+	try {
+		const root = await realpath(target.dir);
+		const other = join(root, "other");
+		await mkdir(other);
+		await unix.workspaces.add({ path: root });
+		await unix.workspaces.add({ path: other });
+		const session = await ws.management.create({ cwd: other });
+		await waitFor(
+			() => unix.directory.state.value?.sessions.some((s) => s.id === session.id) === true,
+			"session listed",
+		);
+
+		await expect(unix.workspaces.remove({ path: join(root, "missing") })).rejects.toThrow("WORKSPACE_UNKNOWN:");
+		await unix.workspaces.remove({ path: other });
+		await waitFor(
+			() => ws.workspaces.state.value?.workspaces.some((w) => w.path === other) === false,
+			"removal broadcast",
+		);
+		await waitFor(
+			() => unix.directory.state.value?.sessions.every((s) => s.id !== session.id) === true,
+			"session hidden",
+		);
+		await expect(ws.workspaces.remove({ path: other })).rejects.toThrow("WORKSPACE_UNKNOWN:");
+
+		const remaining = ws.workspaces.state.value?.workspaces.map((w) => w.path) ?? [];
+		expect(remaining.length).toBeGreaterThan(0);
+		for (const path of remaining.slice(1)) await ws.workspaces.remove({ path });
+		await waitFor(() => ws.workspaces.state.value?.workspaces.length === 1, "only one workspace left");
+		await expect(ws.workspaces.remove({ path: remaining[0]! })).rejects.toThrow("WORKSPACE_LAST:");
+		expect(ws.workspaces.state.value?.workspaces.map((w) => w.path)).toEqual([remaining[0]!]);
+
+		await unix.workspaces.add({ path: other });
+		await waitFor(
+			() => ws.directory.state.value?.sessions.some((s) => s.id === session.id) === true,
+			"session restored",
+		);
+	} finally {
+		await unix.close();
+		await ws.close();
+		await cleanup(target);
+	}
+});
+
+it("serializes concurrent remove and add of the same workspace", async () => {
+	const target = await makeGateway();
+	const unix = await connectTestClient(target);
+	const ws = await connectTestWsClient(target);
+	try {
+		const root = await realpath(target.dir);
+		const other = join(root, "other");
+		await mkdir(other);
+		await unix.workspaces.add({ path: other });
+		await Promise.allSettled([unix.workspaces.remove({ path: other }), ws.workspaces.add({ path: other })]);
+		const paths = (unix.workspaces.state.value?.workspaces ?? []).map((w) => w.path);
+		expect(paths.filter((path) => path === other).length).toBeLessThanOrEqual(1);
+		await waitFor(
+			() =>
+				JSON.stringify(ws.workspaces.state.value?.workspaces.map((w) => w.path)) ===
+				JSON.stringify(unix.workspaces.state.value?.workspaces.map((w) => w.path)),
+			"clients agree",
+		);
+	} finally {
+		await unix.close();
+		await ws.close();
+		await cleanup(target);
+	}
+});

@@ -117,6 +117,9 @@ export class GatewayConnection {
 	#connected = false;
 	#incompatible = false;
 	#operating = false;
+	/** The current workspace was in the last workspace list seen; a later list without it means it was removed. */
+	#workspaceListed = false;
+	#workspaceGone = false;
 	#initialized = false;
 	constructor(options: GatewayConnectionOptions) {
 		this.#options = options;
@@ -220,6 +223,17 @@ export class GatewayConnection {
 			await this.#select(item.path, undefined, epoch);
 		});
 	}
+	/** Removing the current workspace moves to the next one only after the server accepted; a rejection changes nothing. */
+	async removeWorkspace(path: string): Promise<void> {
+		await this.#operate(async (epoch) => {
+			const next = this.#workspaces!.state.value.workspaces.find((w) => w.path !== path);
+			await this.#workspaces!.remove({ path });
+			this.#assert(epoch);
+			if (path !== this.#workspace) return;
+			this.#workspaceGone = false;
+			if (next) await this.#select(next.path, undefined, epoch);
+		});
+	}
 	async browse(options: NekoBrowseOptions): Promise<NekoDirectoryPage> {
 		if (!this.#connected || !this.#workspaces) throw new Error(getT()("gw.notConnected"));
 		return this.#workspaces.browse(options);
@@ -254,6 +268,7 @@ export class GatewayConnection {
 			else await this.#clear(epoch);
 			this.#assert(epoch);
 			this.#workspace = path;
+			this.#workspaceListed = this.#workspaces?.state.value.workspaces.some((w) => w.path === path) === true;
 			this.#options.events.onWorkspace(path);
 		} catch (error) {
 			// A failed attach cannot leave an old chat eligible for submissions.
@@ -293,8 +308,18 @@ export class GatewayConnection {
 		this.#assert(epoch);
 	}
 	#reconcile(): void {
-		if (!this.managementReady || !this.#currentSessionId || this.#sessions.some((s) => s.id === this.#currentSessionId))
-			return;
+		if (!this.managementReady) return;
+		if (this.#workspaceGone) {
+			const listed = this.#workspaces?.state.value.workspaces ?? [];
+			const next = listed[0];
+			if (listed.some((w) => w.path === this.#workspace)) this.#workspaceGone = false;
+			else if (next) {
+				this.#workspaceGone = false;
+				void this.#operate((epoch) => this.#select(next.path, undefined, epoch)).catch((e) => this.#error(e));
+				return;
+			}
+		}
+		if (!this.#currentSessionId || this.#sessions.some((s) => s.id === this.#currentSessionId)) return;
 		void this.#operate((epoch) => this.#select(this.#workspace, undefined, epoch)).catch((e) => this.#error(e));
 	}
 	async configure(change: NekoConversationChange): Promise<void> {
@@ -535,7 +560,14 @@ export class GatewayConnection {
 		this.#unsub.push(directory.state.subscribe(publish));
 		this.#unsub.push(
 			this.#workspaces.state.subscribe((value) => {
-				if (epoch === this.#epoch) this.#options.events.onWorkspaces(value);
+				if (epoch !== this.#epoch) return;
+				this.#options.events.onWorkspaces(value);
+				const listed = value.workspaces.some((w) => w.path === this.#workspace);
+				if (!listed && this.#workspaceListed) {
+					this.#workspaceGone = true;
+					this.#reconcile();
+				}
+				this.#workspaceListed = listed;
 			}),
 		);
 		if (!this.#initialized) {

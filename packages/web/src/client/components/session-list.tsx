@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { appActions, reportError } from "../lib/bootstrap";
 import { workspaceSessions } from "../lib/gateway";
+import { localizeCoreError } from "../lib/i18n/core-text.ts";
 import { formatDateTime, formatRelative } from "../lib/i18n/format.ts";
 import { useT } from "../lib/i18n/index.ts";
 import { sessionStatusText } from "../lib/interactions";
@@ -22,6 +23,9 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 	const [picker, setPicker] = useState(false);
 	const [archive, setArchive] = useState<string | null>(null);
 	const [archiveError, setArchiveError] = useState("");
+	const [removal, setRemoval] = useState<string | null>(null);
+	const [removalError, setRemovalError] = useState("");
+	const [removalBusy, setRemovalBusy] = useState(false);
 	const [query, setQuery] = useState("");
 	const disabled = state.phase !== "ready" || state.operating;
 	const sessions = workspaceSessions(state.sessions, state.workspaceRoot).filter((s) => matchesSession(s, query));
@@ -32,6 +36,13 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 			})
 			.catch(reportError);
 	};
+	const launchRoot = state.webInfo?.launchRoot;
+	const removeReason = (path: string): string | null =>
+		path === launchRoot
+			? t("sessions.removeWorkspaceLaunch")
+			: state.workspaces.length <= 1
+				? t("sessions.removeWorkspaceLast")
+				: null;
 	if (!open) return null;
 	const content = (
 		<>
@@ -207,30 +218,54 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 						<>
 							<div className="section-label">{t("common.workspace")}</div>
 							<div className="workspace-options">
-								{state.workspaces.map((w) => (
-									<button
-										type="button"
-										className={`workspace-option ${w.path === state.workspaceRoot ? "is-active" : ""}`}
-										key={w.path}
-										title={w.path}
-										onClick={() => {
-											setMenu(null);
-											setQuery("");
-											action(appActions.selectWorkspace(w.path));
-										}}
-									>
-										<Icon name="folder" />
-										<span>
-											<strong>{folderName(w.path)}</strong>
-											<small>{w.path}</small>
-										</span>
-										{w.path === state.workspaceRoot && (
-											<span role="img" aria-label={t("sessions.currentWorkspace")}>
-												✓
-											</span>
-										)}
-									</button>
-								))}
+								{state.workspaces.map((w) => {
+									const reason = removeReason(w.path);
+									return (
+										<div className={`workspace-row ${w.path === state.workspaceRoot ? "is-active" : ""}`} key={w.path}>
+											<button
+												type="button"
+												className="workspace-option"
+												title={w.path}
+												onClick={() => {
+													setMenu(null);
+													setQuery("");
+													action(appActions.selectWorkspace(w.path));
+												}}
+											>
+												<Icon name="folder" />
+												<span>
+													<strong>{folderName(w.path)}</strong>
+													<small>{w.path}</small>
+												</span>
+												{w.path === state.workspaceRoot && (
+													<span role="img" aria-label={t("sessions.currentWorkspace")}>
+														✓
+													</span>
+												)}
+											</button>
+											<button
+												type="button"
+												className="icon-btn row-remove"
+												disabled={disabled || reason !== null}
+												aria-label={t("sessions.removeWorkspaceAria", { name: folderName(w.path) })}
+												aria-describedby={reason ? `workspace-remove-${w.path}` : undefined}
+												title={reason ?? t("sessions.removeWorkspace")}
+												onClick={() => {
+													setRemoval(w.path);
+													setRemovalError("");
+													setMenu(null);
+												}}
+											>
+												<Icon name="trash" />
+											</button>
+											{reason && (
+												<span className="sr-only" id={`workspace-remove-${w.path}`}>
+													{reason}
+												</span>
+											)}
+										</div>
+									);
+								})}
 							</div>
 							<button
 								type="button"
@@ -248,6 +283,62 @@ export function SessionList({ open, onClose }: { open: boolean; onClose: () => v
 				</Popover>
 			)}
 			{picker && <WorkspacePicker initialPath={state.workspaceRoot} onClose={() => setPicker(false)} />}
+			{removal && (
+				<Modal
+					title={t("sessions.removeWorkspace")}
+					locked={state.operating || removalBusy}
+					onClose={() => setRemoval(null)}
+				>
+					<div className="confirm-body">
+						<p>
+							<strong>{folderName(removal)}</strong>
+						</p>
+						<p className="path-text" title={removal}>
+							{removal}
+						</p>
+						<ul className="confirm-notes">
+							<li>{t("sessions.removeWorkspaceNoFiles")}</li>
+							<li>
+								{t("sessions.removeWorkspaceHidden", { count: workspaceSessions(state.sessions, removal).length })}
+							</li>
+							<li>{t("sessions.removeWorkspaceRestore")}</li>
+						</ul>
+						{removalError && (
+							<p role="alert" className="error-text">
+								{removalError}
+							</p>
+						)}
+						<div className="actions">
+							<button
+								type="button"
+								className="btn-outline"
+								disabled={state.operating || removalBusy}
+								onClick={() => setRemoval(null)}
+							>
+								{t("common.cancel")}
+							</button>
+							<button
+								type="button"
+								className="btn-danger"
+								disabled={state.operating || removalBusy}
+								onClick={() => {
+									setRemovalBusy(true);
+									setRemovalError("");
+									void appActions
+										.removeWorkspace(removal)
+										.then(() => setRemoval(null))
+										.catch((e: unknown) =>
+											setRemovalError(localizeCoreError(e instanceof Error ? e.message : String(e))),
+										)
+										.finally(() => setRemovalBusy(false));
+								}}
+							>
+								{t("sessions.confirmRemoveWorkspace")}
+							</button>
+						</div>
+					</div>
+				</Modal>
+			)}
 			{archive && (
 				<Modal title={t("sessions.archive")} locked={state.operating} onClose={() => setArchive(null)}>
 					<div className="confirm-body">

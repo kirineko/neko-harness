@@ -36,7 +36,7 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 凭据 / provider 目录是 core 的纯模块 `credential-providers.ts`（子路径 `@neko-harness/core/credential-providers`，前端共用）：`MODEL_PROVIDERS`（Pi 1.3.0 里纯 API Key 的 32 个 provider，封闭集合）与 `SEARCH_CREDENTIAL_PROVIDERS`（Tavily）。目录的 `envVar` 由 `provider-settings.test.ts` 与 Pi 的 `checkAuth` 对账，升级 Pi 时该测试失败即需显式更新目录；Azure / Anthropic / Cloudflare / Bedrock / Vertex / OAuth 类 provider 不在范围内。
 - 运行时注册目录内全部 Pi provider，但只有「已启用」的才可选：启用集合存于 `app.neko.provider-settings` 文档（缺省仅 deepseek，DeepSeek 锁定不可取消），`listSelectableModels()` 只含已启用 provider 的模型并带 `available`（有无凭据），`listModels()` 仍是全部模型供按会话模型查找（投影、图片能力）。经 `options.providers` 注入的非目录 provider（测试 faux）不受启用 / Key 门禁。
 - 受理输入、`compact`、子 agent 启动与会话命名统一走 `guardProvider`：先 `PROVIDER_DISABLED`，再 `PROVIDER_KEY_REQUIRED`（`CODE: 文案` 前缀，网关原样透传）。`--model` / `defaultModel` 指向未启用 provider 不阻止启动，只在提交时拦截。自动压缩 `triggerPercent` 的基准窗口只统计已启用 provider 的模型。
-- 网关 `neko.credentials` v2：`statuses` 是按 provider id 的映射（模型 provider 带 `enabled`），`setEnabled` 修改启用；`neko.models.list` 返回可选模型。应用协议 8。Web 在凭据状态变化后重拉模型列表；设置页：`/settings` = 模型服务，`/settings/search` = 联网搜索（Tavily Key 与搜索服务选择）。
+- 网关 `neko.credentials` v2：`statuses` 是按 provider id 的映射（模型 provider 带 `enabled`），`setEnabled` 修改启用；`neko.models.list` 返回可选模型。应用协议 9。Web 在凭据状态变化后重拉模型列表；设置页：`/settings` = 模型服务，`/settings/search` = 联网搜索（Tavily Key 与搜索服务选择）。
 - 新会话模型的解析链：会话级显式指定 > CLI `--model`（core 的 `options.modelOverride`）> UI 保存的默认模型（`app.neko.default-model` 文档，`{ model: NekoModelRef | null }`）> 配置文件 `defaultModel`（`options.model`）> 内置 `deepseek/deepseek-flash`。网关 `neko.default-model` 契约发布 `{ effective, source: cli|saved|config|default }` 并提供 `set`/`clear`（校验目录内已知模型且 provider 已启用，不查 Key）；Web 模型选择器与 TUI `/model`（`d` 键）对可选模型「设为默认」，无 Key 条目不可设。保存值的 provider 后被取消启用时不回退，新会话照取、提交时 `PROVIDER_DISABLED`。
 
 ## 提示词与技能
@@ -72,6 +72,12 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 失效：`NekoSession.abort()`（归档经它）与离开 plan 模式把待批准计划置 `cancelled`，普通输入受理成功后、或 `submit_plan` 时 inbox 已有排队用户输入，计划置 `superseded`（保持 plan 模式）。重启不取消待批准计划。
 - 只读三层：`tools.remove`；`neko-plan` 扩展的 `beforeTool`（edit/write/job 与不安全 bash）；`wrapTool(createBashTool())` 执行端复核。bash 判定是纯模块 `plan-bash.ts` 的 `isSafeCommand`（引号外切段、白名单正则 + 危险参数/内容拒绝，白名单外一律拒绝；是护栏不是沙箱）。`submit_plan` / `neko-plan` 属 `MAIN_ONLY_*`；`subagent` 工具在 plan 模式拒绝启动与继续 coder。
 - 可选能力：`ChatView.plan`（`{ mode, revision, current }`，缺省 = 旧网关）、`SessionSummary.awaitingPlan`、方法 `planGet` / `planRespond` / `planMode`（不在 `configure` 的 change 里）；前端用 `planClient`（`client-session.ts`，`PLAN_UNSUPPORTED`）探测，不提升应用协议。Web 只用 `/plan` 切换并显示模式标识，TUI 用 `/plan`（有待批准时打开计划面板）与 `Shift+Tab`；新计划到达时与问题面板同规则自动打开（`PlanDock.autoOpen`，复用 `canAutoOpen`，每个版本只一次）；移动端只能查看与决定，不能进入 plan 模式。「取消并退出计划模式」不是新决定，只是对 `planMode("normal")`（`setPlanMode` → `PlanService.setMode` 把待批准计划置 `cancelled`）的快捷入口：Web 计划卡片、TUI 计划面板（`X` 键）、移动 `plan.exit`（只能退出，幂等）都复用它。计划的 `steps` / `note` 是 Markdown（Web `Markdown` 经 DOMPurify、Dart `NekoMarkdown`、TUI pi-tui `Markdown`，控制字符先剥离），`title` / `feedback` 仍按纯文本。限制集中在 `PLAN_LIMITS`（`interactions.ts`），改数值需同步 spec 与 Dart 契约。
+
+## 工作区登记与移除
+
+- 工作区目录是 `app.neko.workspaces` 文档；移除用独立墓碑文档 `app.neko.workspaces-removed`（`{ paths }`），两者同一次提交修改。`registerWorkspace(path, explicit)`：隐式（启动扫描会话 cwd、`forkConversation`）遇到墓碑路径直接跳过，显式（`addWorkspace`、带 cwd 的 `createConversation`、启动时的 `defaultCwd`）会清除墓碑再登记。新增登记入口必须经它并选对 `explicit`。
+- `NekoRuntime.removeWorkspace(path)` 只改登记，不删文件、不归档会话；校验顺序 `WORKSPACE_UNKNOWN:` → `WORKSPACE_LAST:`（至少保留一个）→ `WORKSPACE_BUSY:`（该目录非归档会话 `running` / `awaiting` / `awaitingPlan`）。`listConversations()` 跳过墓碑工作区下的会话（经已知 id 的 `getConversation` 仍可取），重新显式添加即恢复。错误文案常量在 `workspace.ts`，英文由 `core-ui-strings.json` 的 `webErrors` 钉住，只有 Web 映射（TUI / 移动端不提供移除入口）。
+- 网关 `neko.workspaces` 契约 v2 新增 `remove`（经 `serialize` 与 `add` 串行），应用协议 9；不提供旧网关降级。Web：工作区切换器每行有移除按钮（hover / 聚焦显示，触屏常驻），确认框后调用 `GatewayConnection.removeWorkspace`；Web 启动目录（`webInfo.launchRoot`）和仅剩的一个工作区置灰不可移除。移除当前工作区成功后切到目录里的下一个，失败不切换；别的客户端移除了当前工作区时（`#workspaceGone`）自动切到第一个。移动端沿用 `workspaces.changed` 回退逻辑，无需改动。
 
 ## 工作区浏览与改动
 

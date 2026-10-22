@@ -52,6 +52,7 @@ export async function fetchGatewayInfo(): Promise<GatewayInfo> {
 			webVersion: info.webVersion,
 			installedVersion: info.installedVersion,
 			gatewaySpawned: info.gatewaySpawned === true,
+			launchRoot: info.workspaceRoot,
 		});
 	return info;
 }
@@ -239,6 +240,9 @@ export const appActions = {
 	},
 	addWorkspace(path: string): Promise<void> {
 		return requireConnection().addWorkspace(path);
+	},
+	removeWorkspace(path: string): Promise<void> {
+		return requireConnection().removeWorkspace(path);
 	},
 	browse(options: NekoBrowseOptions) {
 		return requireConnection().browse(options);

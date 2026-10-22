@@ -169,3 +169,96 @@ it("rejects archived sessions without new metadata and preserves storage", async
 		await runtime.close();
 	}
 });
+
+const paths = async (runtime: Awaited<ReturnType<typeof createNekoRuntime>>) =>
+	(await runtime.listWorkspaces()).map((w) => w.path).sort();
+
+it("removes a workspace without touching its sessions and restores it by adding it again", async () => {
+	const a = directory(),
+		b = directory();
+	const faux = fauxProvider();
+	const options = { storagePath: join(a, "remove.sqlite"), cwd: a, providers: [faux.provider], model };
+	let runtime = await createNekoRuntime(options);
+	try {
+		const inB = await runtime.createConversation({ cwd: b });
+		const archivedInB = await runtime.createConversation({ cwd: b });
+		await runtime.archiveConversation(archivedInB.id);
+		await expect(runtime.removeWorkspace(join(a, "missing"))).rejects.toThrow("WORKSPACE_UNKNOWN:");
+		await runtime.removeWorkspace(b);
+		expect(await paths(runtime)).toEqual([a]);
+		expect((await runtime.listConversations()).some((s) => s.id === inB.id)).toBe(false);
+		await expect(runtime.removeWorkspace(b)).rejects.toThrow("WORKSPACE_UNKNOWN:");
+		await expect(runtime.removeWorkspace(a)).rejects.toThrow("WORKSPACE_LAST:");
+
+		// Implicit sources (startup scan, fork) must not bring it back.
+		await runtime.close();
+		runtime = await createNekoRuntime(options);
+		expect(await paths(runtime)).toEqual([a]);
+		expect((await runtime.listConversations()).some((s) => s.id === inB.id)).toBe(false);
+		const forked = await runtime.forkConversation(inB.id);
+		expect(await paths(runtime)).toEqual([a]);
+		expect((await runtime.listConversations()).some((s) => s.id === forked.id)).toBe(false);
+
+		await runtime.addWorkspace(b);
+		expect(await paths(runtime)).toEqual([a, b].sort());
+		const restored = (await runtime.listConversations()).map((s) => s.id);
+		expect(restored).toContain(inB.id);
+		expect(restored).toContain(forked.id);
+		expect(restored).not.toContain(archivedInB.id);
+	} finally {
+		await runtime.close();
+	}
+}, 30000);
+
+it("re-registers a removed workspace when a session is created there or the runtime starts there", async () => {
+	const a = directory(),
+		b = directory();
+	const faux = fauxProvider();
+	const options = { storagePath: join(a, "explicit.sqlite"), providers: [faux.provider], model };
+	let runtime = await createNekoRuntime({ ...options, cwd: a });
+	try {
+		await runtime.addWorkspace(b);
+		await runtime.removeWorkspace(b);
+		await runtime.createConversation({ cwd: b });
+		expect(await paths(runtime)).toEqual([a, b].sort());
+		await runtime.removeWorkspace(b);
+		await runtime.close();
+		runtime = await createNekoRuntime({ ...options, cwd: b });
+		expect(await paths(runtime)).toEqual([a, b].sort());
+	} finally {
+		await runtime.close();
+	}
+}, 30000);
+
+it("refuses to remove a workspace with a running session", async () => {
+	const a = directory(),
+		b = directory();
+	const faux = fauxProvider();
+	const runtime = await createNekoRuntime({
+		storagePath: join(a, "busy.sqlite"),
+		cwd: a,
+		providers: [faux.provider],
+		model,
+	});
+	try {
+		const session = await runtime.createConversation({ cwd: b });
+		await runtime.harness.commit(async (tx) => {
+			(await tx.doc(SessionMetadataDoc, session.id)).status = "running";
+		}, runtime.context);
+		await expect(runtime.removeWorkspace(b)).rejects.toThrow("WORKSPACE_BUSY:");
+		expect(await paths(runtime)).toEqual([a, b].sort());
+		await runtime.harness.commit(async (tx) => {
+			const doc = await tx.doc(SessionMetadataDoc, session.id);
+			doc.status = "idle";
+			doc.awaitingPlan = true;
+		}, runtime.context);
+		await expect(runtime.removeWorkspace(b)).rejects.toThrow("WORKSPACE_BUSY:");
+		await runtime.harness.commit(async (tx) => {
+			(await tx.doc(SessionMetadataDoc, session.id)).awaitingPlan = false;
+		}, runtime.context);
+		await runtime.removeWorkspace(b);
+		expect(await paths(runtime)).toEqual([a]);
+	} finally {
+		await runtime.close();
+	}
+}, 30000);

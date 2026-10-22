@@ -133,6 +133,9 @@ import {
 	type NekoWorkspace,
 	normalizeWorkspace,
 	savedWorkspace,
+	WORKSPACE_BUSY,
+	WORKSPACE_LAST,
+	WORKSPACE_UNKNOWN,
 } from "./workspace.ts";
 import { type DirChildren, type FileContent, WorkspaceFiles } from "./workspace-files.ts";
 
@@ -378,6 +381,19 @@ const WorkspacesDoc = defineDoc<{ items: NekoWorkspace[] }>({
 	initial: () => ({ items: [] }),
 });
 
+/**
+ * Workspaces the user removed. Implicit registration (startup scan, fork) skips these paths and their conversations
+ * are hidden from the directory; an explicit add clears the entry, which restores them.
+ */
+const RemovedWorkspacesDoc = defineDoc<{ paths: string[] }>({
+	kind: "app.neko.workspaces-removed",
+	version: 1,
+	scope: "conversation",
+	history: "latest",
+	fork: "initial",
+	initial: () => ({ paths: [] }),
+});
+
 /** User-level search provider choice; `null` means "never saved", so the config value or the default applies. */
 const SearchSettingsDoc = defineDoc<{ provider: SearchProviderId | null }>({
 	kind: "app.neko.search-settings",
@@ -467,6 +483,11 @@ export type NekoRuntime = {
 	globalUsage(): Promise<UsageState>;
 	listWorkspaces(): Promise<NekoWorkspace[]>;
 	addWorkspace(path: string): Promise<NekoWorkspace>;
+	/**
+	 * Remove a workspace from the directory and hide its conversations (nothing is deleted or archived). Rejects with
+	 * `WORKSPACE_UNKNOWN` / `WORKSPACE_LAST` / `WORKSPACE_BUSY`. Adding the directory again restores everything.
+	 */
+	removeWorkspace(path: string): Promise<void>;
 	touchConversation(id: ConversationId): Promise<void>;
 	forkConversation(id: ConversationId): Promise<NekoSession>;
 	/** Create a new ownerless conversation; starts as a copy of the runtime's model/thinking/cwd choices. */
@@ -761,18 +782,50 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		contextState = resolveContextSettings(options.contextSettings, savedContext);
 		return contextState;
 	};
-	const registerWorkspace = async (path: string): Promise<NekoWorkspace> => {
+	const removedWorkspaces = async (): Promise<ReadonlySet<string>> =>
+		new Set((await harness.snapshot(RemovedWorkspacesDoc, conversation.id, context))?.paths ?? []);
+	/** Explicit registration also lifts a removal; implicit registration (startup scan, fork) leaves removed paths out. */
+	const registerWorkspace = async (path: string, explicit: boolean): Promise<void> => {
 		await harness.commit(async (tx) => {
 			const doc = await tx.doc(WorkspacesDoc, conversation.id);
+			const removed = await tx.doc(RemovedWorkspacesDoc, conversation.id);
+			if (removed.paths.includes(path)) {
+				if (!explicit) return;
+				removed.paths = removed.paths.filter((entry) => entry !== path);
+			}
 			if (!doc.items.some((item) => item.path === path)) doc.items.push({ path, createdAt: Date.now() });
 		}, context);
+	};
+	const addWorkspace = async (input: string): Promise<NekoWorkspace> => {
+		const path = accessibleWorkspace(input);
+		await registerWorkspace(path, true);
 		return (await harness.snapshot(WorkspacesDoc, conversation.id, context))!.items.find((item) => item.path === path)!;
 	};
-	const addWorkspace = async (path: string) => registerWorkspace(accessibleWorkspace(path));
 	for (const record of [...existing, { id: conversation.id }]) {
 		const target = await harness.conversation(record.id, context);
-		if (target) await registerWorkspace(savedWorkspace((await target.agent(context)).cwd));
+		if (target) await registerWorkspace(savedWorkspace((await target.agent(context)).cwd), false);
 	}
+	await registerWorkspace(defaultCwd, true);
+	const removeWorkspace = async (path: string): Promise<void> => {
+		const items = (await harness.snapshot(WorkspacesDoc, conversation.id, context))?.items ?? [];
+		if (!items.some((item) => item.path === path)) throw new Error(WORKSPACE_UNKNOWN);
+		if (items.length <= 1) throw new Error(WORKSPACE_LAST);
+		for (const record of await scanConversations()) {
+			if (record.owner) continue;
+			if ((await harness.snapshot(ArchivedDoc, record.id, context))?.archived) continue;
+			const target = await harness.conversation(record.id, context);
+			if (!target || savedWorkspace((await target.agent(context)).cwd) !== path) continue;
+			const info = await harness.snapshot(SessionMetadataDoc, record.id, context);
+			if (info?.status === "running" || info?.awaiting === true || info?.awaitingPlan === true)
+				throw new Error(WORKSPACE_BUSY);
+		}
+		await harness.commit(async (tx) => {
+			const doc = await tx.doc(WorkspacesDoc, conversation.id);
+			const removed = await tx.doc(RemovedWorkspacesDoc, conversation.id);
+			doc.items = doc.items.filter((item) => item.path !== path);
+			if (!removed.paths.includes(path)) removed.paths.push(path);
+		}, context);
+	};
 
 	const jobIo = (id: ConversationId) => ({
 		commit: <T>(change: (tx: Tx) => T | Promise<T>) => harness.commit(change, context),
@@ -1198,13 +1251,14 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		},
 		touchConversation,
 		addWorkspace,
+		removeWorkspace,
 		async listWorkspaces() {
 			return [...((await harness.snapshot(WorkspacesDoc, conversation.id, context))?.items ?? [])];
 		},
 		async forkConversation(id) {
 			const source = await sessionFor(id);
 			const agent = await source.conversation.agent(context);
-			await registerWorkspace(savedWorkspace(agent.cwd));
+			await registerWorkspace(savedWorkspace(agent.cwd), false);
 			const newest = await source.conversation.entries({}, 1, undefined, context);
 			const at = newest.items[0]?.id;
 			const sourceMetadata = at === undefined ? undefined : await harness.snapshot(SessionMetadataDoc, id, context);
@@ -1311,12 +1365,15 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			// The directory hides archived conversations (soft-deleted).
 			const records = await scanConversations();
 			const infos: NekoConversationInfo[] = [];
+			const removed = await removedWorkspaces();
 			for (const record of records) {
 				if (record.owner) continue;
 				const archived = (await harness.snapshot(ArchivedDoc, record.id, context))?.archived ?? false;
 				if (!archived) {
 					const target = await harness.conversation(record.id, context);
 					if (!target) continue;
+					const workspaceRoot = savedWorkspace((await target.agent(context)).cwd);
+					if (removed.has(workspaceRoot)) continue;
 					const info = (await harness.snapshot(SessionMetadataDoc, record.id, context))!;
 					infos.push({
 						title: info.title,
@@ -1329,7 +1386,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 						model: (await target.agent(context)).model ?? null,
 						id: record.id,
 						archived: false,
-						workspaceRoot: savedWorkspace((await target.agent(context)).cwd),
+						workspaceRoot,
 						lastUsedAt: (await harness.snapshot(ActivityDoc, record.id, context))?.lastUsedAt ?? 0,
 					});
 				}

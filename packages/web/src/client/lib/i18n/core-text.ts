@@ -39,6 +39,9 @@ const ERROR_RULES: Record<string, Rule> = {
 		render: (t, m) => t("core.error.providerKeyRequired", { provider: m[1] ?? "" }),
 	},
 	PLAN_BUSY: { pattern: /^/, render: (t) => t("core.error.planBusy") },
+	WORKSPACE_UNKNOWN: { pattern: /^/, render: (t) => t("core.error.workspaceUnknown") },
+	WORKSPACE_LAST: { pattern: /^/, render: (t) => t("core.error.workspaceLast") },
+	WORKSPACE_BUSY: { pattern: /^/, render: (t) => t("core.error.workspaceBusy") },
 };
 
 const CODE_PREFIX = /^([A-Z][A-Z_]+): ([\s\S]*)$/;

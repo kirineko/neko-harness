@@ -34,7 +34,14 @@ export type NekoState = {
 	updates: UpdateState | null;
 	/** Windows 命令 shell（Git Bash）状态；null = 未连接，或网关不报告（非 Windows / 旧网关）。 */
 	shell: NekoShellStatus | null;
-	webInfo: { webVersion: string; installedVersion: string | null; serverId: string; gatewaySpawned: boolean } | null;
+	webInfo: {
+		webVersion: string;
+		installedVersion: string | null;
+		serverId: string;
+		gatewaySpawned: boolean;
+		/** 启动 Web 的目录；它每次连接都会被重新登记，所以不可移除。 */
+		launchRoot: string;
+	} | null;
 	credentials: NekoCredentialState | null;
 	searchSettings: NekoSearchSettingsState | null;
 	contextSettings: NekoContextSettingsState | null;

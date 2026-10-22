@@ -1357,7 +1357,7 @@ body.is-resizing-panel * {
 			display: none;
 		}
 	}
-	.chrome :is(.chrome-row, .icon-btn, .workspace-trigger, .workspace-option):hover:not(:disabled) {
+	.chrome :is(.chrome-row, .icon-btn, .workspace-trigger):hover:not(:disabled) {
 		background: var(--color-sakura-50);
 	}
 	.chrome-row {
@@ -1510,6 +1510,43 @@ body.is-resizing-panel * {
 		max-height: 45dvh;
 		overflow: auto;
 	}
+	/* 底色（悬停 / 当前）画在整行上，让垃圾桶按钮那一列也在高亮里，不留白边 */
+	.workspace-row {
+		display: flex;
+		align-items: center;
+		border-radius: var(--radius-control);
+	}
+	.workspace-row:hover:not(.is-active) {
+		background: var(--color-sakura-50);
+	}
+	.workspace-row .workspace-option {
+		flex: 1;
+		min-width: 0;
+		width: auto;
+	}
+	.row-remove {
+		flex: none;
+		opacity: 0;
+		margin-right: 3px;
+	}
+	/* 弹层打开时会程序化聚焦第一行，用 :focus-visible 而不是 :focus-within，避免一打开就显示 */
+	.workspace-row:hover .row-remove,
+	.workspace-row:has(:focus-visible) .row-remove {
+		opacity: 1;
+	}
+	.chrome .row-remove:hover:not(:disabled) {
+		color: var(--diff-del);
+		background: var(--diff-del-bg);
+	}
+	/* 禁用项与其他行一样默认隐藏、悬停或键盘聚焦时显示，只是停在灰色一档；权重要压过 .chrome button:disabled */
+	.workspace-row .row-remove:disabled {
+		cursor: not-allowed;
+		opacity: 0;
+	}
+	.workspace-row:hover .row-remove:disabled,
+	.workspace-row:has(:focus-visible) .row-remove:disabled {
+		opacity: 0.45;
+	}
 	.workspace-option {
 		display: flex;
 		align-items: center;
@@ -1657,6 +1694,29 @@ body.is-resizing-panel * {
 	.confirm-body .actions {
 		margin-top: 24px;
 	}
+	.confirm-notes {
+		margin: 12px 0 0;
+		padding-left: 1.25em;
+		list-style: disc;
+		font-size: 13px;
+		color: var(--color-ink-700);
+	}
+	.confirm-notes li + li {
+		margin-top: 4px;
+	}
+	.btn-danger {
+		padding: 6px 12px;
+		border: 1px solid color-mix(in oklab, var(--diff-del) 55%, var(--mix-base));
+		background: var(--diff-del-bg);
+		color: var(--diff-del);
+		font-weight: 600;
+	}
+	.btn-danger:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--diff-del) 16%, transparent);
+	}
+	.btn-danger:disabled {
+		opacity: 0.45;
+	}
 	.drawer {
 		--sidebar-width: min(300px, calc(100vw - 48px));
 		width: var(--sidebar-width);
@@ -1665,6 +1725,14 @@ body.is-resizing-panel * {
 		margin: 0 auto 0 0;
 		border-radius: 0;
 		background: var(--color-base);
+	}
+	@media (hover: none), (pointer: coarse) {
+		.row-remove {
+			opacity: 1;
+		}
+		.workspace-row .row-remove:disabled {
+			opacity: 0.45;
+		}
 	}
 	@media (hover: none) {
 		.row-more {
