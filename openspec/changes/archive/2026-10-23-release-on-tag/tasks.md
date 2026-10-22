@@ -25,7 +25,7 @@
 ## 4. 合入与收尾
 
 - [x] 4.1 `bun run check` 通过（仓库内如有代码/测试改动），并在改动涉及测试时跑一次 `bun run test`；验证：命令退出 0
-- [ ] 4.2 经用户确认后合入 main（含此前未推送的提交）并推送；验证：推送后不触发任何 workflow（tag 才触发），`gh workflow list` 只有 Release
+- [x] 4.2 经用户确认后合入 main（含此前未推送的提交）并推送；验证：推送后不触发任何 workflow（tag 才触发），`gh workflow list` 只有 Release
 - [x] 4.3 自查发版路径：对照 RELEASING.md 走一遍「发布说明 → tag → 推送」的前置条件，确认 `preflight` 的每条校验在文档里都有对应说明；验证：文档与 `release.yml` 逐项对应
 
 ## Workflow follow-up

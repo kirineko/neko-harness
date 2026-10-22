@@ -61,7 +61,8 @@ Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTE
 ### Workspace and files
 
 - The workspace is the directory neko was started in (`--cwd` overrides it). The assistant is not sandboxed to it.
-- Web sidebar: add and switch projects, browse the file tree, list the changes this session produced (with diffs), and open the folder in VS Code or the file manager — opening it works only from the machine running the web server.
+- Web sidebar: add, switch and remove projects, browse the file tree, list the changes this session produced (with diffs), and open the folder in VS Code or the file manager — opening it works only from the machine running the web server.
+- Removing a project only hides it and its sessions from the list: no files are deleted, and adding the same directory again brings them back. The directory the web server started in, the last remaining project and any project with a running session (or one waiting for an answer or plan decision) cannot be removed.
 - Type `@` to reference a file or directory. Images: `Ctrl+V` in the TUI (`Alt+V` on Windows and WSL, where the terminal handles paste itself); paste, drop or pick files in the web UI. Whether a model accepts images depends on the model.
 - Sessions: `/new` and `/sessions` in the TUI, the sidebar in the web UI; `/fork` and `/archive` in the TUI, archive from the web sidebar.
 
@@ -88,7 +89,7 @@ Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTE
 
 ### Clients
 
-**Web** — chat, workspace sidebar (files, changes, open in editor), skill market (技能市场), and settings (设置): `/settings` 模型服务, `/settings/search` 联网搜索, `/settings/context` 上下文, `/settings/mobile` 手机配对, `/about` 版本与更新. The web UI ships Chinese labels; they are quoted as shown, with a short gloss where it helps.
+**Web** — chat, workspace sidebar (files, changes, open in editor), skill market (技能市场), and settings (设置): `/settings` 模型服务, `/settings/search` 联网搜索, `/settings/context` 上下文, `/settings/mobile` 手机配对, `/about` 版本与更新. The workspace, job and subagent panels share one width: drag its edge (or use ←/→ and Home/End, double-click to reset); it is remembered in the browser. The web UI ships Chinese labels; they are quoted as shown, with a short gloss where it helps.
 
 **TUI** — `/` completes commands, `@` files and `/skill:` skills; `/help` lists every shortcut and command.
 
@@ -183,6 +184,8 @@ The assistant runs commands and edits files: use it in projects you trust, and r
 
 Finish your work, quit every neko UI and service, run `neko update`, then start again. On Windows, `neko update` prints the manual steps: quit neko and run `bun add --global neko-harness@latest`.
 
+Version 0.5.0 raises the application protocol to 9 (project removal). A UI or gateway from an older release is refused with a protocol message, so restart every neko process after updating.
+
 `/version` in the TUI and web **关于与更新** show the running version, check for updates and explain how to restart or reload. If the running version has no `neko update` command, reinstall with `bun add --global neko-harness`.
 
 ## Development
@@ -199,7 +202,8 @@ bun run neko serve      # gateway only
 | Command | What it does |
 | --- | --- |
 | `bun run build` | tsc build of every workspace package (the web package also runs vite) |
-| `bun run test` | Bun test (`--conditions=neko-source --isolate`) |
+| `bun run test` | Bun test (`--conditions=neko-source --parallel`): the full suite takes about 12 s on a laptop |
+| `bun run test:serial` | the same tests one after another (`--isolate`); use it to tell a real failure from a timing problem |
 | `bun run check` | biome check plus type checks for the root and the web client |
 | `bun run check:write` | biome fixes plus the same type checks |
 | `bun run build:release` | build the `dist/` release bundle |
@@ -213,7 +217,7 @@ Layout:
 - `apps/mobile` — Flutter app (beta)
 - `openspec/` changes and specs, `docs/` protocol docs, `scripts/` build and release scripts
 
-Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `bun run check` and `bun run test` before handing work over.
+Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `bun run check` and `bun run test` before handing work over. Releases are published by pushing a `vX.Y.Z` tag (see [.github/RELEASING.md](.github/RELEASING.md)); there is no CI on ordinary pushes.
 
 ## Documentation
 

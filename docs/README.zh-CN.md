@@ -61,7 +61,8 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 ### 工作区与文件
 
 - 工作区是启动目录（`--cwd` 可指定）。助手不受工作区限制，它不是访问沙箱。
-- Web 侧栏可添加、切换项目，浏览文件树，查看本次会话产生的改动（含 diff），并在本机用 VS Code 或文件管理器打开文件夹——后两项仅在运行 Web 服务的机器上可用。
+- Web 侧栏可添加、切换、移除项目，浏览文件树，查看本次会话产生的改动（含 diff），并在本机用 VS Code 或文件管理器打开文件夹——后两项仅在运行 Web 服务的机器上可用。
+- 移除项目只是把它和它的会话从列表里隐藏：不删除任何文件，重新添加同一目录即可恢复。Web 服务的启动目录、最后一个项目，以及有运行中会话（或正等待回答、计划决定）的项目不能移除。
 - 输入 `@` 引用文件或目录。图片：TUI 用 `Ctrl+V`（Windows 与 WSL 为 `Alt+V`，那里粘贴由终端处理）；Web 支持粘贴、拖放与选择。识图能力取决于所选模型。
 - 会话：TUI 用 `/new`、`/sessions`，Web 用侧栏；TUI 另有 `/fork` 与 `/archive`，Web 侧栏可归档。
 
@@ -88,7 +89,7 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 
 ### 多端
 
-**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/mobile` 手机配对、`/about` 版本与更新。
+**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/mobile` 手机配对、`/about` 版本与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
 
 **TUI**：`/` 补全命令、`@` 补全文件、`/skill:` 补全技能；`/help` 列出全部快捷键与命令。
 
@@ -183,6 +184,8 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 
 先完成任务，退出所有 neko 界面与服务，执行 `neko update`，完成后重新启动。Windows 上 `neko update` 会显示手动升级指引：先退出 neko，再运行 `bun add --global neko-harness@latest`。
 
+0.5.0 把应用协议升到 9（项目移除）。旧版本的界面或网关会被新版本以协议提示拒绝，所以升级后请重启所有 neko 进程。
+
 TUI 输入 `/version`，或打开 Web「设置 → 关于与更新」，可查看版本、检查更新并按提示重启或刷新。若当前版本没有 `neko update` 命令，可重新运行 `bun add --global neko-harness`。
 
 ## 开发
@@ -199,7 +202,8 @@ bun run neko serve      # 仅启动网关
 | 命令 | 说明 |
 | --- | --- |
 | `bun run build` | tsc 构建全部 workspace 包（web 另含 vite build） |
-| `bun run test` | Bun test（`--conditions=neko-source --isolate`） |
+| `bun run test` | Bun test（`--conditions=neko-source --parallel`）：完整套件在笔记本上约 12 秒 |
+| `bun run test:serial` | 同样的测试逐个顺序执行（`--isolate`），用来区分真实失败与时序问题 |
 | `bun run check` | biome check + 根/Web 客户端类型检查 |
 | `bun run check:write` | biome 修复 + 根/Web 客户端类型检查 |
 | `bun run build:release` | 以发布标记构建 `dist/` 可执行包 |
@@ -213,7 +217,7 @@ bun run neko serve      # 仅启动网关
 - `apps/mobile`：Flutter 手机端（测试版）
 - `openspec/` 变更与规格、`docs/` 协议文档、`scripts/` 构建与发布脚本
 
-约定：Biome（tab 缩进、双引号、120 列）；相对导入带 `.ts` 扩展名；TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`。`reference/` 只读；`dist/`、`artifacts/` 不提交；行为改动走 `openspec/` 变更。提交前运行 `bun run check` 与 `bun run test`。
+约定：Biome（tab 缩进、双引号、120 列）；相对导入带 `.ts` 扩展名；TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`。`reference/` 只读；`dist/`、`artifacts/` 不提交；行为改动走 `openspec/` 变更。提交前运行 `bun run check` 与 `bun run test`。发版通过推送 `vX.Y.Z` tag 触发（见 [.github/RELEASING.md](../.github/RELEASING.md)），普通 push 不跑 CI。
 
 ## 更多文档
 
