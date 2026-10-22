@@ -1,4 +1,4 @@
-/// 移动 API v1 DTO（docs/mobile-api-v1.md）。解析宽松：缺失字段取默认值，
+/// 移动 API v1 DTO（docs/mobile/api-v1.md）。解析宽松：缺失字段取默认值，
 /// 未知字段忽略，使电脑端追加可选字段不破坏旧 App。
 library;
 

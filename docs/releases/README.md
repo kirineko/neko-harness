@@ -6,4 +6,4 @@
 - 按需取用的结构：**新增** / **实现说明** / **已知限制** / **兼容性** / **内部**，没有内容的节不写。
 - 已发布的历史版本不回填；它们的说明在各自的 GitHub Release 页面。
 
-发版流程见 [RELEASING.md](../../.github/RELEASING.md)。
+发版流程见 [releasing.md](../dev/releasing.md)。

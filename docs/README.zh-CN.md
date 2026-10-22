@@ -22,7 +22,7 @@
 
 ## 环境要求
 
-- **Bun 1.4.2**（任意 1.4.x 版本），见 [Bun 安装说明](https://bun.sh/docs/installation)。找不到 `neko` 命令时，将 Bun 的 bin 目录加入 `PATH`（`~/.bun/bin`，Windows 为 `%USERPROFILE%\.bun\bin`）。
+- **Bun 1.4.x**（推荐 1.4.4），见 [Bun 安装说明](https://bun.sh/docs/installation)。找不到 `neko` 命令时，将 Bun 的 bin 目录加入 `PATH`（`~/.bun/bin`，Windows 为 `%USERPROFILE%\.bun\bin`）。
 - macOS、Linux 或 Windows。**Windows 还需要 [Git for Windows](https://git-scm.com/download/win)**：bash 工具、后台任务与子 agent 经 Git Bash 运行，neko 会自动查找（可用 `shell.path` 覆盖）。
 - 一个模型 API Key。默认 DeepSeek 开箱可用，另有 31 个纯 API Key 服务可启用。
 
@@ -89,7 +89,9 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 
 ### 多端
 
-**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/mobile` 手机配对、`/about` 版本与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
+**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/appearance` 外观、`/settings/language` 语言、`/settings/mobile` 手机配对、`/about` 关于与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
+
+Web 界面有中文（默认）与 English 两种语言，在「设置 → 语言」切换；「设置 → 外观」可选主题（樱花、纸白、夜墨）和聊天排版（字体、字号、字重、行高）。两者只保存在当前浏览器，不影响 TUI 与手机端。
 
 **TUI**：`/` 补全命令、`@` 补全文件、`/skill:` 补全技能；`/help` 列出全部快捷键与命令。
 
@@ -104,7 +106,7 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 
 终端主题可用 `--theme light|dark|auto`（默认 `auto`）、环境变量 `NEKO_THEME` 或 `/theme` 切换。
 
-界面语言（默认 `zh`，可选 `en`）可用 `--lang zh|en`、环境变量 `NEKO_LANG` 或 `/language` 切换，选择会被保存。Web（设置 → 语言）与移动端各自有独立的语言设置。
+界面语言（默认 `zh`，可选 `en`）可用 `--lang zh|en`、环境变量 `NEKO_LANG` 或 `/language` 切换，选择会被保存。Web 与移动端各自有独立的语言设置。
 
 **手机（测试版）**：Android 应用（[Flutter](../apps/mobile/README.md)），通过局域网控制电脑上的助手。Web「设置 → 手机配对」展示二维码，用应用扫码连接；手机需与电脑同一网络，系统防火墙放行所选端口（WSL 默认 NAT 会自动经 `powershell.exe` 转发）。应用只信任配对时取得的证书指纹，撤销设备、重新生成证书都在同一页完成。APK 附在 [GitHub Releases](https://github.com/kirineko/neko-harness/releases)（`NekoAI-v<版本>-<abi>.apk`，arm64-v8a / armeabi-v7a / x86_64）。测试版使用 debug 签名：升级需卸载重装并重新扫码配对，也没有应用内升级。
 
@@ -190,7 +192,7 @@ TUI 输入 `/version`，或打开 Web「设置 → 关于与更新」，可查�
 
 ## 开发
 
-源码开发需要 Bun 1.4.2（见 `.bun-version`）；Windows 还需要 Git for Windows。
+源码开发使用 Bun 1.4.4（见 `.bun-version`，任意 1.4.x 可用）；Windows 还需要 Git for Windows。
 
 ```bash
 bun install --frozen-lockfile
@@ -217,15 +219,16 @@ bun run neko serve      # 仅启动网关
 - `apps/mobile`：Flutter 手机端（测试版）
 - `openspec/` 变更与规格、`docs/` 协议文档、`scripts/` 构建与发布脚本
 
-约定：Biome（tab 缩进、双引号、120 列）；相对导入带 `.ts` 扩展名；TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`。`reference/` 只读；`dist/`、`artifacts/` 不提交；行为改动走 `openspec/` 变更。提交前运行 `bun run check` 与 `bun run test`。发版通过推送 `vX.Y.Z` tag 触发（见 [.github/RELEASING.md](../.github/RELEASING.md)），普通 push 不跑 CI。
+约定：Biome（tab 缩进、双引号、120 列）；相对导入带 `.ts` 扩展名；TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`。`reference/` 只读；`dist/`、`artifacts/` 不提交；行为改动走 `openspec/` 变更。提交前运行 `bun run check` 与 `bun run test`。发版通过推送 `vX.Y.Z` tag 触发（见 [docs/dev/releasing.md](dev/releasing.md)），普通 push 不跑 CI。
 
 ## 更多文档
 
+- [docs/README.md](README.md)：文档索引
 - [AGENTS.md](../AGENTS.md)：架构、模块与开发约定
 - [README.md](../README.md)：英文版文档
-- [docs/mobile-api-v1.md](mobile-api-v1.md)：手机端 JSON-RPC 协议
+- [docs/mobile/api-v1.md](mobile/api-v1.md)：手机端 JSON-RPC 协议
 - [apps/mobile/README.md](../apps/mobile/README.md)：Flutter 测试版的开发与发版
-- [.github/RELEASING.md](../.github/RELEASING.md)：发布流程
+- [docs/dev/releasing.md](dev/releasing.md)：发布流程
 - [openspec/](../openspec)：变更提案与规格
 
 ## 许可证

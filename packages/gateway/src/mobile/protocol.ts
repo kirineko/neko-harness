@@ -99,7 +99,7 @@ export function buildHelloResult(serverId: string, serverName: string, apiVersio
 	};
 }
 
-// ——— mobile-api-v1 业务方法 schemas（fixtures 契约锚点；形状与 docs/mobile-api-v1.md 一致） ———
+// ——— mobile-api-v1 业务方法 schemas（fixtures 契约锚点；形状与 docs/mobile/api-v1.md 一致） ———
 
 const opt = Type.Optional;
 const str = Type.String();

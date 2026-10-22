@@ -22,7 +22,7 @@ A local AI coding assistant for the terminal, the browser and your phone: it rea
 
 ## Requirements
 
-- **Bun 1.4.2** (any 1.4.x release) — see the [Bun installation guide](https://bun.sh/docs/installation). If `neko` is not found afterwards, add Bun's bin directory to `PATH` (`~/.bun/bin`, on Windows `%USERPROFILE%\.bun\bin`).
+- **Bun 1.4.x** (1.4.4 recommended) — see the [Bun installation guide](https://bun.sh/docs/installation). If `neko` is not found afterwards, add Bun's bin directory to `PATH` (`~/.bun/bin`, on Windows `%USERPROFILE%\.bun\bin`).
 - macOS, Linux or Windows. **Windows also needs [Git for Windows](https://git-scm.com/download/win)**: the bash tool, background jobs and subagents run through Git Bash, which neko finds automatically (`shell.path` overrides the lookup).
 - A model API key. DeepSeek works out of the box; 31 other API-key providers can be enabled.
 
@@ -48,13 +48,13 @@ Both UIs can run at the same time and share one gateway. The process that starte
 
 ## First run
 
-In the TUI run `/login`; in the web UI open **设置 → 模型服务** (settings → model providers). Paste a [DeepSeek API key](https://platform.deepseek.com/api_keys) and save it. The default model is `deepseek/deepseek-flash` (DeepSeek V4.1 Flash); pick another from the model picker, and change the thinking level with `/think` in the TUI.
+In the TUI run `/login`; in the web UI open **Settings → Model services**. Paste a [DeepSeek API key](https://platform.deepseek.com/api_keys) and save it. The default model is `deepseek/deepseek-flash` (DeepSeek V4.1 Flash); pick another from the model picker, and change the thinking level with `/think` in the TUI.
 
 Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `TAVILY_API_KEY`, …). A key saved in the UI wins over the environment, and keys stay on this machine.
 
-**Other providers.** Besides DeepSeek there are 31 API-key providers (OpenRouter, OpenCode Go / Zen, OpenAI, Google, Groq, Mistral, xAI, Together, …). Enable one in `/login` (space toggles it) or in **设置 → 模型服务**, then save its key or export its environment variable — the provider card in the web settings shows the exact name. Enabled providers appear in `/model` and in the composer's model picker. Disabling a provider keeps its saved key but blocks sending in sessions that use it, until you re-enable the provider or switch those sessions to another model. `--model` takes `provider/modelId`, for example `openrouter/anthropic/claude-haiku-4.5`.
+**Other providers.** Besides DeepSeek there are 31 API-key providers (OpenRouter, OpenCode Go / Zen, OpenAI, Google, Groq, Mistral, xAI, Together, …). Enable one in `/login` (space toggles it) or in **Settings → Model services**, then save its key or export its environment variable — the provider card in the web settings shows the exact name. Enabled providers appear in `/model` and in the composer's model picker. Disabling a provider keeps its saved key but blocks sending in sessions that use it, until you re-enable the provider or switch those sessions to another model. `--model` takes `provider/modelId`, for example `openrouter/anthropic/claude-haiku-4.5`.
 
-**Default model.** Choose a model and set it as the default for new sessions: the ☆ action in the web picker (设为默认) or `d` in the TUI `/model` list, pressing `d` again to clear it. Precedence: `--model` > saved default > `defaultModel` in the config file > built-in DeepSeek Flash. Only sessions created afterwards are affected.
+**Default model.** Choose a model and set it as the default for new sessions: the ☆ action (**Set as default**) in the web picker or `d` in the TUI `/model` list, pressing `d` again to clear it. Precedence: `--model` > saved default > `defaultModel` in the config file > built-in DeepSeek Flash. Only sessions created afterwards are affected.
 
 ## Features
 
@@ -68,28 +68,30 @@ Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTE
 
 ### Conversation and queue
 
-- Sending while a run is busy queues the message instead of interrupting it. The queue bar (above the composer in the web UI, `Alt+↑` in the TUI) lists what is waiting, and every entry can be **steered** (引导) into the running work after the current tool round or **withdrawn** (撤回) back into the editor.
+- Sending while a run is busy queues the message instead of interrupting it. The queue bar (above the composer in the web UI, `Alt+↑` in the TUI) lists what is waiting, and every entry can be **steered** into the running work after the current tool round or **withdrawn** back into the editor.
 - TUI queue keys: `Alt+↑` selects, `↑`/`↓` moves, `Enter` steers the selected message, `Esc` withdraws it without stopping the run.
 - `Esc` on the running session stops the current run.
 
 ### Context and export
 
-- `/compact` compacts the conversation and accepts optional instructions. Automatic compaction follows pi-durable's native policy — it triggers close to the model window; tune the trigger percentage, the keep-recent budget and on/off in TUI `/context`, in web **设置 → 上下文**, or in the config file (`context.compaction`). A value saved in the UI wins over the config file.
+- `/compact` compacts the conversation and accepts optional instructions. Automatic compaction follows pi-durable's native policy — it triggers close to the model window; tune the trigger percentage, the keep-recent budget and on/off in TUI `/context`, in web **Settings → Context**, or in the config file (`context.compaction`). A value saved in the UI wins over the config file.
 - Tool result pruning is off by default. With `context.pruning` enabled, old tool results become placeholders in the model context once usage crosses a threshold; the transcript, projections and exports keep the originals, and the model re-runs a tool when it needs the data again. `/context` and the settings page expose the knobs.
 - Copy and export: the web UI copies an answer without its reasoning and exports Markdown, HTML or JSON from the top bar (thinking included on request). TUI: `/copy` and `/export [path] [--thinking]`; without a path the file goes into the workspace, and an existing file is never overwritten.
 
 ### Agent capabilities
 
-- **Skills.** `/skill:` completes installed skills; browse and install them from the market in the web sidebar (**技能市场**) or with TUI `/skills`. The prompt carries only the skill list — a body is read when the skill is invoked.
+- **Skills.** `/skill:` completes installed skills; browse and install them from the market in the web sidebar (**Skill market**) or with TUI `/skills`. The prompt carries only the skill list — a body is read when the skill is invoked.
 - **Subagents.** The assistant delegates exploration, planning or coding work, waits for the result and integrates it. Delegation cards and the sidebar in the web UI, `/agents` in the TUI; stop the current round without losing the agent's context. Bash commands from an explore subagent need one approval each.
-- **Background jobs.** The `job` tool moves long commands (`npm run dev`, `uv run …`) to the background, up to 4 at a time. When one finishes the assistant is told and keeps going; live output and manual stops live in the web top bar **任务** and TUI `/jobs`. Jobs still running when the gateway restarts are marked lost and never re-run.
-- **Todos.** For multi-step work the assistant keeps an ordered, read-only todo list. Web top bar **待办 n/m**, TUI `/todos`, progress entry on the mobile chat page. It is saved with the session and survives restarts and compaction; subagents cannot use it.
+- **Background jobs.** The `job` tool moves long commands (`npm run dev`, `uv run …`) to the background, up to 4 at a time. When one finishes the assistant is told and keeps going; live output and manual stops live in the web top bar **Jobs** and TUI `/jobs`. Jobs still running when the gateway restarts are marked lost and never re-run.
+- **Todos.** For multi-step work the assistant keeps an ordered, read-only todo list. Web top bar **Todo n/m**, TUI `/todos`, progress entry on the mobile chat page. It is saved with the session and survives restarts and compaction; subagents cannot use it.
 - **Questions.** When a decision is missing, the assistant asks with `ask_user`: single or multiple choice — a recommended option is marked but never preselected — with optional text, or skip. Answer above the composer in the web UI, with `Ctrl+O` or `/question` in the TUI, or on the mobile chat page. The answer counts only once submitted (`Enter` in the TUI); the assistant stays paused meanwhile and messages you send queue behind the answer. Questions and options are plain text.
-- **Web search.** Tavily by default — keyless mode is rate-limited until you add a key — or DeepSeek search and fetch, reusing your DeepSeek key. Pick the provider in web **设置 → 联网搜索**, TUI `/search`, or `webSearch.provider` in the config file. DeepSeek search bills per successful request (CNY 5 per 1000).
+- **Web search.** Tavily by default — keyless mode is rate-limited until you add a key — or DeepSeek search and fetch, reusing your DeepSeek key. Pick the provider in web **Settings → Web search**, TUI `/search`, or `webSearch.provider` in the config file. DeepSeek search bills per successful request (CNY 5 per 1000).
 
 ### Clients
 
-**Web** — chat, workspace sidebar (files, changes, open in editor), skill market (技能市场), and settings (设置): `/settings` 模型服务, `/settings/search` 联网搜索, `/settings/context` 上下文, `/settings/mobile` 手机配对, `/about` 版本与更新. The workspace, job and subagent panels share one width: drag its edge (or use ←/→ and Home/End, double-click to reset); it is remembered in the browser. The web UI ships Chinese labels; they are quoted as shown, with a short gloss where it helps.
+**Web** — chat, workspace sidebar (files, changes, open in editor), skill market, and settings: `/settings` Model services, `/settings/search` Web search, `/settings/context` Context, `/settings/appearance` Appearance, `/settings/language` Language, `/settings/mobile` Mobile pairing, `/about` About and updates. The workspace, job and subagent panels share one width: drag its edge (or use ←/→ and Home/End, double-click to reset); it is remembered in the browser.
+
+The web UI is available in Chinese (default) and English: switch it in **Settings → Language**. **Settings → Appearance** sets the theme (Sakura, Paper or Ink) and the chat typography (font, size, weight, line height). Both are stored in the browser only, apply to that browser alone, and do not affect the TUI or the mobile app.
 
 **TUI** — `/` completes commands, `@` files and `/skill:` skills; `/help` lists every shortcut and command.
 
@@ -104,18 +106,18 @@ Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTE
 
 The terminal theme comes from `--theme light|dark|auto` (default `auto`), the `NEKO_THEME` environment variable, or `/theme`.
 
-The interface language (`zh` by default, or `en`) comes from `--lang zh|en`, the `NEKO_LANG` environment variable, or `/language`; the choice is saved. The Web UI (Settings → Language) and the mobile app keep their own language setting.
+The interface language (`zh` by default, or `en`) comes from `--lang zh|en`, the `NEKO_LANG` environment variable, or `/language`; the choice is saved. The web UI and the mobile app keep their own language setting.
 
-**Mobile (beta)** — an Android app ([Flutter](apps/mobile/README.md)) that drives the agent over your LAN. In web **设置 → 手机配对**, show the QR code and scan it with the app. The phone must be on the same network and the firewall must allow the port; under WSL's default NAT the port is forwarded through `powershell.exe` automatically. The app trusts only the certificate fingerprint it received while pairing, so revoke a device or regenerate the certificate on the same page when needed. APKs are attached to [GitHub Releases](https://github.com/kirineko/neko-harness/releases) as `NekoAI-v<version>-<abi>.apk` (arm64-v8a, armeabi-v7a, x86_64). This is a beta: builds use a debug signature, so upgrading means uninstalling, reinstalling and pairing again, and there is no in-app update.
+**Mobile (beta)** — an Android app ([Flutter](apps/mobile/README.md)) that drives the agent over your LAN. In web **Settings → Mobile pairing**, show the QR code and scan it with the app. The phone must be on the same network and the firewall must allow the port; under WSL's default NAT the port is forwarded through `powershell.exe` automatically. The app trusts only the certificate fingerprint it received while pairing, so revoke a device or regenerate the certificate on the same page when needed. APKs are attached to [GitHub Releases](https://github.com/kirineko/neko-harness/releases) as `NekoAI-v<version>-<abi>.apk` (arm64-v8a, armeabi-v7a, x86_64). This is a beta: builds use a debug signature, so upgrading means uninstalling, reinstalling and pairing again, and there is no in-app update.
 
 ## Plan mode
 
 Read-only planning with an explicit approval step.
 
-- **Enter and leave.** TUI: `/plan` or `Shift+Tab` — idle sessions only. Web: `/plan` in the composer. While the mode is on, the composer shows a **规划模式（只读）** badge.
+- **Enter and leave.** TUI: `/plan` or `Shift+Tab` — idle sessions only. Web: `/plan` in the composer. While the mode is on, the composer shows a **Plan mode (read-only)** badge.
 - **What the assistant may do.** Read files, search the code base, use the web, keep todos, ask questions and run read-only bash (listing, searching, `git log`/`diff`/`status`, version checks). `edit`, `write`, `job` and any command that changes files, installs packages or starts processes are rejected — the tools are removed from the agent, a `beforeTool` guard checks the rest, and bash is checked again when it executes (a guard rail, not a sandbox). Explore and plan subagents are allowed; the coder subagent is not.
 - **Submitting.** Once it understands the task the assistant calls `submit_plan` once, alone in its turn, with a short title, ordered steps and an optional note (risks, assumptions, verification). The round ends and the session goes idle, waiting for your decision.
-- **Deciding.** The plan card sits above the composer in the web UI; in the TUI a panel opens by itself. **批准并执行** (approve and execute) leaves plan mode and submits the plan as the next input, so execution starts immediately. **要求修改** (request changes) takes a note, keeps plan mode, and the assistant revises and submits again. **取消并退出计划模式** (cancel and leave plan mode) cancels the waiting plan (web button, TUI `X`). TUI keys: `↑`/`↓` choose, `A` approves, `R` writes changes, `X` cancels and exits, `Esc` closes the panel without deciding.
+- **Deciding.** The plan card sits above the composer in the web UI; in the TUI a panel opens by itself. **Approve and run** leaves plan mode and submits the plan as the next input, so execution starts immediately. **Request changes** takes a note, keeps plan mode, and the assistant revises and submits again. **Cancel and leave plan mode** cancels the waiting plan (web button, TUI `X`). TUI keys: `↑`/`↓` choose, `A` approves, `R` writes changes, `X` cancels and exits, `Esc` closes the panel without deciding.
 - **Edge cases.** Sending a normal message while a plan waits replaces that plan. Stopping the session or leaving plan mode cancels it; a restart keeps it. The mode and the last 5 plans are saved with the session, and a forked session inherits them.
 - **Mobile.** A paired phone can read a plan and approve, request changes, or cancel and exit; it cannot enter plan mode. Mode changes and decisions are accepted only while the session is idle.
 
@@ -186,11 +188,11 @@ Finish your work, quit every neko UI and service, run `neko update`, then start 
 
 Version 0.5.0 raises the application protocol to 9 (project removal). A UI or gateway from an older release is refused with a protocol message, so restart every neko process after updating.
 
-`/version` in the TUI and web **关于与更新** show the running version, check for updates and explain how to restart or reload. If the running version has no `neko update` command, reinstall with `bun add --global neko-harness`.
+`/version` in the TUI and web **About and updates** show the running version, check for updates and explain how to restart or reload. If the running version has no `neko update` command, reinstall with `bun add --global neko-harness`.
 
 ## Development
 
-Source development needs Bun 1.4.2 (see `.bun-version`) and, on Windows, Git for Windows.
+Source development uses Bun 1.4.4 (see `.bun-version`; any 1.4.x works) and, on Windows, Git for Windows.
 
 ```bash
 bun install --frozen-lockfile
@@ -215,17 +217,18 @@ Layout:
 - `packages/gateway` — Chord / WebSocket gateway and the mobile API
 - `packages/tui`, `packages/web`, `packages/cli` — the two frontends and the `neko` command
 - `apps/mobile` — Flutter app (beta)
-- `openspec/` changes and specs, `docs/` protocol docs, `scripts/` build and release scripts
+- `openspec/` changes and specs, `docs/` documentation, `scripts/` build and release scripts
 
-Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `bun run check` and `bun run test` before handing work over. Releases are published by pushing a `vX.Y.Z` tag (see [.github/RELEASING.md](.github/RELEASING.md)); there is no CI on ordinary pushes.
+Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `bun run check` and `bun run test` before handing work over. Releases are published by pushing a `vX.Y.Z` tag (see [docs/dev/releasing.md](docs/dev/releasing.md)); there is no CI on ordinary pushes.
 
 ## Documentation
 
-- [AGENTS.md](AGENTS.md) — architecture, modules and development conventions
+- [AGENTS.md](AGENTS.md) — architecture, modules and development conventions (Chinese only)
+- [docs/README.md](docs/README.md) — documentation index
 - [docs/README.zh-CN.md](docs/README.zh-CN.md) — this documentation in Chinese
-- [docs/mobile-api-v1.md](docs/mobile-api-v1.md) — mobile JSON-RPC protocol
-- [apps/mobile/README.md](apps/mobile/README.md) — building and releasing the Flutter app
-- [.github/RELEASING.md](.github/RELEASING.md) — release process
+- [docs/mobile/api-v1.md](docs/mobile/api-v1.md) — mobile JSON-RPC protocol (Chinese only)
+- [apps/mobile/README.md](apps/mobile/README.md) — building and releasing the Flutter app (Chinese only)
+- [docs/dev/releasing.md](docs/dev/releasing.md) — release process (Chinese only)
 - [openspec/](openspec/) — change proposals and specs
 
 ## License

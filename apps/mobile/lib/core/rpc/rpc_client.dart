@@ -101,7 +101,7 @@ class RpcNotification {
   final Map<String, dynamic> params;
 }
 
-/// 业务方法返回的稳定错误（`error.data.code`，见 docs/mobile-api-v1.md）。
+/// 业务方法返回的稳定错误（`error.data.code`，见 docs/mobile/api-v1.md）。
 class MobileApiException implements Exception {
   const MobileApiException(this.code, this.message);
 

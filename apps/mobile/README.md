@@ -1,7 +1,7 @@
 # NekoAI（neko_mobile）
 
 neko 的 Android 手机端（Flutter），通过局域网 HTTPS/WSS 控制电脑上的 Agent。协议见
-`docs/mobile-api-v1.md`，设计见 `openspec/changes/add-flutter-mobile-control/design.md`。
+`docs/mobile/api-v1.md`，设计见 `openspec/changes/add-flutter-mobile-control/design.md`。
 
 ## 开发
 
@@ -18,7 +18,7 @@ flutter build apk --release --split-per-abi   # 产物：build/app/outputs/flutt
 再执行 `flutter pub get`，不要把镜像地址写入锁文件。
 
 `flutter test` 包含读取 `packages/gateway/test/fixtures/mobile-api-v1/` 的协议对拍测试；协议变更须同时更新 fixtures、
-`docs/mobile-api-v1.md` 与 `lib/core/api/models.dart`。
+`docs/mobile/api-v1.md` 与 `lib/core/api/models.dart`。
 
 依赖取舍：不使用 `permission_handler`（14.x 要求 compileSdk 37），相机设置跳转由 `MainActivity` 的 MethodChannel 实现；
 `mobile_scanner` 使用 bundled 模型，无 Google Play 服务也能扫码；Markdown 用 `flutter_markdown_plus`（`flutter_markdown` 已停止维护），
@@ -122,14 +122,9 @@ cd apps/mobile && flutter test integration_test/mobile_e2e_test.dart -d <设备>
 `ask_user` 调用）：手机可见待办进度与只读列表、单选/多选回答、关闭不结算、经 `connectPaired` 真实重连后重新 attach/查询并显式提交、
 回答后再次重连同步最终状态。注意：该用例**尚未在真机/模拟器上执行**，执行后再把结果记在此处。手工验证 release 包时可直接扫码，或粘贴 `<数据目录>/pairing.txt`。
 
-## M0 真机验证记录
+## 真机验证覆盖的场景
 
-- 日期：2026-10-15
-- 设备：V2419A，Android 16（API 36，arm64）
-- 电脑侧：macOS 26.6.2，Bun 1.4.2，临时隔离数据目录与 faux provider
-- App 侧：Flutter 3.47.7，Dart 3.13.5，release arm64 APK
-
-已通过：
+首个版本（M0）在 Android 真机（release arm64 APK）上人工验证过以下场景，配置变化后建议按此清单回归：
 
 - 首次扫码配对；首次拒绝相机权限后进入系统设置授权，返回并重试成功。
 - 错误自签名证书、已过期证书、伪造签发者攻击链均在 TLS/证书校验阶段拒绝；攻击链测试服务端未收到任何配对 HTTP 请求。
@@ -138,4 +133,4 @@ cd apps/mobile && flutter test integration_test/mobile_e2e_test.dart -d <设备>
 - App 退到后台 5 分钟后返回前台，连接恢复为 ready。
 - 本机 admin 服务撤销设备后服务端删除授权；App 显示“设备授权已被电脑撤销”，停止重试并仅提供重新扫码入口。
 
-同时通过：`flutter analyze`、`flutter test`（87 个）、`flutter build apk --release --split-per-abi`；仓库侧 `bun run check`、`bun run build` 与全量 Bun 测试（656 个）。
+自动化检查：`flutter analyze`、`flutter test`、`flutter build apk --release --split-per-abi`，以及仓库侧 `bun run check`、`bun run build` 与 `bun run test`。
