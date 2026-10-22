@@ -26,7 +26,10 @@ const root = resolve(import.meta.dir, "..");
 await mkdir(join(root, "artifacts"), { recursive: true });
 await run([process.execPath, "pm", "pack", "--destination", "artifacts"], root);
 const archive = join(root, "artifacts", `neko-harness-${manifest.version}.tgz`);
-const listing = await run(["tar", "-tzf", archive], root);
+// GNU tar (Git for Windows) reads "D:\..." as host:path; pass a relative name and run inside artifacts/ instead.
+const tarCwd = join(root, "artifacts");
+const archiveName = `neko-harness-${manifest.version}.tgz`;
+const listing = await run(["tar", "-tzf", archiveName], tarCwd);
 const files = listing
 	.trim()
 	.split(/\r?\n/)
@@ -46,7 +49,7 @@ for (const required of [
 ]) {
 	if (!files.includes(`package/${required}`)) throw new Error(`Missing ${required}`);
 }
-const packed = JSON.parse(await run(["tar", "-xOf", archive, "package/package.json"], root));
+const packed = JSON.parse(await run(["tar", "-xOf", archiveName, "package/package.json"], tarCwd));
 if (packed.private || packed.name !== "neko-harness" || packed.version !== manifest.version) {
 	throw new Error("Invalid published manifest");
 }
