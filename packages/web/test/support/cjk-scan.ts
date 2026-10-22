@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { parseSync } from "rolldown/utils";
 
 const CJK = /[\u2e80-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/u;
@@ -15,7 +15,8 @@ export function listSources(root: string): string[] {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
 			const path = join(dir, entry.name);
 			if (entry.isDirectory()) walk(path);
-			else if (/\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts")) out.push(relative(root, path));
+			else if (/\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts"))
+				out.push(relative(root, path).split(sep).join("/"));
 		}
 	};
 	walk(root);

@@ -1,7 +1,8 @@
 import { expect, it } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { listSources, scanDirectory } from "./support/cjk-scan.ts";
 
-const ROOT = new URL("../src/client", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../src/client", import.meta.url));
 
 /**
  * Chinese text may only live in the dictionaries (and the server-text mapping next to them). Every other literal,

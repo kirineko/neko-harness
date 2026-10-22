@@ -1,7 +1,8 @@
 import { expect, it } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { listSources, scanDirectory, scanLiterals } from "./support/literal-scan.ts";
 
-const ROOT = new URL("../src", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const DICTIONARY_DIR = "i18n/";
 
 type Allowed = { file: string; text?: string; reason: string };

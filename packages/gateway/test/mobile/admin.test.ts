@@ -475,7 +475,13 @@ describe("mobile admin full surface (4.1)", () => {
 			await client.waitForClose();
 			const after = await connectAdmin(gateway, token);
 			try {
-				const state = await after.admin.state(null);
+				// The server notices the closed socket asynchronously; the client-side close can come first (observed on Windows).
+				let state = await after.admin.state(null);
+				const offlineBy = Date.now() + 5_000;
+				while (state.devices[0]?.online !== false && Date.now() < offlineBy) {
+					await new Promise((resolve) => setTimeout(resolve, 25));
+					state = await after.admin.state(null);
+				}
 				expect(state.devices[0]?.online).toBe(false);
 				expect(state.devices[0]?.lastSeenAt).toBeGreaterThan(pairedAt);
 			} finally {

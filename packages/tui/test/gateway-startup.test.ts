@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 import { existsSync, writeFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { Socket } from "node:net";
+import { createServer as createNetServer, type Server as NetServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -135,14 +135,15 @@ for (const phase of ["HTTP", "Chord"] as const) {
 			const fresh = await target();
 			const sockets = new Set<Socket>();
 			let accepted = 0;
-			const server = createServer();
+			// The HTTP stall uses a raw server because Bun 1.4.4 never emits 'close' for a node:http upgrade socket.
+			const httpServer = phase === "Chord" ? createServer() : undefined;
+			const ws = httpServer ? new WebSocketServer({ server: httpServer }) : undefined;
+			const server: NetServer = httpServer ?? createNetServer((socket) => void socket.resume());
 			server.on("connection", (socket) => {
 				accepted++;
 				sockets.add(socket);
 				socket.on("close", () => sockets.delete(socket));
 			});
-			const ws = phase === "Chord" ? new WebSocketServer({ server }) : undefined;
-			if (!ws) server.on("upgrade", (_request, socket) => socket.resume());
 			await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 			const address = server.address();
 			if (!address || typeof address === "string") throw new Error("Missing address");

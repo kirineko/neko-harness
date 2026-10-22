@@ -67,4 +67,5 @@ it("forwards the TUI language to `neko tui --help` and leaves the other commands
 		expect(output).not.toContain("Usage: neko tui");
 	}
 	expect(await help("../src/main.ts", ["web", "--help"], { NEKO_LANG: "en" })).toContain("模型服务");
-});
+	// Spawns a dozen Bun processes in sequence, which exceeds the 5s default on a busy parallel run.
+}, 30_000);

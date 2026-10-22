@@ -2,7 +2,7 @@ import { describe, expect, it, spyOn } from "bun:test";
 import * as childProcess from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
-import type { Socket } from "node:net";
+import { createServer as createNetServer, type Server as NetServer, type Socket } from "node:net";
 import { join } from "node:path";
 import { connectNekoGateway, startGateway } from "@neko-harness/gateway";
 import { WebSocketServer } from "ws";
@@ -76,15 +76,16 @@ describe.skipIf(IS_WINDOWS)("POSIX Web gateway readiness", () => {
 			const target = await makeGateway();
 			const sockets = new Set<Socket>();
 			let accepted = 0;
-			const server = createServer();
+			// HTTP: a TCP peer that never replies to the upgrade; Chord: upgrade but never send hello/service state.
+			// The HTTP stall uses a raw server because Bun 1.4.4 never emits 'close' for a node:http upgrade socket.
+			const httpServer = phase === "Chord" ? createServer() : undefined;
+			const ws = httpServer ? new WebSocketServer({ server: httpServer }) : undefined;
+			const server: NetServer = httpServer ?? createNetServer((socket) => void socket.resume());
 			server.on("connection", (socket) => {
 				accepted++;
 				sockets.add(socket);
 				socket.on("close", () => sockets.delete(socket));
 			});
-			// HTTP: never reply to upgrade; Chord: upgrade but never send hello/service state.
-			const ws = phase === "Chord" ? new WebSocketServer({ server }) : undefined;
-			if (!ws) server.on("upgrade", (_request, socket) => socket.resume());
 			await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 			const address = server.address();
 			if (!address || typeof address === "string") throw new Error("Missing TCP address");
