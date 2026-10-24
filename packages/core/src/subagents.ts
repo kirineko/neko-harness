@@ -11,6 +11,7 @@ import {
 	type Harness,
 	LiveDoc,
 	type TaskId,
+	type TaskRuntime,
 	type Tx,
 	UsageDoc,
 	type UsageState,
@@ -77,6 +78,7 @@ export type SubagentSummary = {
 export const agentIdFor = (childId: number) => `agent-${childId}`;
 export const DelegationsDoc = defineDoc<{ items: Delegation[] }>({
 	kind: "app.neko.delegations",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -85,6 +87,7 @@ export const DelegationsDoc = defineDoc<{ items: Delegation[] }>({
 });
 export const SubagentsDoc = defineDoc<{ items: SubagentIdentity[] }>({
 	kind: "app.neko.subagents",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -93,6 +96,7 @@ export const SubagentsDoc = defineDoc<{ items: SubagentIdentity[] }>({
 });
 export const SubagentDoc = defineDoc<{ role: SubagentRole | null; parentId: number | null }>({
 	kind: "app.neko.subagent",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -101,6 +105,7 @@ export const SubagentDoc = defineDoc<{ role: SubagentRole | null; parentId: numb
 });
 const SlotsDoc = defineDoc<{ items: { taskId: number; parentId: number; cwd: string; coder: boolean }[] }>({
 	kind: "app.neko.subagent-slots",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "session",
 	initial: () => ({ items: [] }),
@@ -304,6 +309,25 @@ const structuredOutputSchema = Type.Union([
 	),
 ]);
 
+const ADMISSION_POLL_MS = 100;
+
+/** Waits inside the phase: a slot frees up in this process, so persisting each poll as a sleep would only add writes. */
+function pause(runtime: Pick<TaskRuntime<never, never, never, object>, "signal" | "setTimer">, ms: number) {
+	const { signal } = runtime;
+	return new Promise<void>((resolve, reject) => {
+		if (signal.aborted) return reject(signal.reason);
+		const disarm = runtime.setTimer(() => {
+			signal.removeEventListener("abort", abort);
+			resolve();
+		}, ms);
+		const abort = () => {
+			disarm();
+			reject(signal.reason);
+		};
+		signal.addEventListener("abort", abort, { once: true });
+	});
+}
+
 export function createSubagentExtension(
 	prepare: (id: ConversationId, requestId: string, cwd: string) => Promise<void>,
 	discard: (id: ConversationId, requestId: string) => void,
@@ -352,7 +376,7 @@ export function createSubagentExtension(
 						round.startedAt ??= Date.now();
 						return { status: "running", checkpoint: { phase: "deliver" } };
 					}, ctx);
-					if (!admitted) await runtime.sleep(runtime.now() + 100, ctx);
+					if (!admitted) await pause(runtime, ADMISSION_POLL_MS);
 				}
 			},
 			deliver: async (task, runtime, ctx) => {

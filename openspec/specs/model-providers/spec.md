@@ -22,7 +22,7 @@
 
 ### Requirement: 模型目录与切换
 
-系统 SHALL 提供可用模型列表（含上下文窗口、价格、支持的能力及思考强度），并允许按会话切换模型与 thinking level。列表 SHALL 仅包含已启用 provider 的模型，并标明各模型所属 provider 是否已具备凭据；切换 MUST 仅允许切到已启用 provider 的模型。能力列表及不支持强度的调整 MUST 遵循已安装 Pi 1.3.0 的约定，TUI/Web MUST 使用同一能力数据，不能根据外部目录扩展选项或覆盖上游映射。模型引用 SHALL 以 provider 与模型 id 共同标识，模型 id 可含 `/`（如 OpenRouter）。切换模型后，系统 MUST 沿用 Pi 的历史转换，不把先前模型的思考内容作为新模型的可见回答文本发送，也不改写持久历史。
+系统 SHALL 提供可用模型列表（含上下文窗口、价格、支持的能力及思考强度），并允许按会话切换模型与 thinking level。列表 SHALL 仅包含已启用 provider 的模型，并标明各模型所属 provider 是否已具备凭据；切换 MUST 仅允许切到已启用 provider 的模型。能力列表及不支持强度的调整 MUST 遵循已安装 Pi 1.4.0 的约定，TUI/Web MUST 使用同一能力数据，不能根据外部目录扩展选项或覆盖上游映射。模型引用 SHALL 以 provider 与模型 id 共同标识，模型 id 可含 `/`（如 OpenRouter）。切换模型后，系统 MUST 沿用 Pi 的历史转换，不把先前模型的思考内容作为新模型的可见回答文本发送，也不改写持久历史。
 
 #### Scenario: 会话级切换模型
 
@@ -31,7 +31,7 @@
 
 #### Scenario: 已锁定 Pi 的能力
 
-- **WHEN** 使用 Pi 1.3.0 内置 DeepSeek 模型目录
+- **WHEN** 使用 Pi 1.4.0 内置 DeepSeek 模型目录
 - **THEN** Flash 可选 off/low/high/max，Pro 可选 off/high/max；两端不提供 minimal/medium/xhigh
 
 #### Scenario: 切换到不支持当前强度的模型
@@ -118,11 +118,11 @@
 
 ### Requirement: 模型图片能力一致性
 
-系统 SHALL 向两端提供已安装 Pi 1.2.0 的输入类型和图片限制，不使用外部目录覆盖。新图片消息 MUST 在受理时验证实际会话模型支持图片；不支持时保留草稿和附件并提示切换模型或移除图片。历史图片及 read 工具图片结果在模型请求中的转换 SHALL 沿用 Pi，不修改持久历史或伪称非视觉模型能看见原图；工具读取不采用附件提交的能力拒绝策略。
+系统 SHALL 向两端提供已安装 Pi 1.4.0 的输入类型和图片限制，不使用外部目录覆盖。新图片消息 MUST 在受理时验证实际会话模型支持图片；不支持时保留草稿和附件并提示切换模型或移除图片。历史图片及 read 工具图片结果在模型请求中的转换 SHALL 沿用 Pi，不修改持久历史或伪称非视觉模型能看见原图；工具读取不采用附件提交的能力拒绝策略。
 
 #### Scenario: Flash 与 Pro
 
-- **WHEN** Pi 1.2.0 下用户选择 DeepSeek V4.1 Flash 或 V4 Pro
+- **WHEN** Pi 1.4.0 下用户选择 DeepSeek V4.1 Flash 或 V4 Pro
 - **THEN** 两端分别显示 Flash 支持图片、Pro 仅文本，并使用 Flash 声明的图片限制
 
 #### Scenario: 添加后切换模型
@@ -142,7 +142,7 @@
 
 ### Requirement: 内置 provider 目录
 
-系统 SHALL 内置一个封闭的模型 provider 目录，仅包含已安装 Pi 1.3.0 中使用纯 API Key 鉴权且无需额外配置的 provider；不属于目录的 provider MUST NOT 可被启用、配置或选用。目录成员由 Pi 的内置 provider 决定，不引入外部模型目录。
+系统 SHALL 内置一个封闭的模型 provider 目录，仅包含已安装 Pi 1.4.0 中使用纯 API Key 鉴权且无需额外配置的 provider；不属于目录的 provider MUST NOT 可被启用、配置或选用。目录成员由 Pi 的内置 provider 决定，不引入外部模型目录。
 
 #### Scenario: 目录成员
 

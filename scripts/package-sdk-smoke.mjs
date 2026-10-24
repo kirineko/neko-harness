@@ -18,7 +18,7 @@ const connection=new Connection({command:[daemon]});
 const env=new LocalExecutionEnv({connection,cwd:root});
 let pid;
 try{
- const info=await connection.info();pid=info.pid;if(info.version!=="1.3.0"||!info.features.includes("listFiles"))throw new Error("Invalid packaged daemon");
+ const info=await connection.info();pid=info.pid;if(info.version!=="1.4.0"||!info.features.includes("listFiles"))throw new Error("Invalid packaged daemon");
  await writeFile("cache-first.txt","file body");
  let changed=false;const watch=await env.watch([{path:root}],()=>{changed=true;},context);if(!watch.ok)throw watch.error;
  const first=await env.listFiles(".",{maxEntries:100,exclude:["node_modules"]},context);if(!first.ok||!first.value.entries.some(entry=>entry.path==="cache-first.txt"))throw new Error("Initial discovery failed");
@@ -32,6 +32,6 @@ try{
  const bmp=Buffer.alloc(70);bmp.write("BM");bmp.writeUInt32LE(70,2);bmp.writeUInt32LE(54,10);bmp.writeUInt32LE(40,14);bmp.writeInt32LE(2,18);bmp.writeInt32LE(2,22);bmp.writeUInt16LE(1,26);bmp.writeUInt16LE(24,28);bmp.writeUInt32LE(16,34);bmp.fill(160,54);await writeFile("convert.bmp",bmp);
  const converted=await read.execute({path:"convert.bmp"},api,context);if(!converted.output?.some(block=>block.type==="image"&&block.mimeType==="image/png")||!converted.diagnostics?.some(note=>note.message.includes("Converted")))throw new Error("Photon BMP conversion failed");
  await unlink("resize.png");await unlink("convert.bmp");
- console.log(`Pi 1.3 production SDK smoke passed (${process.platform}/${process.arch}, daemon pid ${pid})`);
+ console.log(`Pi 1.4 production SDK smoke passed (${process.platform}/${process.arch}, daemon pid ${pid})`);
 }finally{connection.close();}
 if(pid){let stopped=false;for(let i=0;i<100;i++){try{process.kill(pid,0);}catch{stopped=true;break;}await new Promise(resolve=>setTimeout(resolve,10));}if(!stopped)throw new Error("Packaged helper did not exit");}

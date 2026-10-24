@@ -2,7 +2,7 @@ import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai";
 import { createNekoRuntime } from "../src/runtime.ts";
 
-it("uses published DeepSeek 1.3 capabilities directly", async () => {
+it("uses published DeepSeek capabilities directly", async () => {
 	const runtime = await createNekoRuntime({ storage: "memory" });
 	try {
 		const models = await runtime.listSelectableModels();

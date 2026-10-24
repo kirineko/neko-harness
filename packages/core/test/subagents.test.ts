@@ -107,6 +107,50 @@ it("limits foreground children, cancels queued/running delegates and keeps sibli
 	}
 }, 30000);
 
+it("closes promptly while a delegate waits for a slot and reports nothing for the cancelled wait", async () => {
+	const faux = fauxProvider();
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	faux.setResponses([
+		fauxAssistantMessage(
+			Array.from({ length: 4 }, (_, i) =>
+				fauxToolCall("subagent", { type: "explore", title: `Child ${i}`, task: `Task ${i}` }),
+			),
+			{ stopReason: "toolUse" },
+		),
+		...Array.from({ length: 3 }, () => async (_context: unknown, options?: { signal?: AbortSignal }) => {
+			await Promise.race([
+				gate,
+				new Promise<void>((resolve) => options?.signal?.addEventListener("abort", () => resolve(), { once: true })),
+			]);
+			return fauxAssistantMessage("child evidence");
+		}),
+	]);
+	const reports: unknown[] = [];
+	const runtime = await createNekoRuntime({
+		storage: "memory",
+		credentials: new InMemoryCredentialStore(),
+		providers: [faux.provider],
+		model: { provider: "faux", modelId: "faux-1" },
+		onReport: (error) => reports.push(error),
+	});
+	try {
+		await runtime.submit("Investigate four independent tasks");
+		await until(
+			() => listDelegations(runtime.harness, runtime.root.id, runtime.context),
+			(ds) => ds.length === 4 && ds.some((d) => d.status === "queued"),
+		);
+		const started = Date.now();
+		await runtime.close();
+		expect(Date.now() - started).toBeLessThan(5000);
+		expect(reports).toEqual([]);
+	} finally {
+		release();
+	}
+}, 30000);
+
 it("forks child references at fixed history watermarks without inheriting writable children", async () => {
 	const faux = fauxProvider();
 	faux.setResponses([

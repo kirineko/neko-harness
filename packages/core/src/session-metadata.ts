@@ -41,6 +41,7 @@ export type SessionMetadata = {
 };
 export const SessionMetadataDoc = defineDoc<SessionMetadata>({
 	kind: "app.neko.session-metadata",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -126,10 +127,8 @@ function namingTask(
 		version: 1,
 		initial: () => ({ phase: "wait", until: Date.now() + 100 }),
 		phases: {
-			async wait(task, runtime, context) {
-				await runtime.sleep(task.state.checkpoint.until, context);
-				await runtime.commit(() => ({ status: "running", checkpoint: { phase: "generate", attempt: 0 } }), context);
-			},
+			wait: (task, runtime, context) =>
+				runtime.sleepUntil(task.state.checkpoint.until, { phase: "generate", attempt: 0 }, context),
 			async generate(_task, runtime, context) {
 				while (active >= 2) {
 					await new Promise<void>((resolve, reject) => {

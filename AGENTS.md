@@ -2,7 +2,7 @@
 
 ## 项目
 
-neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui 1.3.0，全部精确锁版本）的 agent harness monorepo。Bun 推荐 1.4.4（任意 1.4.x 可用）。设计决策见 `openspec/changes/archive/2026-10-11-bootstrap-neko-harness/design.md`。
+neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui 1.4.0，全部精确锁版本）的 agent harness monorepo。Bun 推荐 1.4.4（任意 1.4.x 可用）。设计决策见 `openspec/changes/archive/2026-10-11-bootstrap-neko-harness/design.md`。
 
 ## 常用命令
 
@@ -38,7 +38,7 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 
 ## 模型 provider
 
-- 凭据 / provider 目录是 core 的纯模块 `credential-providers.ts`（子路径 `@neko-harness/core/credential-providers`，前端共用）：`MODEL_PROVIDERS`（Pi 1.3.0 里纯 API Key 的 32 个 provider，封闭集合）与 `SEARCH_CREDENTIAL_PROVIDERS`（Tavily）。目录的 `envVar` 由 `provider-settings.test.ts` 与 Pi 的 `checkAuth` 对账，升级 Pi 时该测试失败即需显式更新目录；Azure / Anthropic / Cloudflare / Bedrock / Vertex / OAuth 类 provider 不在范围内。
+- 凭据 / provider 目录是 core 的纯模块 `credential-providers.ts`（子路径 `@neko-harness/core/credential-providers`，前端共用）：`MODEL_PROVIDERS`（Pi 1.4.0 里纯 API Key 的 32 个 provider，封闭集合）与 `SEARCH_CREDENTIAL_PROVIDERS`（Tavily）。目录的 `envVar` 由 `provider-settings.test.ts` 与 Pi 的 `checkAuth` 对账，升级 Pi 时该测试失败即需显式更新目录；Azure / Anthropic / Cloudflare / Bedrock / Vertex / OAuth 类 provider 不在范围内。
 - 运行时注册目录内全部 Pi provider，但只有「已启用」的才可选：启用集合存于 `app.neko.provider-settings` 文档（缺省仅 deepseek，DeepSeek 锁定不可取消），`listSelectableModels()` 只含已启用 provider 的模型并带 `available`（有无凭据），`listModels()` 仍是全部模型供按会话模型查找（投影、图片能力）。经 `options.providers` 注入的非目录 provider（测试 faux）不受启用 / Key 门禁。
 - 受理输入、`compact`、子 agent 启动与会话命名统一走 `guardProvider`：先 `PROVIDER_DISABLED`，再 `PROVIDER_KEY_REQUIRED`（`CODE: 文案` 前缀，网关原样透传）。`--model` / `defaultModel` 指向未启用 provider 不阻止启动，只在提交时拦截。自动压缩 `triggerPercent` 的基准窗口只统计已启用 provider 的模型。
 - 网关 `neko.credentials` v2：`statuses` 是按 provider id 的映射（模型 provider 带 `enabled`），`setEnabled` 修改启用；`neko.models.list` 返回可选模型。应用协议 9。Web 在凭据状态变化后重拉模型列表；设置页：`/settings` = 模型服务，`/settings/search` = 联网搜索（Tavily Key 与搜索服务选择）。
@@ -118,12 +118,15 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - core / gateway 推送的英文文案（工具标题、状态、错误前缀等）在前端映射成当前语言（`core-text`），映射表由 `packages/core/test/fixtures/core-ui-strings.json` 与 `core-ui-strings.test.ts` 对账；core 改了推送文案，该测试失败即需同步各端映射。映射不到的原样显示。已知遗留：gateway 自己拼的中文错误在 `en` 下仍是中文。
 - 防回退：Web、TUI 各有扫描 CJK 字面量的测试（Web `test/support/cjk-scan.ts`），只允许白名单内的条目（语言名本身、协议数据等），白名单要有理由；移动端同理扫描 `lib/` 下的 Dart 字面量。不要在组件里直接写中文或英文用户可见文案。
 
-## Pi 1.3 使用要点（以已安装发布包的类型与行为为准）
+## Pi 1.4 使用要点（以已安装发布包的类型与行为为准）
 
 - durable 异步调用使用 `Context`（core 默认 `BACKGROUND_CONTEXT`）；远程 Chord 引用（`Ref`）方法使用可选 `Ctx`，普通调用自动 root，需要取消/组合时使用 host.root；ctx 只能给创建它的 host 的引用用（否则 `invalid/foreign_ctx`）。
-- Chord 1.3：契约 `remote(..., { host: hostNamed(...) })` 声明放置，调用方不再传 `{ at }`；工厂返回 `variant`（非 `kind`）；`self.state(name, schema, initial)`、`self.resource(name, { version, ... })`、`self.on(name, source, handler)` 按名声明；`lifetime: "host"` 取代 `eager`。`host.get` 异步并等首个状态快照，`host.hold` 同步可能仍 loading（状态在水合前读取会抛 `not_ready`，已结束的引用读取会抛其结束错误）；状态类型是 `T` 不含 `undefined`。对状态的监听器会在重订阅时再收到当前值，必须幂等对账。Chord 未导出 `MethodSpec`，`gateway/contract.ts` 用 `contract()`/`rpc()` 元组封装以保持声明可移植。
-- 网关：host 名固定为 `GATEWAY_HOST`（`neko`），`serverId` 由应用信息校验（`GatewayIdentityError` / `assertGatewayIdentity`），客户端 host 一律用 `createClientHost(link)`；主体类型是 `GatewayPrincipal`。链路协议版本由 Chord 的 `PROTOCOL_VERSION` 决定（1.3.0 为 4）：协议版本不同或握手无法解析（如 Pi 1.2 网关）会被客户端报告为 `ApplicationProtocolError`（不可重试）。服务端 WebSocket 不接受压缩帧；`ws` 在 Bun 下经 `addEventListener` 把文本帧交成 Buffer，因此有界链路用 `on("message", (data, isBinary))`。
-- 存储：`openNodeSqliteStorage(path)`（自动建父目录）或 `MemoryStorage`；一个存储同时只被一个 Harness 打开。
+- Chord（1.3 起沿用，1.4 未变）：契约 `remote(..., { host: hostNamed(...) })` 声明放置，调用方不再传 `{ at }`；工厂返回 `variant`（非 `kind`）；`self.state(name, schema, initial)`、`self.resource(name, { version, ... })`、`self.on(name, source, handler)` 按名声明；`lifetime: "host"` 取代 `eager`。`host.get` 异步并等首个状态快照，`host.hold` 同步可能仍 loading（状态在水合前读取会抛 `not_ready`，已结束的引用读取会抛其结束错误）；状态类型是 `T` 不含 `undefined`。对状态的监听器会在重订阅时再收到当前值，必须幂等对账。Chord 未导出 `MethodSpec`，`gateway/contract.ts` 用 `contract()`/`rpc()` 元组封装以保持声明可移植。
+- 网关：host 名固定为 `GATEWAY_HOST`（`neko`），`serverId` 由应用信息校验（`GatewayIdentityError` / `assertGatewayIdentity`），客户端 host 一律用 `createClientHost(link)`；主体类型是 `GatewayPrincipal`。链路协议版本由 Chord 的 `PROTOCOL_VERSION` 决定（1.3.0 与 1.4.0 均为 4）：协议版本不同或握手无法解析（如 Pi 1.2 网关）会被客户端报告为 `ApplicationProtocolError`（不可重试）。服务端 WebSocket 不接受压缩帧；`ws` 在 Bun 下经 `addEventListener` 把文本帧交成 Buffer，因此有界链路用 `on("message", (data, isBinary))`。
+- 存储：`openNodeSqliteStorage(path)`（自动建父目录）或 `MemoryStorage`；一个存储同时只被一个 Harness 打开。1.4 打开 SQLite 时自动迁到 schema v2，之后 1.3 及更早版本不能再打开，不可回退。
+- 文档定义：`defineDoc` / `defineDocFamily` 必须显式 `checkpointWhen`，本项目一律 `() => false`（改动只存增量，等价 1.3 缺省）；新增文档定义不能省略。
+- 任务等待：`TaskRuntime.sleep()` 已删除。跨阶段的等待用 `runtime.sleepUntil(until, checkpoint, ctx)`（任务进入 `sleeping`，不占 invocation，重启后按 Harness 时钟继续，如会话命名的 `wait` 阶段）；阶段内短等待用 `runtime.setTimer` 加 `runtime.signal`（不落盘，如子 agent 准入轮询 `subagents.ts` 的 `pause`）。穷举任务状态的代码要处理 `sleeping`。
+- 崩溃停放：同一任务被崩溃连续截断 `settings.restartLimit`（默认 5）次且未提交新状态即被停放，经 `onReport`（`task_parked`）报告一次，`Harness.retryTask` 才能再运行；正常 `close()` 不计数。本项目保持默认且不提供恢复入口。测试里模拟崩溃：关闭后用裸存储把任务记录写成 `running` 加 `restarts`（见 `crash-loop.test.ts`）。
 - 上下文设置：`context.compaction`/`context.pruning`（配置文件）与 UI 保存值（`app.neko.context-settings` 文档）按保存值 > 配置 > 默认解析（`packages/core/src/context-settings.ts`）；压缩通过 `Harness.open` 的 `settings.compaction` getter 即时生效，未设置的字段不传，保持原生策略。
 - 工具结果裁剪（`packages/core/src/context-pruning.ts`，默认关闭）：`ContextPruner` 监听提交，成功回答的占用 ≥ 阈值时写入 `app.neko.context-prune` 条目（`requestId = prune:<助手条目 id>`），其 `edits` 把旧大工具结果替换为占位；只改模型上下文，原条目、投影与统计不变（投影对该种类无分支）。
 - 会话：`harness.root(context, { agent })` → `conversation.submit({ type: "input", content }, context)` → `submission.wait(context)`；同 `requestId` 重复提交幂等（含重开后）。
@@ -135,4 +138,4 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 工具结果使用 `output`（模型）、`structuredOutput`（程序）与 `details`（UI，随工具消息持久化）；消息自身仍用 `content`。输入的 `entry: { kind, data }` 与内容原子持久化，排队期间位于 InboxDoc。
 - 存储致命错误终止 Harness，`closed`/watch `session_failed` 通知结束；独立无效读取 StorageRequestError 只失败该请求，在 commit 中仍终止运行时。不重试 StorageRejected。
 - 原生 read 统一文字/图片，上游 Photon 处理器负责工具读图；附件仍严格校验。listFiles 来自 pi-env LocalExecutionEnv，共享按需 Connection，关闭时释放；@ 补全不依赖 fd，缓存与刷新边界见升级 design D11。
-- 以已安装的 1.3.0 类型为准，reference main 可含未发布修复（升级设计见 `openspec/changes/archive/2026-10-17-upgrade-pi-sdk-1-3/design.md`）。ConversationId 是数字 brand（ROOT = 1），未知 id 的 harness.conversation() 返回 undefined。
+- 以已安装的 1.4.0 类型为准，reference main 可含未发布修复（例如 main 上 `Storage.commit` 的签名与发布包不同）；升级设计见 `openspec/changes/archive/2026-10-17-upgrade-pi-sdk-1-3/design.md` 与 `openspec/changes/archive/2026-10-24-upgrade-pi-sdk-1-4/design.md`。ConversationId 是数字 brand（ROOT = 1），未知 id 的 harness.conversation() 返回 undefined。

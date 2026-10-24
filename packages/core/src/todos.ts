@@ -16,6 +16,7 @@ import { SubagentDoc } from "./subagents.ts";
  */
 export const TodosDoc = defineDoc<TodoList>({
 	kind: "app.neko.todos",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "rewindable",
@@ -29,6 +30,7 @@ export const TodosDoc = defineDoc<TodoList>({
  */
 const TodoReceiptDoc = defineDoc<{ applied: boolean; revision: number; items: TodoItem[] }>({
 	kind: "app.neko.todo-receipt",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "task",
 	initial: () => ({ applied: false, revision: 0, items: [] }),

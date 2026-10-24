@@ -31,6 +31,7 @@ export type ToolApproval = {
 };
 export const ApprovalsDoc = defineDoc<{ items: ToolApproval[] }>({
 	kind: "app.neko.approvals",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",

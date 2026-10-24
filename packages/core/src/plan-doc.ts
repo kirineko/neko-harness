@@ -19,6 +19,7 @@ export const PLAN_HISTORY = 5;
  */
 export const PlanDoc = defineDoc<PlanState>({
 	kind: "app.neko.plan",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "rewindable",

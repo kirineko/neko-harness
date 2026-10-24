@@ -1,4 +1,4 @@
-// Pi 1.3 acceptance: upstream behavior changes neko relies on and must not regress or patch around.
+// Upstream Pi behavior changes neko relies on and must not regress or patch around.
 
 import { expect, it } from "bun:test";
 import { mkdtemp, stat } from "node:fs/promises";

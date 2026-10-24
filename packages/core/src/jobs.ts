@@ -50,6 +50,7 @@ export type JobsState = { next: number; items: JobRecord[] };
 /** Session-level job list; forks start empty, as a process does not belong to a copy of the transcript. */
 export const JobsDoc = defineDoc<JobsState>({
 	kind: "app.neko.jobs",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",

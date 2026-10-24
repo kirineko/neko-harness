@@ -174,6 +174,49 @@ it("restores an interrupted naming attempt and ignores results after archive", a
 		await rm(dir, { recursive: true, force: true });
 	}
 });
+it("keeps a naming retry's sleep across a restart and requests the title once", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "neko-naming-sleep-"));
+	const faux = fauxProvider();
+	const retryDelayMs = 1500;
+	const opts = {
+		storagePath: join(dir, "db.sqlite"),
+		providers: [faux.provider],
+		model: { provider: "faux", modelId: "faux-1" },
+		timings: { namingRetryDelayMs: retryDelayMs },
+	};
+	const stamps: number[] = [];
+	faux.setResponses([
+		fauxAssistantMessage([fauxText("answer")]),
+		() => {
+			stamps.push(Date.now());
+			return fauxAssistantMessage([fauxText("   ")]);
+		},
+		() => {
+			stamps.push(Date.now());
+			return fauxAssistantMessage([fauxText("Slept title")]);
+		},
+	]);
+	let runtime = await createNekoRuntime({ ...opts, credentials: new InMemoryCredentialStore() });
+	try {
+		await runtime.submit("name me after a sleep");
+		await until(async () => stamps.length === 1);
+		await until(
+			async () =>
+				(await runtime.harness.snapshot(SessionMetadataDoc, runtime.root.id, runtime.context))?.attempts === 1,
+		);
+		await runtime.close();
+		runtime = await createNekoRuntime({ ...opts, credentials: new InMemoryCredentialStore() });
+		await until(async () => (await runtime.listConversations())[0]?.title === "Slept title");
+		expect(stamps).toHaveLength(2);
+		// The wait is not restarted by the reopen, and it is not skipped either.
+		expect(stamps[1]! - stamps[0]!).toBeGreaterThanOrEqual(retryDelayMs - 100);
+		expect(stamps[1]! - stamps[0]!).toBeLessThan(retryDelayMs * 2);
+		expect(faux.state.callCount).toBe(3);
+	} finally {
+		await runtime.close();
+		await rm(dir, { recursive: true, force: true });
+	}
+});
 it("does not retry a failed first answer using a later question", async () => {
 	const faux = fauxProvider();
 	faux.setResponses([fauxAssistantMessage([]), fauxAssistantMessage([fauxText("later answer")])]);

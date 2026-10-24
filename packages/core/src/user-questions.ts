@@ -33,6 +33,7 @@ import { SubagentDoc } from "./subagents.ts";
  */
 export const QuestionDoc = defineDocFamily<QuestionRecord, QuestionRecord>({
 	kind: "app.neko.question",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -44,6 +45,7 @@ export const QuestionDoc = defineDocFamily<QuestionRecord, QuestionRecord>({
 /** Light live index: only the ids that still wait for the user, so views never carry the whole history. */
 export const QuestionsDoc = defineDoc<{ revision: number; pending: number[] }>({
 	kind: "app.neko.questions",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",

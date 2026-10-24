@@ -365,6 +365,7 @@ const neverAborted = () => new AbortController().signal;
  */
 const ArchivedDoc = defineDoc<{ archived: boolean }>({
 	kind: "app.neko.conversation",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -374,6 +375,7 @@ const ArchivedDoc = defineDoc<{ archived: boolean }>({
 
 const WorkspacesDoc = defineDoc<{ items: NekoWorkspace[] }>({
 	kind: "app.neko.workspaces",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -387,6 +389,7 @@ const WorkspacesDoc = defineDoc<{ items: NekoWorkspace[] }>({
  */
 const RemovedWorkspacesDoc = defineDoc<{ paths: string[] }>({
 	kind: "app.neko.workspaces-removed",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -397,6 +400,7 @@ const RemovedWorkspacesDoc = defineDoc<{ paths: string[] }>({
 /** User-level search provider choice; `null` means "never saved", so the config value or the default applies. */
 const SearchSettingsDoc = defineDoc<{ provider: SearchProviderId | null }>({
 	kind: "app.neko.search-settings",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -407,6 +411,7 @@ const SearchSettingsDoc = defineDoc<{ provider: SearchProviderId | null }>({
 /** User-level model provider enablement; `null` means "never saved", so only the default providers are enabled. */
 const ProviderSettingsDoc = defineDoc<{ enabled: string[] | null }>({
 	kind: "app.neko.provider-settings",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -417,6 +422,7 @@ const ProviderSettingsDoc = defineDoc<{ enabled: string[] | null }>({
 /** User-level default model; `null` means "never saved", so the config value or the built-in default applies. */
 const DefaultModelDoc = defineDoc<{ model: NekoModelRef | null }>({
 	kind: "app.neko.default-model",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -427,6 +433,7 @@ const DefaultModelDoc = defineDoc<{ model: NekoModelRef | null }>({
 /** User-level context settings saved from a UI; `null` fields were never saved. */
 const ContextSettingsDoc = defineDoc<SavedContextSettings>({
 	kind: "app.neko.context-settings",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
@@ -436,6 +443,7 @@ const ContextSettingsDoc = defineDoc<SavedContextSettings>({
 
 const ActivityDoc = defineDoc<{ lastUsedAt: number }>({
 	kind: "app.neko.activity",
+	checkpointWhen: () => false,
 	version: 1,
 	scope: "conversation",
 	history: "latest",
