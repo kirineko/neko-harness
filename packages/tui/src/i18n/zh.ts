@@ -462,7 +462,7 @@ export const zh = {
 	"context.row.autoCompaction.label": "自动压缩",
 	"context.row.autoCompaction.description": "接近上限时自动压缩。/compact 始终可用。",
 	"context.row.compactAt.label": "压缩阈值",
-	"context.row.compactAt.description": "上下文达到最小模型窗口的此比例时压缩。默认接近上限。",
+	"context.row.compactAt.description": "上下文达到当前模型窗口的此比例时压缩。默认接近上限。",
 	"context.row.keepRecent.label": "保留最近内容",
 	"context.row.keepRecent.description": "压缩时原样保留的最近上下文。",
 	"context.row.pruneResults.label": "裁剪工具结果",

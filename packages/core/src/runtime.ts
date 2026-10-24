@@ -11,6 +11,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import { clampThinkingLevel, createModels, getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { PI_ATTRIBUTION } from "@earendil-works/pi-ai/utils/identity";
 import {
 	type AgentEventStream,
 	AssistantEntry,
@@ -46,7 +47,7 @@ import {
 	type ContextSettings,
 	type ContextSettingsPatch,
 	type ContextSettingsState,
-	compactionPolicy,
+	createCompactionPolicy,
 	emptySavedContextSettings,
 	parseContextSettingsPatch,
 	resolveContextSettings,
@@ -684,10 +685,18 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 
 	let savedContext: SavedContextSettings = emptySavedContextSettings();
 	let contextState = resolveContextSettings(options.contextSettings, savedContext);
+	// The whole catalog, enabled or not: a session may still use a model of a disabled provider, and each model's
+	// threshold depends only on its own window.
+	const compactionFor = createCompactionPolicy(
+		new Map(allModels().map((model) => [`${model.provider}/${model.modelId}`, model.contextWindow])),
+	);
 	const harness = await Harness.open(
 		storage,
 		{
 			models,
+			// Model vendors that only accept Pi's client are the reason for this; it matches Pi's default today, and
+			// stating it keeps an upstream change of that default from silently changing what neko sends.
+			identity: { userAgent: "detailed", attribution: PI_ATTRIBUTION },
 			registry,
 			settings: {
 				...(options.timings?.retryBaseDelayMs === undefined
@@ -695,13 +704,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 					: { retry: { baseDelayMs: options.timings.retryBaseDelayMs } }),
 				// Read at every use, so a saved change applies from the next threshold check without a restart.
 				get compaction() {
-					return compactionPolicy(
-						contextState,
-						// Only models a user can pick count; the whole catalog would pin the trigger to its smallest window.
-						allModels()
-							.filter((model) => !isModelProvider(model.provider) || enabled.has(model.provider))
-							.map((model) => model.contextWindow),
-					);
+					return compactionFor(contextState);
 				},
 			},
 			onReport: options.onReport,

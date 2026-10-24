@@ -7,7 +7,7 @@ export { PRUNING_DEFAULTS };
 export type CompactionSettings = {
 	/** Automatic compaction; manual compaction always works. */
 	readonly enabled?: boolean;
-	/** Blocking threshold as a percent of the smallest registered model context window (1-99). */
+	/** Blocking threshold as a percent of each model's own context window (1-99). */
 	readonly triggerPercent?: number;
 	readonly keepRecentTokens?: number;
 };
@@ -257,21 +257,43 @@ export function resolveContextSettings(
 	};
 }
 
+/** The part of pi-durable's `settings.compaction` this module produces. */
+export type CompactionPolicy = {
+	enabled?: boolean;
+	keepRecentTokens?: number;
+	modelOverrides?: Record<string, { reserveTokens: number }>;
+};
+
 /**
  * The `settings.compaction` handed to pi-durable. Only fields that were set (config or saved) are returned, so an
- * untouched install keeps the native policy exactly. `windows` are the registered models' context windows.
+ * untouched install keeps the native policy exactly. `windows` maps `"provider/modelId"` to its context window; the
+ * trigger percent becomes a per-model `reserveTokens`, so each model compacts at that share of its own window.
  */
-export function compactionPolicy(
-	state: ContextSettingsState,
-	windows: readonly number[],
-): { enabled?: boolean; reserveTokens?: number; keepRecentTokens?: number } {
+export function compactionPolicy(state: ContextSettingsState, windows: ReadonlyMap<string, number>): CompactionPolicy {
 	const { effective, sources } = state;
-	const policy: { enabled?: boolean; reserveTokens?: number; keepRecentTokens?: number } = {};
+	const policy: CompactionPolicy = {};
 	if (sources.compaction.enabled !== "default") policy.enabled = effective.compaction.enabled;
 	if (sources.compaction.keepRecentTokens !== "default")
 		policy.keepRecentTokens = effective.compaction.keepRecentTokens;
 	const percent = effective.compaction.triggerPercent;
-	const window = windows.length > 0 ? Math.min(...windows) : 0;
-	if (percent !== null && window > 0) policy.reserveTokens = window - Math.floor((window * percent) / 100);
+	if (percent === null) return policy;
+	const overrides: Record<string, { reserveTokens: number }> = {};
+	for (const [id, window] of windows)
+		if (window > 0) overrides[id] = { reserveTokens: window - Math.floor((window * percent) / 100) };
+	if (Object.keys(overrides).length > 0) policy.modelOverrides = overrides;
 	return policy;
+}
+
+/**
+ * `compactionPolicy` bound to a fixed window table, remembering the last result by settings-state identity. The
+ * override table is as large as the model catalog and pi-durable reads its settings on every threshold check.
+ */
+export function createCompactionPolicy(
+	windows: ReadonlyMap<string, number>,
+): (state: ContextSettingsState) => CompactionPolicy {
+	let last: { state: ContextSettingsState; policy: CompactionPolicy } | undefined;
+	return (state) => {
+		if (last?.state !== state) last = { state, policy: compactionPolicy(state, windows) };
+		return last.policy;
+	};
 }

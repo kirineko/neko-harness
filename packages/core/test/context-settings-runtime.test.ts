@@ -13,13 +13,18 @@ afterEach(async () => {
 	for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-function open(options: { storagePath?: string; context?: ContextSettings } = {}) {
-	const faux = fauxProvider({ models: [{ id: "small", contextWindow: 1000000 }] });
+function open(options: { storagePath?: string; context?: ContextSettings; modelId?: string } = {}) {
+	const faux = fauxProvider({
+		models: [
+			{ id: "small", contextWindow: 1000000 },
+			{ id: "narrow", contextWindow: 100000 },
+		],
+	});
 	faux.setResponses(Array.from({ length: 30 }, () => fauxAssistantMessage([fauxText("ok")])));
 	return createNekoRuntime({
 		storage: options.storagePath === undefined ? "memory" : "sqlite",
 		...(options.storagePath !== undefined ? { storagePath: options.storagePath } : {}),
-		model: { provider: "faux", modelId: "small" },
+		model: { provider: "faux", modelId: options.modelId ?? "small" },
 		providers: [faux.provider],
 		...(options.context !== undefined ? { contextSettings: options.context } : {}),
 	});
@@ -63,6 +68,27 @@ it("applies a config trigger and a saved override without a restart", async () =
 		expect(reset.effective.compaction.triggerPercent).toBe(1);
 	} finally {
 		await off.close();
+	}
+}, 60000);
+
+it("compacts each model at the trigger percent of its own window", async () => {
+	// 20% is 20k tokens for the narrow model and 200k for the wide one (background compaction starts 32k earlier);
+	// a turn is about 15k tokens, so two turns pass the first and stay far below the second.
+	const context = { compaction: { triggerPercent: 20 } };
+	const narrow = await open({ context, modelId: "narrow" });
+	try {
+		await pump(narrow, 2);
+		expect((await narrow.root.compactionRecord())?.phase).toBeDefined();
+	} finally {
+		await narrow.close();
+	}
+	// Another, smaller model in the catalog must not pull the wide model's threshold down with it.
+	const wide = await open({ context, modelId: "small" });
+	try {
+		await pump(wide, 2);
+		expect(await wide.root.compactionRecord()).toBeNull();
+	} finally {
+		await wide.close();
 	}
 }, 60000);
 

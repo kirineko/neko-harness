@@ -465,7 +465,7 @@ export const en: Record<MessageKey, string> = {
 	"context.row.autoCompaction.description": "Compact automatically near the limit. /compact always works.",
 	"context.row.compactAt.label": "Compact at",
 	"context.row.compactAt.description":
-		"Compact when context reaches this share of the smallest model window. Default is near the limit.",
+		"Compact when context reaches this share of the current model's window. Default is near the limit.",
 	"context.row.keepRecent.label": "Keep recent",
 	"context.row.keepRecent.description": "Recent context a compaction keeps verbatim.",
 	"context.row.pruneResults.label": "Prune tool results",
