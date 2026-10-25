@@ -1,17 +1,13 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { ConversationId, Cursor, EntryId, EntryRecord, Harness } from "@earendil-works/pi-durable";
+import { CHANGE_LIMITS, clipDiff } from "./change-limits.ts";
+import { CODEMODE_NAME } from "./codemode-mode.ts";
+import { NestedChangesDoc, type NestedChangesState } from "./nested-changes.ts";
 import { countDiffLines, editResultDiff, synthesizedWriteDiff } from "./projection.ts";
 import { SubagentsDoc } from "./subagents.ts";
 
-/** Bounds of the per-session change index; hitting one is reported as `truncated`, never dropped silently. */
-export const CHANGE_LIMITS = {
-	files: 500,
-	opsPerFile: 50,
-	diffBytes: 2 * 1024 * 1024,
-	opDiffBytes: 64 * 1024,
-	conversations: 64,
-};
+export { CHANGE_LIMITS };
 
 /** The main agent's label in `ChangeOp.agent` and `ChangedFile.agents`; subagents use their title. */
 export const MAIN_AGENT = "main";
@@ -54,19 +50,6 @@ export function normalizeChangePath(raw: string, cwd: string, workspace: string)
 	return { path: resolved.split(sep).join("/"), outside: true };
 }
 
-function clipDiff(diff: string): { diff: string; truncated: boolean } {
-	if (Buffer.byteLength(diff, "utf8") <= CHANGE_LIMITS.opDiffBytes) return { diff, truncated: false };
-	const lines = diff.split("\n");
-	const kept: string[] = [];
-	let bytes = 0;
-	for (const line of lines) {
-		bytes += Buffer.byteLength(line, "utf8") + 1;
-		if (bytes > CHANGE_LIMITS.opDiffBytes) break;
-		kept.push(line);
-	}
-	return { diff: kept.join("\n"), truncated: true };
-}
-
 type FileAggregate = {
 	path: string;
 	outside: boolean;
@@ -89,6 +72,8 @@ export class ConversationChanges {
 	truncated = false;
 	bytes = 0;
 	readonly files = new Map<string, FileAggregate>();
+	/** Position of every codemode call seen: its tool result's entry id once there is one, else its assistant entry. */
+	readonly #scripts = new Map<string, number>();
 	readonly #pending = new Map<string, Pending>();
 	readonly #agent: string;
 	readonly #cwd: string;
@@ -104,12 +89,14 @@ export class ConversationChanges {
 		for (const message of entry.model ?? []) {
 			if (message.role === "assistant") {
 				for (const block of message.content) {
+					if (block.type === "toolCall" && block.name === CODEMODE_NAME) this.#scripts.set(block.id, entry.id);
 					if (block.type !== "toolCall" || (block.name !== "edit" && block.name !== "write")) continue;
 					const path = (block.arguments as { path?: unknown } | undefined)?.path;
 					if (typeof path === "string" && path !== "")
 						this.#pending.set(block.id, { tool: block.name, path, args: block.arguments });
 				}
 			} else if (message.role === "toolResult") {
+				if (this.#scripts.has(message.toolCallId)) this.#scripts.set(message.toolCallId, entry.id);
 				const call = this.#pending.get(message.toolCallId);
 				if (!call) continue;
 				this.#pending.delete(message.toolCallId);
@@ -120,8 +107,29 @@ export class ConversationChanges {
 		this.last = entry.id;
 	}
 
+	/**
+	 * A copy that also holds the edits and writes of scripts whose codemode call is in this conversation's entries
+	 * (a record of a call that was rewound away stays out). The cached index itself is never changed by it.
+	 */
+	withNested(nested: Readonly<NestedChangesState>): ConversationChanges {
+		const visible = nested.items.filter((item) => this.#scripts.has(item.parentCallId));
+		const copy = new ConversationChanges(this.#agent, this.#cwd, this.#workspace);
+		copy.last = this.last;
+		copy.total = this.total;
+		copy.truncated = this.truncated || (nested.dropped && visible.length > 0);
+		copy.bytes = this.bytes;
+		for (const [path, file] of this.files)
+			copy.files.set(path, { ...file, agents: new Set(file.agents), items: file.items.map((item) => ({ ...item })) });
+		for (const item of visible)
+			copy.#record(
+				{ tool: item.tool, path: item.path },
+				{ diff: item.diff, added: item.added, removed: item.removed, truncated: item.truncated },
+				this.#scripts.get(item.parentCallId)!,
+			);
+		return copy;
+	}
+
 	#add(call: Pending, details: unknown, seq: number) {
-		const { path, outside } = normalizeChangePath(call.path, this.#cwd, this.#workspace);
 		let diff = "";
 		let added = 0;
 		let removed = 0;
@@ -141,6 +149,16 @@ export class ConversationChanges {
 				({ diff, added, removed, truncated } = synthesized);
 			}
 		}
+		this.#record(call, { diff, added, removed, truncated }, seq);
+	}
+
+	#record(
+		call: Pick<Pending, "tool" | "path">,
+		shown: { diff: string; added: number; removed: number; truncated: boolean },
+		seq: number,
+	) {
+		const { path, outside } = normalizeChangePath(call.path, this.#cwd, this.#workspace);
+		const { diff, added, removed, truncated } = shown;
 		this.total++;
 		let file = this.files.get(path);
 		if (!file) {
@@ -161,7 +179,7 @@ export class ConversationChanges {
 		file.added += added;
 		file.removed += removed;
 		file.agents.add(this.#agent);
-		file.lastSeq = seq;
+		file.lastSeq = Math.max(file.lastSeq, seq);
 		file.items.push({ seq, agent: this.#agent, tool: call.tool, diff, added, removed, truncated });
 		this.bytes += Buffer.byteLength(diff, "utf8");
 		if (file.items.length > CHANGE_LIMITS.opsPerFile) {
@@ -274,9 +292,11 @@ export class ChangeTracker {
 		let revision = 0;
 		let truncated = false;
 		for (const member of await this.#members(rootId)) {
-			const state = await this.#sync(member, workspace);
-			if (!state) continue;
-			revision += state.total;
+			const synced = await this.#sync(member, workspace);
+			if (!synced) continue;
+			const nested = await this.#harness.snapshot(NestedChangesDoc, member.id, this.#context);
+			const state = nested && nested.items.length > 0 ? synced.withNested(nested) : synced;
+			revision += synced.total + (nested?.total ?? 0);
 			truncated ||= state.truncated;
 			for (const file of state.files.values()) {
 				const existing = merged.get(file.path);

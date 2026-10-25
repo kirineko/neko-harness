@@ -1,6 +1,6 @@
 /** Item-level helpers shared by the Markdown/JSON/HTML exporters; browser-safe. */
 import type { ImageFile } from "./image-transfer.ts";
-import type { ChatImage, ChatItem } from "./projection.ts";
+import type { ChatImage, ChatItem, CodemodeCallView } from "./projection.ts";
 
 export type ExportSource = {
 	sessionId: string;
@@ -37,6 +37,19 @@ export function imageLabel(image: ChatImage): string {
 	const size = image.width > 0 && image.height > 0 ? ` · ${image.width}×${image.height}` : "";
 	return `${image.name} · ${image.mimeType}${size}`;
 }
+/** One line per nested call of a codemode script: tool, argument preview, status, time, error. Never a result body. */
+export function codemodeCallLine(call: CodemodeCallView): string {
+	return [
+		`${call.name}${call.args === "" ? "" : ` ${oneLine(call.args)}`}`,
+		call.status,
+		call.durationMs === null ? "" : formatDuration(call.durationMs),
+		call.error === null ? "" : oneLine(call.error),
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
+/** Trailing line of a codemode list that was cut at the call limit. */
+export const codemodeOmittedLine = (omitted: number): string => `… ${omitted} more calls not listed`;
 export function formatDuration(ms: number): string {
 	return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
 }

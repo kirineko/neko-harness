@@ -1658,6 +1658,24 @@ abstract class AppLocalizations {
   /// **'+{added} −{removed}（diff 已截断）'**
   String transcriptDiffSummaryTruncated(int added, int removed);
 
+  /// No description provided for @transcriptCodemodeCalls.
+  ///
+  /// In zh, this message translates to:
+  /// **'工具调用（{count}）'**
+  String transcriptCodemodeCalls(int count);
+
+  /// No description provided for @transcriptCodemodeMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有 {count} 条未显示'**
+  String transcriptCodemodeMore(int count);
+
+  /// No description provided for @transcriptCodemodeFullOutput.
+  ///
+  /// In zh, this message translates to:
+  /// **'完整输出：{path}'**
+  String transcriptCodemodeFullOutput(String path);
+
   /// No description provided for @transcriptSubagentTitle.
   ///
   /// In zh, this message translates to:

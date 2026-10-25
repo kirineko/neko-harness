@@ -14,6 +14,7 @@ import {
 	wrapTool,
 } from "@earendil-works/pi-durable";
 import { createBashTool } from "@earendil-works/pi-durable/tools";
+import { enabledTools } from "./agent-change.ts";
 import { DelegationsDoc, SubagentDoc, SubagentsDoc } from "./subagents.ts";
 
 export type ToolApproval = {
@@ -241,7 +242,7 @@ export async function prepareApprovalConversations(
 		await harness.commit(
 			(tx) =>
 				configure(tx, id, {
-					tools: [...agent.tools.filter((t) => t.name !== "bash"), createBashTool()],
+					tools: [...enabledTools(agent).filter((t) => t.name !== "bash"), createBashTool()],
 					extensions: { add: [extension] },
 				}),
 			context,

@@ -88,7 +88,7 @@ const rules = async (tools: string[]) => {
 	);
 	const section = extension.sections?.find((s) => s.key === "rules");
 	const input = {
-		agent: { cwd: home, tools: tools.map((name) => ({ name })) },
+		agent: { cwd: home, tools: tools.map((name) => ({ name })), callable: [] },
 		read: { snapshot: async () => ({ role: null, parentId: null }) },
 	} as unknown as PromptInput;
 	return (await section!.render(input, BACKGROUND_CONTEXT)) ?? "";

@@ -5,6 +5,7 @@ import {
 	NekoApplicationInfo,
 	type NekoAttachment,
 	NekoChat,
+	NekoCodemodeSettings,
 	NekoContextSettings,
 	NekoCredentials,
 	NekoDefaultModel,
@@ -254,6 +255,7 @@ export type NekoGatewayConnection = {
 	readonly credentials: NekoCredentials;
 	readonly searchSettings: NekoSearchSettings;
 	readonly contextSettings: NekoContextSettings;
+	readonly codemodeSettings: NekoCodemodeSettings;
 	readonly defaultModel: NekoDefaultModel;
 	readonly skillMarket: NekoSkillMarket;
 	readonly attachment: NekoAttachment | undefined;
@@ -295,6 +297,7 @@ export function createGatewayConnection(
 			credentials = get(NekoCredentials),
 			searchSettings = get(NekoSearchSettings),
 			contextSettings = get(NekoContextSettings),
+			codemodeSettings = get(NekoCodemodeSettings),
 			defaultModel = get(NekoDefaultModel),
 			skillMarket = get(NekoSkillMarket);
 		keep.push(
@@ -303,6 +306,7 @@ export function createGatewayConnection(
 			credentials.state.subscribe(() => {}),
 			searchSettings.state.subscribe(() => {}),
 			contextSettings.state.subscribe(() => {}),
+			codemodeSettings.state.subscribe(() => {}),
 			defaultModel.state.subscribe(() => {}),
 		);
 		return {
@@ -314,6 +318,7 @@ export function createGatewayConnection(
 			credentials,
 			searchSettings,
 			contextSettings,
+			codemodeSettings,
 			defaultModel,
 			skillMarket,
 		};
@@ -338,6 +343,7 @@ export function createGatewayConnection(
 			credentials,
 			searchSettings,
 			contextSettings,
+			codemodeSettings,
 			defaultModel,
 			workspaceFiles,
 			skillMarket,
@@ -351,6 +357,7 @@ export function createGatewayConnection(
 				credentials.ready,
 				searchSettings.ready,
 				contextSettings.ready,
+				codemodeSettings.ready,
 				defaultModel.ready,
 				workspaceFiles.ready,
 				skillMarket.ready,
@@ -396,6 +403,9 @@ export function createGatewayConnection(
 		},
 		get contextSettings() {
 			return services().contextSettings;
+		},
+		get codemodeSettings() {
+			return services().codemodeSettings;
 		},
 		get defaultModel() {
 			return services().defaultModel;

@@ -214,4 +214,76 @@ void main() {
     };
     expect(icons, hasLength(3));
   });
+  Map<String, dynamic> codemodeItem({Map<String, dynamic>? codemode}) =>
+      <String, dynamic>{
+        'key': 't-cm1',
+        'type': 'tool',
+        'refs': <Map<String, dynamic>>[],
+        'tool': <String, dynamic>{
+          'callId': 'call-cm',
+          'name': 'codemode',
+          'summary': 'read files',
+          'status': 'done',
+          'detail': 'await tools.read({ path: "a.ts" })',
+          'result': 'SCRIPT-OUT',
+          'codemode': ?codemode,
+        },
+      };
+
+  testWidgets('codemode 工具卡展开后显示嵌套调用、省略数与完整输出路径', (tester) async {
+    final transcript = Transcript()
+      ..applySnapshot(
+        snapshotOf(<Map<String, dynamic>>[
+          codemodeItem(
+            codemode: <String, dynamic>{
+              'calls': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'id': 1,
+                  'name': 'read',
+                  'args': 'a.ts',
+                  'status': 'ok',
+                  'durationMs': 1500,
+                },
+                <String, dynamic>{
+                  'id': 2,
+                  'name': 'edit',
+                  'args': 'b.ts',
+                  'status': 'error',
+                  'error': 'NO-MATCH',
+                },
+              ],
+              'omitted': 3,
+              'fullOutputPath': '/tmp/out.txt',
+            },
+          ),
+        ]),
+      );
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(tester, transcript, _Actions(transcript));
+
+    expect(find.textContaining('NO-MATCH'), findsNothing);
+    await tester.tap(find.text('codemode'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('read'), findsOneWidget);
+    expect(find.text('edit'), findsOneWidget);
+    expect(find.text('a.ts'), findsOneWidget);
+    expect(find.text('1.5 s'), findsOneWidget);
+    expect(find.text('NO-MATCH'), findsOneWidget);
+    expect(find.textContaining('/tmp/out.txt'), findsOneWidget);
+    expect(find.textContaining('SCRIPT-OUT'), findsOneWidget);
+    expect(find.textContaining('tools.read'), findsOneWidget);
+  });
+
+  testWidgets('缺少 codemode 字段时按普通工具项显示', (tester) async {
+    final transcript = Transcript()
+      ..applySnapshot(snapshotOf(<Map<String, dynamic>>[codemodeItem()]));
+    await _pump(tester, transcript, _Actions(transcript));
+
+    await tester.tap(find.text('codemode'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('SCRIPT-OUT'), findsOneWidget);
+    expect(CodemodeInfo.fromJson(<String, dynamic>{'calls': 'oops'}), isNull);
+  });
 }

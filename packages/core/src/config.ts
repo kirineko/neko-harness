@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
+import { type CodemodeSettings, parseCodemodeSettings } from "./codemode-mode.ts";
 import { type ContextSettings, mergeContextSettings, parseContextSettings } from "./context-settings.ts";
 import type { NekoModelRef } from "./runtime.ts";
 import { isSearchProvider, SEARCH_PROVIDERS, type SearchProviderId } from "./search-providers.ts";
@@ -45,6 +46,8 @@ export type NekoConfig = {
 	readonly webSearch?: NekoWebSearchConfig;
 	/** Context management: compaction trigger and tool result pruning. Unset keeps the native behaviour. */
 	readonly context?: ContextSettings;
+	/** Codemode mode for new sessions: off (default), on or only. */
+	readonly codemode?: CodemodeSettings;
 	readonly shell?: NekoShellConfig;
 };
 
@@ -141,6 +144,9 @@ export function mergeNekoConfig(base: NekoConfig, overrides: NekoConfig): NekoCo
 			: {}),
 		...(base.context !== undefined || overrides.context !== undefined
 			? { context: mergeContextSettings(base.context, overrides.context) }
+			: {}),
+		...(base.codemode !== undefined || overrides.codemode !== undefined
+			? { codemode: { ...base.codemode, ...overrides.codemode } }
 			: {}),
 		...(base.shell !== undefined || overrides.shell !== undefined
 			? { shell: { ...base.shell, ...overrides.shell } }
@@ -260,6 +266,13 @@ function validate(config: Record<string, unknown>, source: string): void {
 	if (config.context !== undefined) {
 		try {
 			parseContextSettings(config.context);
+		} catch (error) {
+			throw new Error(`neko config: ${source}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+	if (config.codemode !== undefined) {
+		try {
+			parseCodemodeSettings(config.codemode);
 		} catch (error) {
 			throw new Error(`neko config: ${source}: ${error instanceof Error ? error.message : String(error)}`);
 		}

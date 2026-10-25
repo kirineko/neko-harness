@@ -1,4 +1,5 @@
 import { type ConversationId, defineExtension, type PromptInput, section } from "@earendil-works/pi-durable";
+import { enabledTools } from "../agent-change.ts";
 import { ROLE_PROMPTS, SUBAGENT_DELIVERY, SubagentDoc } from "../subagents.ts";
 import type { PromptResources } from "./resources.ts";
 import { escapeXml, formatSkillsForPrompt } from "./skills.ts";
@@ -11,6 +12,9 @@ const PREAMBLE =
 
 /** Rules contributed per tool, in the spirit of pi's promptGuidelines. */
 const TOOL_GUIDELINES: Record<string, readonly string[]> = {
+	codemode: [
+		"Use codemode to batch independent tool calls (Promise.allSettled), chain them, or filter large output, instead of many separate calls.",
+	],
 	subagent: [
 		"Delegate only independent, sufficiently scoped work when isolation or parallelism helps. Handle simple tasks directly. Pass necessary context and user constraints; research-only requests must not become coding tasks. For related follow-up work, list and continue a suitable idle subagent using its stable agentId; busy means no task was accepted. Do not change its role. Verify and integrate reports. Do not modify files concurrently with a coder assigned those files.",
 	],
@@ -90,8 +94,9 @@ export const createNekoPrompt = (
 		const resources = cwd ? await loadResources(input.conversationId, cwd) : { contextFiles: [], skills: [] };
 		const sections: Record<string, string | undefined> = {
 			preamble: role ? ROLE_PROMPTS[role] + SUBAGENT_DELIVERY : PREAMBLE,
+			// Tools only scripts can call still get their rules: the codemode section lists declarations, not usage.
 			rules: buildRules(
-				input.agent.tools.map((tool) => tool.name),
+				enabledTools(input.agent).map((tool) => tool.name),
 				platform,
 			),
 			project_context: renderProjectContext(resources.contextFiles),

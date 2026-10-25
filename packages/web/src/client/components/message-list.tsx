@@ -8,6 +8,7 @@ import { type Translate, useT } from "../lib/i18n/index.ts";
 import { questionUi } from "../lib/question-ui";
 import { getState } from "../lib/store";
 import { AskUserRow } from "./ask-user-row";
+import { ToolOrCodemodeCard } from "./codemode-card";
 import { CopyButton } from "./copy-button";
 import { ImageGallery } from "./image-gallery";
 import { JobReportCard } from "./job-report-card";
@@ -15,7 +16,6 @@ import { Markdown } from "./markdown";
 import { PlanRow } from "./plan-row";
 import { SkillInvocationCard } from "./skill-card";
 import { ThinkingBlock } from "./thinking";
-import { ToolCard } from "./tool-card";
 
 const BOTTOM_THRESHOLD = 48;
 
@@ -170,7 +170,8 @@ function ToolRow({
 	}
 	return (
 		<div className="chat-row anim-other">
-			<ToolCard
+			<ToolOrCodemodeCard
+				codemode={item.codemode}
 				name={item.name}
 				summary={item.summary}
 				detail={item.detail}
@@ -204,7 +205,8 @@ function StreamingRow({ streaming, busy }: { streaming: StreamingView; busy: boo
 			)}
 			{streaming.toolCalls.map((call) => (
 				<div key={`st${call.callId}`} className="chat-row anim-other">
-					<ToolCard
+					<ToolOrCodemodeCard
+						codemode={call.codemode}
 						name={call.name}
 						summary={call.summary}
 						detail={call.detail}

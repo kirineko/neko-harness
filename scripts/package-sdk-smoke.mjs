@@ -6,6 +6,7 @@ import {Connection,LocalExecutionEnv,localDaemon} from "@earendil-works/pi-env";
 import {createNodePhotonImages} from "@earendil-works/pi-durable/images/node";
 import {createReadTool} from "@earendil-works/pi-durable/tools";
 import {BACKGROUND_CONTEXT as context} from "@earendil-works/chord/context";
+import {CodemodeSandbox} from "@earendil-works/pi-codemode";
 import sharp from "sharp";
 const require=createRequire(import.meta.url);
 const root=process.cwd();
@@ -32,6 +33,8 @@ try{
  const bmp=Buffer.alloc(70);bmp.write("BM");bmp.writeUInt32LE(70,2);bmp.writeUInt32LE(54,10);bmp.writeUInt32LE(40,14);bmp.writeInt32LE(2,18);bmp.writeInt32LE(2,22);bmp.writeUInt16LE(1,26);bmp.writeUInt16LE(24,28);bmp.writeUInt32LE(16,34);bmp.fill(160,54);await writeFile("convert.bmp",bmp);
  const converted=await read.execute({path:"convert.bmp"},api,context);if(!converted.output?.some(block=>block.type==="image"&&block.mimeType==="image/png")||!converted.diagnostics?.some(note=>note.message.includes("Converted")))throw new Error("Photon BMP conversion failed");
  await unlink("resize.png");await unlink("convert.bmp");
+ const sandbox=new CodemodeSandbox({memoryLimitBytes:256*1024*1024});
+ try{const ran=await sandbox.execute("return 6*7;");if(!ran.ok||ran.value!==42)throw new Error("Packaged codemode script failed: "+JSON.stringify(ran));}finally{sandbox.close();}
  console.log(`Pi 1.4 production SDK smoke passed (${process.platform}/${process.arch}, daemon pid ${pid})`);
 }finally{connection.close();}
 if(pid){let stopped=false;for(let i=0;i<100;i++){try{process.kill(pid,0);}catch{stopped=true;break;}await new Promise(resolve=>setTimeout(resolve,10));}if(!stopped)throw new Error("Packaged helper did not exit");}

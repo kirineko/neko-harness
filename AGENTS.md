@@ -78,6 +78,16 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 - 只读三层：`tools.remove`；`neko-plan` 扩展的 `beforeTool`（edit/write/job 与不安全 bash）；`wrapTool(createBashTool())` 执行端复核。bash 判定是纯模块 `plan-bash.ts` 的 `isSafeCommand`（引号外切段、白名单正则 + 危险参数/内容拒绝，白名单外一律拒绝；是护栏不是沙箱）。`submit_plan` / `neko-plan` 属 `MAIN_ONLY_*`；`subagent` 工具在 plan 模式拒绝启动与继续 coder。
 - 可选能力：`ChatView.plan`（`{ mode, revision, current }`，缺省 = 旧网关）、`SessionSummary.awaitingPlan`、方法 `planGet` / `planRespond` / `planMode`（不在 `configure` 的 change 里）；前端用 `planClient`（`client-session.ts`，`PLAN_UNSUPPORTED`）探测，不提升应用协议。Web 只用 `/plan` 切换并显示模式标识，TUI 用 `/plan`（有待批准时打开计划面板）与 `Shift+Tab`；新计划到达时与问题面板同规则自动打开（`PlanDock.autoOpen`，复用 `canAutoOpen`，每个版本只一次）；移动端只能查看与决定，不能进入 plan 模式。「取消并退出计划模式」不是新决定，只是对 `planMode("normal")`（`setPlanMode` → `PlanService.setMode` 把待批准计划置 `cancelled`）的快捷入口：Web 计划卡片、TUI 计划面板（`X` 键）、移动 `plan.exit`（只能退出，幂等）都复用它。计划的 `steps` / `note` 是 Markdown（Web `Markdown` 经 DOMPurify、Dart `NekoMarkdown`、TUI pi-tui `Markdown`，控制字符先剥离），`title` / `feedback` 仍按纯文本。限制集中在 `PLAN_LIMITS`（`interactions.ts`），改数值需同步 spec 与 Dart 契约。
 
+## Codemode
+
+- 模型写 JavaScript 脚本批量调用工具（基于 `@earendil-works/pi-codemode` 与 pi-durable 的 `codemode` 扩展，`packages/core/src/codemode.ts`、`codemode-mode.ts`）。三种模式：`off`（缺省）、`on`（普通工具之外再提供 `codemode`）、`only`（模型只见 `codemode` 加 todo / ask_user / subagent；edit/bash 规则照常）。扩展在注册表常驻安装；`off` 时会话的 agent 配置移除该扩展（工具与提示词节随之消失），`only` 再用 `modelTools` 收窄模型可见工具。
+- 数据位置：全局设置是 `app.neko.codemode-settings` 文档（`{ mode | null }`，根会话，`null` = 回落配置文件 `codemode.mode`）；解析优先级 UI 保存值 > 配置文件 > `off`（`resolveCodemodeSettings`）。会话创建时的模式固化进 `app.neko.codemode` 文档（rewindable / `fork: "asOf"`），**只对新会话生效**，改设置不影响已有会话；子 agent 继承父会话模式。运行时 `codemodeSettings()` / `setCodemodeMode()` / `resetCodemodeMode()`。
+- Agent 配置是 plan 模式与 codemode 的联合投影：纯函数 `agentChangeFor({ plan, codemode, role })`（`agent-change.ts`）产出唯一的 `tools` / `modelTools` / `callable` 配置，`agentSyncChange` 判断是否需要对账；运行时 `syncAgent` 在受理输入前与启动时幂等应用，plan 与 codemode 不得各自写配置。脚本内可调用的工具由 `callers` 决定（`subagent` 仅 `["model"]`，`job` 可从脚本调用）。
+- 嵌套改动记录：脚本里的 `edit` / `write` 不产生独立的 toolCall 条目，经 `nestedChangeWraps`（`nested-changes.ts`）把成功的嵌套调用记入 `app.neko.nested-changes` 文档，`ChangeTracker` 叠加到「本次改动」（`change-limits.ts` 集中上限）。
+- 沙箱限额集中在 `CODEMODE_LIMITS`：worker 同时最多 2 个、每个 256 MiB，`WorkerLimiter` 排队等待上限 60 秒（超时 `SANDBOX_BUSY`）。改数值需同步 spec。
+- 投影：`projection.ts` 的 `CodemodeView`（`calls` 最多 100 条、参数 / 错误各 200 字符、`omitted`、`fullOutputPath`）经 `ChatItem.codemode` / 流式 `call.codemode` 到各端；缺省 = 普通工具项或旧网关。Markdown / HTML / JSON 导出带脚本与调用列表。网关 `neko.codemode-settings` 契约（`{ effective: { mode }, source }`，`set` / `reset`）；应用协议 10。移动端只显示卡片，无设置入口，不提升移动 API 版本。
+- 前端：Web `/settings/codemode` 与 `CodemodeCard`，TUI `/codemode` 面板与工具卡调用列表，Dart `CodemodeInfo`。`codemode` / `/codemode` 在 `protected-terms.json` 中受保护，三端文案必须保留。
+
 ## 工作区登记与移除
 
 - 工作区目录是 `app.neko.workspaces` 文档；移除用独立墓碑文档 `app.neko.workspaces-removed`（`{ paths }`），两者同一次提交修改。`registerWorkspace(path, explicit)`：隐式（启动扫描会话 cwd、`forkConversation`）遇到墓碑路径直接跳过，显式（`addWorkspace`、带 cwd 的 `createConversation`、启动时的 `defaultCwd`）会清除墓碑再登记。新增登记入口必须经它并选对 `explicit`。

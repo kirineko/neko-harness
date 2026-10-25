@@ -39,7 +39,17 @@ import {
 import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createCodingTools } from "@earendil-works/pi-durable/tools";
+import { agentChangeFor, agentSyncChange } from "./agent-change.ts";
 import { AgentFileSearch } from "./agent-file-search.ts";
+import { CodemodeDoc, CodemodeSettingsDoc, createCodemodeRuntime } from "./codemode.ts";
+import {
+	CODEMODE_LIMITS,
+	type CodemodeMode,
+	type CodemodeSettings,
+	type CodemodeSettingsState,
+	parseCodemodeMode,
+	resolveCodemodeSettings,
+} from "./codemode-mode.ts";
 import { type CompactionRecord, readCompaction } from "./compaction.ts";
 import { ContextPruner } from "./context-pruning.ts";
 import {
@@ -84,15 +94,7 @@ import {
 } from "./interactions.ts";
 import { JobManager } from "./job-engine.ts";
 import { type JobOutputRead, type JobSummary, JobsDoc, summarizeJobRecord } from "./jobs.ts";
-import {
-	agentInPlanMode,
-	approvedPlanPrompt,
-	createPlanExtension,
-	PLAN_BUSY,
-	PlanService,
-	planAgentChange,
-	planRevisionPrompt,
-} from "./plan.ts";
+import { approvedPlanPrompt, createPlanExtension, PLAN_BUSY, PlanService, planRevisionPrompt } from "./plan.ts";
 import type { PlanItem } from "./plan-doc.ts";
 import { totalUsage } from "./projection.ts";
 import { expandSkillCommand } from "./prompt/invoke.ts";
@@ -177,6 +179,8 @@ export type NekoRuntimeOptions = {
 	readonly searchProvider?: SearchProviderId;
 	/** Config-file context settings (compaction trigger, tool result pruning); saved UI values take precedence. */
 	readonly contextSettings?: ContextSettings;
+	/** Config-file codemode mode for new sessions; a saved UI value takes precedence. */
+	readonly codemodeSettings?: CodemodeSettings;
 	/** Model the root conversation runs with; default the built-in DeepSeek chat model. */
 	readonly model?: NekoModelRef;
 	/** Explicit per-launch override (CLI `--model`); wins over the saved default and the config value for new sessions. */
@@ -196,6 +200,8 @@ export type NekoRuntimeOptions = {
 	readonly shellResolver?: WindowsShellResolver;
 	/** Shortens built-in waits so tests need not sit through them; not exposed by the CLI or the config file. */
 	readonly timings?: NekoRuntimeTimings;
+	/** Overrides the codemode worker cap and wait; tests use small values. Not exposed by the CLI or the config file. */
+	readonly codemodeLimits?: { readonly maxWorkers?: number; readonly waitMs?: number };
 };
 
 export type NekoRuntimeTimings = {
@@ -526,6 +532,12 @@ export type NekoRuntime = {
 	setContextSettings(patch: ContextSettingsPatch): Promise<ContextSettingsState>;
 	/** Clear every saved override. */
 	resetContextSettings(): Promise<ContextSettingsState>;
+	/** Effective codemode mode for new sessions (saved > config > off) with its source. */
+	codemodeSettings(): Promise<CodemodeSettingsState>;
+	/** Validate and persist the codemode mode; applies to sessions created afterwards. */
+	setCodemodeMode(mode: CodemodeMode): Promise<CodemodeSettingsState>;
+	/** Clear the saved mode. */
+	resetCodemodeMode(): Promise<CodemodeSettingsState>;
 	/** The search provider the next tool call uses. */
 	searchSettings(): Promise<SearchSettings>;
 	/** Persist the user's search provider choice; the next tool call uses it. */
@@ -678,6 +690,11 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 	registry.install(createQuestionExtension(() => questions));
 	let plans!: PlanService;
 	registry.install(createPlanExtension(() => plans));
+	const codemode = createCodemodeRuntime({
+		maxWorkers: options.codemodeLimits?.maxWorkers ?? CODEMODE_LIMITS.maxWorkers,
+		waitMs: options.codemodeLimits?.waitMs ?? CODEMODE_LIMITS.waitMs,
+	});
+	registry.install(codemode.extension);
 	for (const extension of options.extensions ?? []) registry.install(extension);
 	let approvals!: ToolApprovals;
 	const approvalExtension = createApprovalExtension(() => approvals);
@@ -761,6 +778,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			}
 		}
 	} catch (error) {
+		await codemode.close();
 		await workspaceFiles.close();
 		await harness.close(context);
 		throw error;
@@ -779,6 +797,20 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 	enabled = new Set(
 		normalizeEnabledProviders((await harness.snapshot(ProviderSettingsDoc, conversation.id, context))?.enabled),
 	);
+	/** Saved value > configuration file > off; read at every use, so a change applies to the next new session. */
+	const codemodeState = async (): Promise<CodemodeSettingsState> =>
+		resolveCodemodeSettings(
+			options.codemodeSettings,
+			(await harness.snapshot(CodemodeSettingsDoc, conversation.id, context))?.mode,
+		);
+	// A session's mode is fixed when it is created. The root of a new database is created here, so it takes the
+	// effective mode too; roots of older databases have no record and stay off.
+	if (existing.length === 0) {
+		const initial = (await codemodeState()).effective.mode;
+		await harness.commit(async (tx) => {
+			(await tx.doc(CodemodeDoc, conversation.id)).mode = initial;
+		}, context);
+	}
 	const savedSearch = (await harness.snapshot(SearchSettingsDoc, conversation.id, context))?.provider;
 	if (isSearchProvider(savedSearch)) searchProvider = savedSearch;
 	savedContext = sanitizeSavedContextSettings(await harness.snapshot(ContextSettingsDoc, conversation.id, context));
@@ -913,11 +945,14 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			if (admissions.get(id) === work) admissions.delete(id);
 		}
 	};
-	/** The agent configuration is a projection of the plan document; repair it before anything depends on it. */
-	const syncPlanAgent = async (target: Conversation) => {
-		const mode = await plans.mode(target.id);
-		if ((mode === "plan") !== agentInPlanMode(await target.agent(context)))
-			await target.configure(planAgentChange(mode), context);
+	/** The agent configuration is a projection of the plan and codemode documents; repair it before anything depends on it. */
+	const syncAgent = async (target: Conversation) => {
+		const change = agentSyncChange(await target.agent(context), {
+			plan: await plans.mode(target.id),
+			codemode: (await harness.snapshot(CodemodeDoc, target.id, context))?.mode ?? "off",
+			role: "main",
+		});
+		if (change) await target.configure(change, context);
 	};
 	const submitTo = async (
 		target: Conversation,
@@ -926,7 +961,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		extra?: Pick<InputData, "planDecision">,
 	): Promise<Submission> =>
 		admit(target.id, async () => {
-			await syncPlanAgent(target);
+			await syncAgent(target);
 			const agent = await target.agent(context);
 			const workspace = executionWorkspace(agent.cwd);
 			const duplicate =
@@ -1109,7 +1144,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			return admit(target.id, async () => {
 				if (await isRunning(target.id)) throw new Error(PLAN_BUSY);
 				await plans.setMode(target.id, mode);
-				await syncPlanAgent(target);
+				await syncAgent(target);
 				return plans.view(target.id);
 			});
 		},
@@ -1232,7 +1267,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		try {
 			const session = await getConversation(id);
 			if (!session) continue;
-			await admit(id, () => syncPlanAgent(session.conversation));
+			await admit(id, () => syncAgent(session.conversation));
 			const pending = await plans.undispatched(id);
 			if (pending) await dispatchPlan(session.conversation, pending);
 		} catch (error) {
@@ -1327,6 +1362,9 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 						? await tx.createConversation({ ownership: { kind: "ownerless" } })
 						: await tx.forkConversation(id, at, { ownership: { kind: "ownerless" } });
 				(await tx.doc(DelegationsDoc, child.id)).items = inherited;
+				// A fork with history gets the mode as of its fork point (the document is rewindable); an empty copy
+				// has no history to carry it, so it takes the source's current mode.
+				if (at === undefined) (await tx.doc(CodemodeDoc, child.id)).mode = (await tx.doc(CodemodeDoc, id)).mode;
 				if (sourceMetadata) {
 					const doc = await tx.doc(SessionMetadataDoc, child.id);
 					doc.title = sourceMetadata.title || sourceMetadata.firstPromptPreview;
@@ -1409,6 +1447,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			// Read at every creation, so a saved change applies without a restart (same as ProviderSettingsDoc).
 			const savedDefault = (await harness.snapshot(DefaultModelDoc, conversation.id, context))?.model ?? null;
 			const effective = createOptions?.model ?? modelOverride ?? savedDefault ?? model;
+			const mode = (await codemodeState()).effective.mode;
 			const created = await harness.createConversation(
 				{
 					ownership: { kind: "ownerless" },
@@ -1416,6 +1455,10 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 						model: effective,
 						thinkingLevel: resolveLevel(effective, createOptions?.thinkingLevel ?? options.thinkingLevel ?? "high"),
 						cwd: workspace.path,
+						...agentChangeFor({ plan: "normal", codemode: mode, role: "main" }),
+					},
+					init: async (tx, id) => {
+						(await tx.doc(CodemodeDoc, id)).mode = mode;
 					},
 				},
 				context,
@@ -1480,6 +1523,20 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		},
 		async resetContextSettings() {
 			return persistContext(emptySavedContextSettings());
+		},
+		codemodeSettings: codemodeState,
+		async setCodemodeMode(mode) {
+			const parsed = parseCodemodeMode(mode);
+			await harness.commit(async (tx) => {
+				(await tx.doc(CodemodeSettingsDoc, conversation.id)).mode = parsed;
+			}, context);
+			return codemodeState();
+		},
+		async resetCodemodeMode() {
+			await harness.commit(async (tx) => {
+				(await tx.doc(CodemodeSettingsDoc, conversation.id)).mode = null;
+			}, context);
+			return codemodeState();
 		},
 		async searchSettings() {
 			return { selected: searchProvider };
@@ -1596,6 +1653,8 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			registry.install(extension);
 		},
 		async close() {
+			// Scripts are stopped first; an interrupted one is replayed on the next start.
+			await codemode.close();
 			await cleanup();
 			return harness.close(context);
 		},

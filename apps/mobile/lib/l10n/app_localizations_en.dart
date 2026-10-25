@@ -934,6 +934,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String transcriptCodemodeCalls(int count) {
+    return 'Tool calls ($count)';
+  }
+
+  @override
+  String transcriptCodemodeMore(int count) {
+    return '$count more not shown';
+  }
+
+  @override
+  String transcriptCodemodeFullOutput(String path) {
+    return 'Full output: $path';
+  }
+
+  @override
   String transcriptSubagentTitle(String title) {
     return 'Sub-agent · $title';
   }

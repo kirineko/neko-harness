@@ -211,3 +211,21 @@ it("parses, validates, and merges context settings", () => {
 	});
 	expect(mergeNekoConfig({}, {}).context).toBeUndefined();
 });
+
+it("parses, validates, and merges codemode settings", () => {
+	expect(parseNekoConfig('{"codemode": {"mode": "only"}}', "test.json", {}).codemode).toEqual({ mode: "only" });
+	expect(parseNekoConfig('{"codemode": {}}', "test.json", {}).codemode).toEqual({});
+	for (const bad of [
+		'{"codemode": 5}',
+		'{"codemode": {"mode": "auto"}}',
+		'{"codemode": {"mode": null}}',
+		'{"codemode": {"x": 1}}',
+	])
+		expect(() => parseNekoConfig(bad, "test.json", {})).toThrow(/test\.json.*codemode/);
+	expect(() => parseNekoConfig('{"codemode": {"mode": "auto"}}', "test.json", {})).toThrow(/off, on, only/);
+	expect(mergeNekoConfig({ codemode: { mode: "on" } }, { codemode: { mode: "only" } }).codemode).toEqual({
+		mode: "only",
+	});
+	expect(mergeNekoConfig({ codemode: { mode: "on" } }, {}).codemode).toEqual({ mode: "on" });
+	expect(mergeNekoConfig({}, {}).codemode).toBeUndefined();
+});

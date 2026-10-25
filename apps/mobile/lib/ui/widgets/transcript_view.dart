@@ -518,6 +518,8 @@ class _ToolCardState extends State<ToolCard> {
         ..._interactionDetails(context, interaction, onOpenQuestion)
       else ...<Widget>[
         if (tool.detail != null) mono('detail', tool.detail!),
+        if (tool.codemode != null && tool.codemode!.total > 0)
+          _codemodeCalls(context, tool.codemode!),
         if (tool.result != null)
           mono('result', tool.result!)
         else if (tool.output != null)
@@ -541,6 +543,16 @@ class _ToolCardState extends State<ToolCard> {
           mono('diff', tool.diff!),
         ],
       ],
+      if (tool.codemode?.fullOutputPath != null)
+        Padding(
+          padding: const EdgeInsets.only(top: NekoSpace.xs),
+          child: SelectableText(
+            context.l10n.transcriptCodemodeFullOutput(
+              tool.codemode!.fullOutputPath!,
+            ),
+            style: context.small(tokens.textFaint),
+          ),
+        ),
       if (tool.note != null)
         Padding(
           padding: const EdgeInsets.only(top: NekoSpace.xs),
@@ -643,6 +655,82 @@ class _ToolCardState extends State<ToolCard> {
       ),
     );
   }
+}
+
+/// codemode 脚本的嵌套调用列表：状态图标、工具名、参数预览、耗时与错误。
+Widget _codemodeCalls(BuildContext context, CodemodeInfo info) {
+  final tokens = NekoTokens.of(context);
+  Widget row(CodemodeCall call) {
+    final (NekoIconData icon, Color color) = switch (call.status) {
+      CodemodeCallStatus.running => (NekoIcons.more, tokens.primary),
+      CodemodeCallStatus.ok => (NekoIcons.checkCircle, tokens.success),
+      CodemodeCallStatus.error => (NekoIcons.alert, tokens.danger),
+      CodemodeCallStatus.cancelled => (NekoIcons.alert, tokens.textFaint),
+    };
+    final duration = call.durationMs;
+    return Padding(
+      padding: const EdgeInsets.only(top: NekoSpace.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              NekoIcon(
+                icon,
+                size: 14,
+                color: color,
+                semanticLabel: call.status.name,
+              ),
+              const SizedBox(width: NekoSpace.xs),
+              Text(call.name, style: NekoTokens.code),
+              const SizedBox(width: NekoSpace.xs),
+              Expanded(
+                child: Text(
+                  call.args,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.small(tokens.textMuted),
+                ),
+              ),
+              if (duration != null)
+                Text(
+                  '${(duration / 1000).toStringAsFixed(1)} s',
+                  style: context.meta(tokens.textFaint),
+                ),
+            ],
+          ),
+          if (call.error != null)
+            Padding(
+              padding: const EdgeInsets.only(left: NekoSpace.lg),
+              child: Text(call.error!, style: context.small(tokens.danger)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  return Padding(
+    padding: const EdgeInsets.only(top: NekoSpace.xs),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          context.l10n.transcriptCodemodeCalls(info.total),
+          style: context.small(tokens.textMuted),
+        ),
+        for (final call in info.calls) row(call),
+        if (info.omitted > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: NekoSpace.xs),
+            child: Text(
+              context.l10n.transcriptCodemodeMore(info.omitted),
+              style: context.small(tokens.textFaint),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// `ask_user` / `todo` 工具项的标题；状态来自结构化 `interaction`，不解析 result 文案。

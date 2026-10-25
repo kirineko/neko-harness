@@ -25,7 +25,7 @@ export type ToolCardProps = {
 };
 
 /* 状态 = 图标 + 色彩双重编码：失败态不止靠边框色差，灰度下仍可辨识 */
-const STATUS = {
+export const STATUS = {
 	pending: {
 		label: "tool.status.pending",
 		icon: "clock",
@@ -52,11 +52,15 @@ const STATUS = {
 	},
 } as const satisfies Record<string, { label: PlainKey; icon: string; spin: boolean; className: string }>;
 
+export function toolStatus(phase: ToolCardProps["phase"], isError: boolean | undefined) {
+	return phase !== "done" ? STATUS[phase] : isError ? STATUS.doneError : STATUS.doneOk;
+}
+
 /** 工具调用卡片：名称、参数摘要、状态徽章；展开看参数详情、代码变更 diff 与输出/结果预览。 */
 export function ToolCard(props: ToolCardProps) {
 	const t = useT();
 	const [expanded, setExpanded] = useState(false);
-	const status = props.phase !== "done" ? STATUS[props.phase] : props.isError ? STATUS.doneError : STATUS.doneOk;
+	const status = toolStatus(props.phase, props.isError);
 	const duration =
 		props.phase === "done" && props.durationMs !== undefined && props.durationMs !== null
 			? ` · ${(props.durationMs / 1000).toFixed(1)}s`

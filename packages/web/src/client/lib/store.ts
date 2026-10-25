@@ -3,6 +3,7 @@ import type { UpdateState } from "@neko-harness/core/application-version";
 import type { QuestionList, TodoList } from "@neko-harness/core/interactions";
 import { useSyncExternalStore } from "react";
 import type {
+	NekoCodemodeSettingsState,
 	NekoContextSettingsState,
 	NekoCredentialState,
 	NekoDefaultModelState,
@@ -45,6 +46,7 @@ export type NekoState = {
 	credentials: NekoCredentialState | null;
 	searchSettings: NekoSearchSettingsState | null;
 	contextSettings: NekoContextSettingsState | null;
+	codemodeSettings: NekoCodemodeSettingsState | null;
 	/** 新建会话的默认模型（neko.default-model 订阅，实时）；null = 未连接。 */
 	defaultModel: NekoDefaultModelState | null;
 	workspaceRoot: string;
@@ -69,6 +71,7 @@ let state: NekoState = {
 	credentials: null,
 	searchSettings: null,
 	contextSettings: null,
+	codemodeSettings: null,
 	defaultModel: null,
 	workspaceRoot: "",
 	workspaces: [],
@@ -121,6 +124,11 @@ export const storeActions = {
 	setSearchSettings(searchSettings: NekoSearchSettingsState | null): void {
 		if (searchSettings && state.searchSettings && searchSettings.revision < state.searchSettings.revision) return;
 		emit({ ...state, searchSettings });
+	},
+	setCodemodeSettings(codemodeSettings: NekoCodemodeSettingsState | null): void {
+		if (codemodeSettings && state.codemodeSettings && codemodeSettings.revision < state.codemodeSettings.revision)
+			return;
+		emit({ ...state, codemodeSettings });
 	},
 	setContextSettings(contextSettings: NekoContextSettingsState | null): void {
 		if (contextSettings && state.contextSettings && contextSettings.revision < state.contextSettings.revision) return;

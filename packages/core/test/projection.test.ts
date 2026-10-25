@@ -238,3 +238,96 @@ it("fills streaming call diff fields (write synthesized, others null)", () => {
 		phase: "pending",
 	});
 });
+
+const CODEMODE_ARGS = {
+	code: '// @options: {"timeout_ms": 1000}\n\nconst a = await tools.read({ path: "a" });\ntext(a);',
+};
+
+it("summarizes a codemode call by its first code line, skipping @options", () => {
+	const [item] = toolItems([assistantWithToolCall(1, "cm1", "codemode", CODEMODE_ARGS)]);
+	expect(item).toMatchObject({ summary: 'const a = await tools.read({ path: "a" });', detail: CODEMODE_ARGS.code });
+	expect(item?.codemode).toBeUndefined();
+});
+
+it("lists the nested calls of a running script from pi.live.nestedTools", () => {
+	const nested = (key: string, name: string, status: string, summary?: unknown) => ({
+		callId: `cm2/${key}`,
+		parentCallId: "cm2",
+		parentTaskId: 1,
+		taskId: 2,
+		name,
+		status,
+		arguments: { path: "x".repeat(500) },
+		...(summary === undefined ? {} : { summary }),
+	});
+	const docs = {
+		...BASE_DOCS,
+		"pi.live": {
+			tools: [{ callId: "cm2", name: "codemode", status: "running" }],
+			nestedTools: [
+				nested("c1", "read", "done", { isError: false, durationMs: 12 }),
+				nested("c2", "read", "done", { isError: true, durationMs: 3, error: "e".repeat(500) }),
+				nested("c3", "bash", "running"),
+				nested("c4", "grep", "done"),
+				{ ...nested("c1", "read", "done"), parentCallId: "other", callId: "other/c1" },
+			],
+		},
+	};
+	const [item] = toolItems([assistantWithToolCall(1, "cm2", "codemode", CODEMODE_ARGS)], docs);
+	expect(item?.codemode?.omitted).toBe(0);
+	expect(item?.codemode?.fullOutputPath).toBeNull();
+	expect(item?.codemode?.calls.map((c) => [c.id, c.name, c.status, c.durationMs])).toEqual([
+		[1, "read", "ok", 12],
+		[2, "read", "error", 3],
+		[3, "bash", "running", null],
+		[4, "grep", "cancelled", null],
+	]);
+	expect(item?.codemode?.calls[0]?.args.length).toBe(200);
+	expect(item?.codemode?.calls[1]?.error?.length).toBe(200);
+
+	const streaming = projectChatView(
+		makeView([], {
+			...docs,
+			"pi.live": {
+				...docs["pi.live"],
+				generation: { attempt: 0, message: assistantWithToolCall(1, "cm2", "codemode", CODEMODE_ARGS).model[0] },
+			},
+		}),
+		"test/model",
+	).streaming;
+	expect(streaming?.toolCalls[0]?.codemode?.calls).toHaveLength(4);
+});
+
+it("uses the persisted details for a finished script, bounded to 100 calls", () => {
+	const calls = Array.from({ length: 130 }, (_, i) => ({
+		id: i + 1,
+		name: "read",
+		args: '{"path":"a"}',
+		status: i === 0 ? "cancelled" : i === 1 ? "error" : "ok",
+		durationMs: 5,
+		...(i === 1 ? { error: "boom" } : {}),
+	}));
+	const [item] = toolItems([
+		assistantWithToolCall(1, "cm3", "codemode", CODEMODE_ARGS),
+		toolResult(2, "cm3", "codemode", { calls, fullOutputPath: "/tmp/out.txt" }),
+	]);
+	expect(item?.codemode?.calls).toHaveLength(100);
+	expect(item?.codemode).toMatchObject({ omitted: 30, fullOutputPath: "/tmp/out.txt" });
+	expect(item?.codemode?.calls[0]).toMatchObject({ id: 1, status: "cancelled", error: null });
+	expect(item?.codemode?.calls[1]).toMatchObject({ status: "error", error: "boom" });
+});
+
+it("leaves codemode absent without usable details", () => {
+	for (const details of [undefined, null, { calls: "x" }, "x"]) {
+		const [item] = toolItems([
+			assistantWithToolCall(1, "cm4", "codemode", CODEMODE_ARGS),
+			toolResult(2, "cm4", "codemode", details),
+		]);
+		expect(item?.codemode).toBeUndefined();
+	}
+	const [other] = toolItems([
+		assistantWithToolCall(1, "cm5", "bash", { command: "ls" }),
+		toolResult(2, "cm5", "bash", { calls: [] }),
+	]);
+	expect(other?.codemode).toBeUndefined();
+});

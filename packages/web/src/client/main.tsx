@@ -7,6 +7,7 @@ import { languageStore } from "./lib/language.ts";
 import { AboutPage } from "./pages/about-page";
 import { ChatPage } from "./pages/chat-page";
 import { SettingsAppearancePage } from "./pages/settings-appearance-page";
+import { SettingsCodemodePage } from "./pages/settings-codemode-page";
 import { SettingsContextPage } from "./pages/settings-context-page";
 import { SettingsLanguagePage } from "./pages/settings-language-page";
 import { SettingsMobilePage } from "./pages/settings-mobile-page";
@@ -22,6 +23,11 @@ const settingsSearchRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/settings/search",
 	component: SettingsSearchPage,
+});
+const settingsCodemodeRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/settings/codemode",
+	component: SettingsCodemodePage,
 });
 const settingsContextRoute = createRoute({
 	getParentRoute: () => rootRoute,
@@ -50,6 +56,7 @@ const routeTree = rootRoute.addChildren([
 	settingsRoute,
 	settingsSearchRoute,
 	settingsContextRoute,
+	settingsCodemodeRoute,
 	settingsAppearanceRoute,
 	settingsLanguageRoute,
 	settingsMobileRoute,

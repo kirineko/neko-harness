@@ -18,17 +18,17 @@ afterEach(() => {
 	for (const d of dirs.splice(0)) removeDirSync(d);
 });
 
-const input = (cwd: string, tools: string[]): PromptInput =>
+const input = (cwd: string, tools: string[], callable: string[] = tools): PromptInput =>
 	({
-		agent: { cwd, tools: tools.map((name) => ({ name })) },
+		agent: { cwd, tools: tools.map((name) => ({ name })), callable: callable.map((name) => ({ name })) },
 		read: { snapshot: async () => ({ role: null, parentId: null }) },
 	}) as unknown as PromptInput;
 
-const renderAll = async (home: string, cwd: string, tools: string[]) => {
+const renderAll = async (home: string, cwd: string, tools: string[], callable: string[] = tools) => {
 	const load = createResourceLoader(home, undefined, { builtinDir: null });
 	const extension = createNekoPrompt((_id, workspace) => load(workspace));
 	const out: Record<string, string | undefined> = {};
-	const shared = input(cwd, tools);
+	const shared = input(cwd, tools, callable);
 	for (const s of extension.sections ?? []) out[s.key] = await s.render(shared, BACKGROUND_CONTEXT);
 	return { keys: (extension.sections ?? []).map((s) => s.key), out };
 };
@@ -123,4 +123,33 @@ it("adds the Git Bash rule on win32 only when bash or job is enabled, determinis
 	expect(await render("linux", ["read", "bash", "job"])).not.toContain(rule);
 	expect(await render("win32", ["read", "edit"])).not.toContain(rule);
 	expect(await render("win32", ["read", "bash"])).toBe(await render("win32", ["read", "bash"]));
+});
+
+const CODEMODE_RULE = "Use codemode to batch independent tool calls";
+
+it("adds the codemode rule once, and keeps the rules of tools that only scripts can call", async () => {
+	const home = directory();
+	const workspace = directory();
+	const only = await renderAll(
+		home,
+		workspace,
+		["codemode", "todo", "ask_user"],
+		["read", "edit", "bash", "todo", "ask_user"],
+	);
+	expect(only.out.rules?.split(CODEMODE_RULE)).toHaveLength(2);
+	expect(only.out.rules).toContain("Use edit for precise changes");
+	expect(only.out.rules).toContain("Use bash for file operations");
+	expect(only.out.rules).toContain("Use read to examine files");
+	const on = await renderAll(home, workspace, ["read", "bash", "codemode"]);
+	expect(on.out.rules?.split(CODEMODE_RULE)).toHaveLength(2);
+});
+
+it("leaves the rules byte-for-byte unchanged when codemode is off", async () => {
+	const home = directory();
+	const workspace = directory();
+	const tools = ["read", "bash", "edit", "write", "find_files", "search_text", "todo", "ask_user", "subagent", "job"];
+	const off = await renderAll(home, workspace, tools);
+	expect(off.out.rules).not.toContain("codemode");
+	const same = await renderAll(home, workspace, tools, [...tools].reverse());
+	expect(same.out.rules).toBe(off.out.rules);
 });

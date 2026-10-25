@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "@earendil-works/chord";
 import {
-	type AgentChange,
 	type ConversationId,
 	defineExtension,
 	defineTool,
@@ -27,44 +26,14 @@ import {
 	validatePlanArgs,
 } from "./interactions.ts";
 import { isSafeCommand } from "./plan-bash.ts";
-import { PLAN_HISTORY, PlanDoc, type PlanItem, type PlanState } from "./plan-doc.ts";
+import { PLAN_HISTORY, PLAN_REMOVED_TOOLS, PlanDoc, type PlanItem, type PlanState } from "./plan-doc.ts";
 import { queuedUserInput } from "./queued.ts";
 import { SubagentDoc } from "./subagents.ts";
 import { live } from "./user-questions.ts";
 
-export { PLAN_CODER_BLOCKED, PlanDoc } from "./plan-doc.ts";
-
-/** Tools removed from the session while it plans; a later `edit`/`write`/`job` call cannot even resolve. */
-const PLAN_REMOVED_TOOLS = ["edit", "write", "job"] as const;
-
-export const PLAN_INSTRUCTIONS = [
-	"You are in plan mode: research and plan only, and change nothing.",
-	"- Allowed: read, find_files, search_text, web_search, web_extract, todo, ask_user, read-only subagents (explore, plan) and bash limited to read-only commands (listing, searching, git log/diff/status, version checks). Other commands are rejected.",
-	"- Not available: edit, write, job and any command that modifies files, installs packages or starts processes. Do not try to work around this.",
-	"- When you understand the task, call submit_plan once, alone in its turn, with a short title, ordered concrete steps and an optional note (risks, assumptions, verification). The user then approves it or asks for changes.",
-	"- After submit_plan do nothing else. If the user asks for changes, research what is needed and submit a revised plan.",
-	"- Use ask_user only for decisions you cannot settle by reading the code.",
-].join("\n");
+export { PLAN_CODER_BLOCKED, PLAN_INSTRUCTIONS, PLAN_REMOVED_TOOLS, PlanDoc } from "./plan-doc.ts";
 
 export const PLAN_BUSY = "PLAN_BUSY: Wait for the current run to finish or stop it first.";
-
-/**
- * Agent configuration that realizes a mode. Tools are matched by name, so a name-only registration is enough and the
- * change stays idempotent when the tools are already gone from the resolved agent.
- */
-export function planAgentChange(mode: PlanMode): AgentChange {
-	if (mode === "normal") return { tools: null, modelTools: null, instructions: null };
-	const named = (name: string) => ({ name }) as ToolRegistration;
-	return {
-		tools: { remove: PLAN_REMOVED_TOOLS.map(named) },
-		modelTools: { add: [named("submit_plan")] },
-		instructions: PLAN_INSTRUCTIONS,
-	};
-}
-
-/** Whether a resolved agent is configured for plan mode (the instructions are the marker). */
-export const agentInPlanMode = (agent: { instructions?: string | undefined }): boolean =>
-	agent.instructions === PLAN_INSTRUCTIONS;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const toRecord = ({ taskId: _taskId, dispatched: _dispatched, ...record }: PlanItem): PlanRecord => clone(record);

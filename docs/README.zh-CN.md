@@ -85,11 +85,12 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 - **后台任务。** `job` 工具把长命令（`npm run dev`、`uv run` 等）转入后台，同时最多 4 个。任务结束时助手收到回报并继续处理；实时输出与手动停止在 Web 顶栏「任务」、TUI `/jobs`。网关重启时仍在运行的任务标记为已丢失，不会自动重跑。
 - **待办。** 多步骤任务中助手维护一份有序、只读的待办：Web 顶栏「待办 n/m」、TUI `/todos`、手机聊天页进度入口查看。随会话保存，重启与压缩后仍在，子 agent 不能使用。
 - **向你提问。** 缺少必要决策时，助手用 `ask_user` 提问：可单选或多选（带「推荐」提示但不预选），可附加文字，也可跳过。Web 在输入区上方、TUI 按 `Ctrl+O` 或 `/question`、手机在聊天页回答；选择需提交（TUI 按 `Enter`）才生效，等待期间助手暂停、期间发送的消息排到回答之后。问题与选项按纯文本显示。
+- **Codemode。** 不必每步一次工具调用：助手可以写一小段 JavaScript 脚本，一次调用 `read`、`grep`、`edit`、`bash` 等工具。三种模式：`off`（默认）、`on`（普通工具之外再提供脚本工具）、`only`（模型只看到脚本工具以及待办、提问、子 agent）。在 TUI `/codemode`、Web「设置 → Codemode」或配置文件 `codemode.mode` 选择；界面保存的值优先于配置文件，只对新会话生效。嵌套调用在工具卡片里列出，脚本里的编辑与其他编辑一样出现在工作区「本次改动」。脚本在 worker 中运行（同时最多 2 个、每个 256 MiB），等待上限 60 秒；审批与 plan 模式对嵌套调用照常生效。
 - **联网搜索。** 默认 Tavily（无 Key 时为有限流的 keyless 模式），也可改用 DeepSeek 搜索与抓取并复用 DeepSeek Key。在 Web「设置 → 联网搜索」、TUI `/search` 或配置文件 `webSearch.provider` 选择。DeepSeek 搜索按成功请求计费（5 元 / 千次）。
 
 ### 多端
 
-**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/appearance` 外观、`/settings/language` 语言、`/settings/mobile` 手机配对、`/about` 关于与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
+**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/codemode` Codemode、`/settings/appearance` 外观、`/settings/language` 语言、`/settings/mobile` 手机配对、`/about` 关于与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
 
 Web 界面有中文（默认）与 English 两种语言，在「设置 → 语言」切换；「设置 → 外观」可选主题（樱花、纸白、夜墨）和聊天排版（字体、字号、字重、行高）。两者只保存在当前浏览器，不影响 TUI 与手机端。
 
@@ -100,6 +101,7 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 | `/login`、`/model`、`/think` | 模型服务与 Key、模型、思考强度 |
 | `/new`、`/sessions`、`/fork`、`/archive` | 会话 |
 | `/compact`、`/context` | 压缩、裁剪及其设置 |
+| `/codemode` | 新会话的 codemode 模式（off、on、only） |
 | `/copy`、`/export` | 复制上一条回答、导出会话 |
 | `/agents`、`/jobs`、`/todos`、`/question`、`/plan` | 委派、后台任务、待办、提问、规划模式 |
 | `/search`、`/skills`、`/theme`、`/language`、`/version`、`/help` | 搜索服务、技能市场、主题、界面语言、版本与更新、快捷键 |
@@ -152,6 +154,7 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 	"defaultModel": { "provider": "deepseek", "modelId": "deepseek-flash" },
 	"thinkingLevel": "high",
 	"webSearch": { "provider": "tavily" },
+	"codemode": { "mode": "off" },
 	"context": {
 		"compaction": { "enabled": true, "triggerPercent": 80, "keepRecentTokens": 20000 },
 		"pruning": { "enabled": false, "triggerPercent": 35, "keepRecent": 10 }
@@ -169,11 +172,12 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 | `webSearch.provider` | 初始搜索服务：`tavily` 或 `deepseek`；界面保存的选择优先 |
 | `context.compaction` | `enabled`、`triggerPercent`（1–99）、`keepRecentTokens`；未设置的字段保持原生策略 |
 | `context.pruning` | `enabled`、`triggerPercent`（1–99）、`keepRecent`、`minChars`、`minSavePercent`；默认关闭 |
+| `codemode.mode` | `off`（默认）、`on` 或 `only`；只对新会话生效，界面保存的选择优先 |
 | `shell.path` | Windows 上的 Git Bash `bash.exe`（会拒绝 WSL 的 `bash.exe`） |
 
 ### 数据与环境变量
 
-- `~/.neko/neko.sqlite`：会话、消息、文档与设置，包括各界面保存的值（默认模型、已启用的服务、上下文设置、搜索服务）。
+- `~/.neko/neko.sqlite`：会话、消息、文档与设置，包括各界面保存的值（默认模型、已启用的服务、上下文设置、codemode 模式、搜索服务）。
 - `~/.neko/credentials.json`：界面保存的 Key，以纯文本形式存给当前用户。要重置某个服务的 Key，从界面或该文件删除即可。
 - `~/.neko/gateway-server-id` 与 socket / 端口文件：界面用于发现网关，可自动重建；`~/.neko/update-check.json` 缓存上次更新检查。
 - 环境变量：每个服务一个（`DEEPSEEK_API_KEY`、`OPENROUTER_API_KEY`、`OPENCODE_API_KEY` 等）、`TAVILY_API_KEY` 用于联网搜索、`NEKO_THEME` 控制 TUI 主题、`NEKO_LANG` 控制 TUI 语言。

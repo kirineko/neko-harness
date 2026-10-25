@@ -8,6 +8,8 @@ export { assertGatewayIdentity } from "./client-session.ts";
 export {
 	NekoApplicationInfo,
 	NekoChat,
+	NekoCodemodeSettings,
+	type NekoCodemodeSettingsState,
 	NekoContextSettings,
 	type NekoContextSettingsPatch,
 	type NekoContextSettingsState,

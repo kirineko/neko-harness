@@ -18,6 +18,9 @@ import {
 } from "@earendil-works/pi-durable";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
+import { agentChangeFor, enabledTools } from "./agent-change.ts";
+import { CodemodeDoc } from "./codemode.ts";
+import { CODEMODE_NAME } from "./codemode-mode.ts";
 import { NekoInput } from "./input.ts";
 import { PLAN_CODER_BLOCKED, PlanDoc } from "./plan-doc.ts";
 import type { UsageTotals } from "./projection.ts";
@@ -122,7 +125,7 @@ export const SUBAGENT_DELIVERY =
 /** Tools only the main agent may use: a subagent reports to its parent instead of planning for or asking the user. */
 export const MAIN_ONLY_TOOLS: ReadonlySet<string> = new Set(["todo", "ask_user", "submit_plan"]);
 export const MAIN_ONLY_EXTENSIONS: ReadonlySet<string> = new Set(["neko-todos", "neko-questions", "neko-plan"]);
-const READ_TOOLS = new Set(["read", "find_files", "search_text", "web_search", "web_extract"]);
+const READ_TOOLS = new Set(["read", "find_files", "search_text", "web_search", "web_extract", CODEMODE_NAME]);
 
 export async function refreshDelegations(tx: Tx, id: ConversationId): Promise<Delegation[]> {
 	const doc = await tx.doc(DelegationsDoc, id);
@@ -481,6 +484,8 @@ export function createSubagentExtension(
 				parameters,
 				structuredOutputSchema,
 				replay: "safe",
+				// Scripts cannot start subagents: a batch of them is hard to follow and to approve.
+				callers: ["model"],
 				execute: async (input, api, context) => {
 					if (!Value.Check(actionParameters, input))
 						throw new Error(
@@ -533,6 +538,10 @@ export function createSubagentExtension(
 							const created =
 								child ?? (await tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }));
 							const role = args.action === "continue" ? "explore" : args.type;
+							const codemode = (await tx.doc(CodemodeDoc, api.conversationId)).mode;
+							(await tx.doc(CodemodeDoc, created.id)).mode = codemode;
+							// The parent's offered tools can be narrowed to codemode; the child starts from everything enabled.
+							const enabled = enabledTools(agent);
 							await configure(tx, created.id, {
 								model: agent.model,
 								thinkingLevel: agent.thinkingLevel,
@@ -540,7 +549,8 @@ export function createSubagentExtension(
 								extensions: agent.extensions.filter(
 									(e) => e.name !== extension.name && !MAIN_ONLY_EXTENSIONS.has(e.name),
 								),
-								tools: agent.tools.filter(
+								modelTools: agentChangeFor({ plan: "normal", codemode, role: "subagent" }).modelTools,
+								tools: enabled.filter(
 									(t) =>
 										t.name !== "subagent" &&
 										t.name !== "job" &&
@@ -660,9 +670,10 @@ export async function removeMainOnlyTools(harness: Harness, ids: ConversationId[
 	for (const id of ids) {
 		if (!(await harness.snapshot(SubagentDoc, id, context))?.role) continue;
 		const agent = await (await harness.conversation(id, context))!.agent(context);
-		if (!agent.tools.some((t) => MAIN_ONLY_TOOLS.has(t.name))) continue;
+		const enabled = enabledTools(agent);
+		if (!enabled.some((t) => MAIN_ONLY_TOOLS.has(t.name))) continue;
 		await harness.commit(
-			(tx) => configure(tx, id, { tools: agent.tools.filter((t) => !MAIN_ONLY_TOOLS.has(t.name)) }),
+			(tx) => configure(tx, id, { tools: enabled.filter((t) => !MAIN_ONLY_TOOLS.has(t.name)) }),
 			context,
 		);
 	}

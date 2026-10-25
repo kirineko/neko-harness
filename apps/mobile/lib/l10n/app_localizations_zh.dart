@@ -889,6 +889,21 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String transcriptCodemodeCalls(int count) {
+    return '工具调用（$count）';
+  }
+
+  @override
+  String transcriptCodemodeMore(int count) {
+    return '还有 $count 条未显示';
+  }
+
+  @override
+  String transcriptCodemodeFullOutput(String path) {
+    return '完整输出：$path';
+  }
+
+  @override
   String transcriptSubagentTitle(String title) {
     return '子 agent · $title';
   }

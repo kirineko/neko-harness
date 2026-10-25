@@ -150,6 +150,67 @@ class ImageRef {
 
 enum ToolStatus { running, done, error }
 
+enum CodemodeCallStatus { running, ok, error, cancelled }
+
+/// codemode 脚本发起的一次嵌套工具调用；只含有界的参数预览与错误，没有结果正文。
+class CodemodeCall {
+  const CodemodeCall({
+    required this.id,
+    required this.name,
+    required this.args,
+    required this.status,
+    this.durationMs,
+    this.error,
+  });
+
+  factory CodemodeCall.fromJson(Json json) => CodemodeCall(
+    id: _int(json['id']),
+    name: _str(json['name']),
+    args: _str(json['args']),
+    status: switch (json['status']) {
+      'ok' => CodemodeCallStatus.ok,
+      'error' => CodemodeCallStatus.error,
+      'cancelled' => CodemodeCallStatus.cancelled,
+      _ => CodemodeCallStatus.running,
+    },
+    durationMs: _intOrNull(json['durationMs']),
+    error: _strOrNull(json['error']),
+  );
+
+  final int id;
+  final String name;
+  final String args;
+  final CodemodeCallStatus status;
+  final int? durationMs;
+  final String? error;
+}
+
+/// codemode 工具项的嵌套调用列表；旧网关没有该字段，此时按普通工具项显示。
+class CodemodeInfo {
+  const CodemodeInfo({
+    required this.calls,
+    required this.omitted,
+    this.fullOutputPath,
+  });
+
+  /// 缺少或结构不对时返回 null。
+  static CodemodeInfo? fromJson(Object? value) {
+    if (value is! Map || value['calls'] is! List) return null;
+    final json = asJson(value);
+    return CodemodeInfo(
+      calls: _list(json['calls']).map(CodemodeCall.fromJson).toList(),
+      omitted: _int(json['omitted']),
+      fullOutputPath: _strOrNull(json['fullOutputPath']),
+    );
+  }
+
+  final List<CodemodeCall> calls;
+  final int omitted;
+  final String? fullOutputPath;
+
+  int get total => calls.length + omitted;
+}
+
 class ToolInfo {
   const ToolInfo({
     required this.callId,
@@ -166,6 +227,7 @@ class ToolInfo {
     this.durationMs,
     this.note,
     this.interaction,
+    this.codemode,
   });
 
   factory ToolInfo.fromJson(Json json) => ToolInfo(
@@ -187,6 +249,7 @@ class ToolInfo {
     durationMs: _intOrNull(json['durationMs']),
     note: _strOrNull(json['note']),
     interaction: ToolInteraction.fromJson(json['interaction']),
+    codemode: CodemodeInfo.fromJson(json['codemode']),
   );
 
   final String callId;
@@ -205,6 +268,9 @@ class ToolInfo {
 
   /// `todo` / `ask_user` 调用的结构化状态；其他工具缺省。
   final ToolInteraction? interaction;
+
+  /// `codemode` 脚本的嵌套调用；其他工具与旧网关缺省。
+  final CodemodeInfo? codemode;
 }
 
 enum TodoStatus { pending, inProgress, completed }

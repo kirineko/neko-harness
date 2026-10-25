@@ -100,3 +100,53 @@ it("accepts nullable diff fields on tool items and streaming calls", () => {
 	};
 	expect(Value.Check(ChatViewSchema, missingDiff)).toBe(false);
 });
+
+it("accepts the optional codemode view on tool items and streaming calls, and items without it", () => {
+	const codemode = {
+		calls: [{ id: 1, name: "read", args: '{"path":"a"}', status: "ok", durationMs: 4, error: null }],
+		omitted: 0,
+		fullOutputPath: null,
+	};
+	const toolItem = {
+		type: "tool",
+		key: "t1",
+		callId: "c1",
+		name: "codemode",
+		summary: "text(a)",
+		detail: null,
+		phase: "done",
+		isError: false,
+		output: null,
+		result: "done",
+		durationMs: 12,
+		note: null,
+		diff: null,
+		diffAdded: null,
+		diffRemoved: null,
+	};
+	const streamCall = {
+		callId: "c2",
+		name: "codemode",
+		summary: "x",
+		detail: null,
+		phase: "running",
+		output: null,
+		diff: null,
+		diffAdded: null,
+		diffRemoved: null,
+	};
+	const view = (item: object, call: object) => ({
+		model: "deepseek/deepseek-chat",
+		agent: { model: null, thinkingLevel: "off" },
+		cwd: "/tmp",
+		busy: false,
+		status: null,
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+		items: [item],
+		streaming: { thinking: "", text: "", toolCalls: [call] },
+	});
+	expect(Value.Check(ChatViewSchema, view(toolItem, streamCall))).toBe(true);
+	expect(Value.Check(ChatViewSchema, view({ ...toolItem, codemode }, { ...streamCall, codemode }))).toBe(true);
+	const bad = { ...codemode, calls: [{ ...codemode.calls[0], status: "weird" }] };
+	expect(Value.Check(ChatViewSchema, view({ ...toolItem, codemode: bad }, streamCall))).toBe(false);
+});

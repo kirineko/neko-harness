@@ -4,6 +4,8 @@
  */
 import { Marked } from "marked";
 import {
+	codemodeCallLine,
+	codemodeOmittedLine,
 	type ExportOptions,
 	type ExportSource,
 	FALLBACK_EXPORT_TITLE,
@@ -172,10 +174,21 @@ export async function exportHtml(
 			]
 				.filter(Boolean)
 				.join(" ");
+			const calls =
+				item.codemode === undefined || item.codemode.calls.length === 0
+					? ""
+					: `<div class="label">Calls</div><pre>${escapeHtml(
+							[
+								...item.codemode.calls.map(codemodeCallLine),
+								...(item.codemode.omitted > 0 ? [codemodeOmittedLine(item.codemode.omitted)] : []),
+							].join("\n"),
+						)}</pre>`;
 			body.push(
 				`<details class="tool ${status}"><summary>${heading}</summary>${
-					item.detail === null || item.detail === "" ? "" : `<pre>${escapeHtml(item.detail)}</pre>`
-				}${
+					item.detail === null || item.detail === ""
+						? ""
+						: `<pre${item.codemode === undefined ? "" : ' class="language-javascript"'}>${escapeHtml(item.detail)}</pre>`
+				}${calls}${
 					output === ""
 						? ""
 						: `<div class="label">${status === "running" ? "Output so far" : "Result"}</div><pre>${escapeHtml(output)}</pre>`

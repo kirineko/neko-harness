@@ -7,6 +7,7 @@
       "dependencies": {
         "@earendil-works/chord": "1.4.0",
         "@earendil-works/pi-ai": "1.4.0",
+        "@earendil-works/pi-codemode": "1.4.0",
         "@earendil-works/pi-durable": "1.4.0",
         "@earendil-works/pi-env": "1.4.0",
         "@earendil-works/pi-tui": "1.4.0",
@@ -42,6 +43,7 @@
       "dependencies": {
         "@earendil-works/chord": "1.4.0",
         "@earendil-works/pi-ai": "1.4.0",
+        "@earendil-works/pi-codemode": "1.4.0",
         "@earendil-works/pi-durable": "1.4.0",
         "@earendil-works/pi-env": "1.4.0",
         "marked": "18.1.0",

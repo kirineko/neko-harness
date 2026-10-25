@@ -22,6 +22,8 @@ import { boundedWebSocketLink } from "@neko-harness/gateway/link";
 import type {
 	NekoBrowseOptions,
 	NekoChat,
+	NekoCodemodeSettings,
+	NekoCodemodeSettingsState,
 	NekoContextSettings,
 	NekoContextSettingsPatch,
 	NekoContextSettingsState,
@@ -62,6 +64,7 @@ export type GatewayEvents = {
 	onCredentials?(state: NekoCredentialState | null): void;
 	onSearchSettings?(state: NekoSearchSettingsState | null): void;
 	onContextSettings?(state: NekoContextSettingsState | null): void;
+	onCodemodeSettings?(state: NekoCodemodeSettingsState | null): void;
 	onDefaultModel?(state: NekoDefaultModelState | null): void;
 	onError(text: string): void;
 	onDirectory(state: NekoDirectoryState): void;
@@ -101,6 +104,7 @@ export class GatewayConnection {
 	#credentials: NekoCredentials | undefined;
 	#searchSettings: NekoSearchSettings | undefined;
 	#contextSettings: NekoContextSettings | undefined;
+	#codemodeSettings: NekoCodemodeSettings | undefined;
 	#defaultModel: NekoDefaultModel | undefined;
 	#skillMarket: NekoSkillMarket | undefined;
 	#chat: NekoChat | undefined;
@@ -157,6 +161,14 @@ export class GatewayConnection {
 	async setContextSettings(patch: NekoContextSettingsPatch): Promise<void> {
 		if (!this.#connected || !this.#contextSettings) throw new Error(getT()("gw.notConnected"));
 		await this.#contextSettings.set(patch);
+	}
+	async setCodemodeMode(mode: NekoCodemodeSettingsState["effective"]["mode"]): Promise<void> {
+		if (!this.#connected || !this.#codemodeSettings) throw new Error(getT()("gw.notConnected"));
+		await this.#codemodeSettings.set({ mode });
+	}
+	async resetCodemodeMode(): Promise<void> {
+		if (!this.#connected || !this.#codemodeSettings) throw new Error(getT()("gw.notConnected"));
+		await this.#codemodeSettings.reset({});
 	}
 	async resetContextSettings(): Promise<void> {
 		if (!this.#connected || !this.#contextSettings) throw new Error(getT()("gw.notConnected"));
@@ -516,6 +528,7 @@ export class GatewayConnection {
 		this.#credentials = client.credentials;
 		this.#searchSettings = client.searchSettings;
 		this.#contextSettings = client.contextSettings;
+		this.#codemodeSettings = client.codemodeSettings;
 		this.#defaultModel = client.defaultModel;
 		this.#skillMarket = client.skillMarket;
 
@@ -543,6 +556,13 @@ export class GatewayConnection {
 			}),
 		);
 		this.#options.events.onContextSettings?.(contextSettings.state.value);
+		const codemodeSettings = this.#codemodeSettings;
+		this.#unsub.push(
+			codemodeSettings.state.subscribe((value) => {
+				if (epoch === this.#epoch) this.#options.events.onCodemodeSettings?.(value);
+			}),
+		);
+		this.#options.events.onCodemodeSettings?.(codemodeSettings.state.value);
 		const defaultModel = this.#defaultModel;
 		this.#unsub.push(
 			defaultModel.state.subscribe((value) => {
@@ -642,6 +662,8 @@ export class GatewayConnection {
 		this.#options.events.onSearchSettings?.(null);
 		this.#contextSettings = undefined;
 		this.#options.events.onContextSettings?.(null);
+		this.#codemodeSettings = undefined;
+		this.#options.events.onCodemodeSettings?.(null);
 		this.#defaultModel = undefined;
 		this.#options.events.onDefaultModel?.(null);
 		this.#models = undefined;

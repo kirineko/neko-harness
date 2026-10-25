@@ -11,6 +11,7 @@ import {
 import type {
 	ChatItem,
 	ChatView,
+	CodemodeView,
 	CredentialProviderId,
 	NekoModelRef,
 	StreamingToolCall,
@@ -33,6 +34,7 @@ import {
 import type { NekoChat } from "@neko-harness/gateway/contract";
 import { ApprovalDock } from "./approval-dock.ts";
 import { copyLastAnswer } from "./clipboard-write.ts";
+import { openCodemodePanel } from "./codemode-ui.ts";
 import { compactionStatus } from "./compaction-status.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BoundedEditor } from "./components/editor.ts";
@@ -165,6 +167,7 @@ class NekoTuiApp {
 	readonly #queueRow = new QueueRow();
 	#searchStop: (() => void) | undefined;
 	#contextStop: (() => void) | undefined;
+	#codemodeStop: (() => void) | undefined;
 	#modelStop: (() => void) | undefined;
 	#agentDetails = new Map<string, SubagentDetail>();
 	#sessionId = "";
@@ -243,6 +246,8 @@ class NekoTuiApp {
 				this.#searchStop = undefined;
 				this.#contextStop?.();
 				this.#contextStop = undefined;
+				this.#codemodeStop?.();
+				this.#codemodeStop = undefined;
 				this.#modelStop?.();
 				this.#modelStop = undefined;
 				clearInterval(this.#sessionPanelTimer);
@@ -528,6 +533,10 @@ class NekoTuiApp {
 		}
 		if (trimmed === "/context") {
 			this.#showContext();
+			return;
+		}
+		if (trimmed === "/codemode") {
+			this.#showCodemode();
 			return;
 		}
 		if (trimmed === "/language") {
@@ -1249,6 +1258,11 @@ class NekoTuiApp {
 		this.#contextStop = openContextPanel(this.#panel, this.#gateway.client, (message) => this.addNotice(message));
 		this.#ui.setFocus(this.#panel);
 	}
+	#showCodemode(): void {
+		if (this.#exitStarted || this.#panel.open || this.#login.open) return;
+		this.#codemodeStop = openCodemodePanel(this.#panel, this.#gateway.client, (message) => this.addNotice(message));
+		this.#ui.setFocus(this.#panel);
+	}
 	#agentDetail(target: string | number) {
 		const round = typeof target === "number" ? this.#lastView?.subagents?.find((r) => r.taskId === target) : undefined;
 		const id = typeof target === "string" ? target : (round?.agentId ?? `agent-${round?.childId}`);
@@ -1665,7 +1679,12 @@ function mergeStream(
 	streamCall: StreamingToolCall | undefined,
 ): ToolCardState {
 	if (streamCall !== undefined && streamCall.phase !== "done") {
-		return { ...item, phase: streamCall.phase, output: streamCall.output };
+		return {
+			...item,
+			phase: streamCall.phase,
+			output: streamCall.output,
+			codemode: streamCall.codemode ?? item.codemode,
+		};
 	}
 	return item;
 }
@@ -1680,6 +1699,7 @@ function streamingCardState(call: {
 	readonly diffAdded: number | null;
 	readonly diffRemoved: number | null;
 	readonly diffTruncated?: boolean;
+	readonly codemode?: CodemodeView | undefined;
 }): ToolCardState {
 	return {
 		name: call.name,
@@ -1695,6 +1715,7 @@ function streamingCardState(call: {
 		diffAdded: call.diffAdded,
 		diffRemoved: call.diffRemoved,
 		diffTruncated: call.diffTruncated,
+		codemode: call.codemode,
 	};
 }
 

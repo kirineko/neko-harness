@@ -4,6 +4,7 @@ import type { ImageFile } from "@neko-harness/core/image-transfer";
 import type { SearchProviderId } from "@neko-harness/core/search-providers";
 import type {
 	NekoBrowseOptions,
+	NekoCodemodeSettingsState,
 	NekoContextSettingsPatch,
 	WirePlanDecision,
 	WireQuestionResponse,
@@ -91,6 +92,7 @@ export function startNekoApp(): void {
 				onCredentials: storeActions.setCredentials,
 				onSearchSettings: storeActions.setSearchSettings,
 				onContextSettings: storeActions.setContextSettings,
+				onCodemodeSettings: storeActions.setCodemodeSettings,
 				onDefaultModel: storeActions.setDefaultModel,
 				onWorkspaces: (state) => storeActions.setWorkspaces(state.workspaces),
 				onWorkspace: storeActions.setWorkspace,
@@ -152,6 +154,12 @@ export const appActions = {
 	},
 	setContextSettings(patch: NekoContextSettingsPatch) {
 		return requireConnection().setContextSettings(patch);
+	},
+	setCodemodeMode(mode: NekoCodemodeSettingsState["effective"]["mode"]) {
+		return requireConnection().setCodemodeMode(mode);
+	},
+	resetCodemodeMode() {
+		return requireConnection().resetCodemodeMode();
 	},
 	resetContextSettings() {
 		return requireConnection().resetContextSettings();

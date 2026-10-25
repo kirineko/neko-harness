@@ -231,3 +231,101 @@ it("still renders the diff body when the target language is unknown", () => {
 	expect(text).toContain("- old");
 	expect(text).toContain("+ new");
 });
+
+const call = (id: number, patch: Partial<import("@neko-harness/core").CodemodeCallView> = {}) => ({
+	id,
+	name: "read",
+	args: `{"path":"f${id}"}`,
+	status: "ok" as const,
+	durationMs: 1200,
+	error: null,
+	...patch,
+});
+const script = (calls: number, extra: Partial<ToolCardState> = {}, omitted = 0): ToolCardState => ({
+	...base,
+	name: "codemode",
+	summary: "const a = await tools.read()",
+	detail: "const a = await tools.read({ path: 'a' });\ntext(a);",
+	phase: "done",
+	result: "Script completed\nOutput:\nhello",
+	durationMs: 3400,
+	codemode: {
+		calls: Array.from({ length: calls }, (_, i) => call(i + 1)),
+		omitted,
+		fullOutputPath: "/tmp/full.txt",
+	},
+	...extra,
+});
+
+it("collapsed codemode cards list at most 8 nested calls and count the rest", () => {
+	const text = render(script(12));
+	expect(text).toContain("codemode");
+	expect(text).toContain('✓ read {"path":"f8"}');
+	expect(text).not.toContain('{"path":"f9"}');
+	expect(text).toContain("4 more");
+	expect(text).not.toContain("Script completed");
+	expect(render(script(8))).not.toContain("more");
+});
+
+it("expanded codemode cards show the script, every listed call, the output and the full output path", () => {
+	const card = new ToolExecutionComponent(
+		script(12, {
+			codemode: {
+				calls: [...Array.from({ length: 12 }, (_, i) => call(i + 1))],
+				omitted: 3,
+				fullOutputPath: "/tmp/full.txt",
+			},
+		}),
+	);
+	card.setExpanded(true);
+	const text = stripTerminalSequences(card.render(100).join("\n"));
+	expect(text).toContain("Script");
+	expect(text).toContain("tools.read({ path: 'a' })");
+	expect(text).toContain('{"path":"f12"}');
+	expect(text).toContain("Tool calls (15)");
+	expect(text).toContain("3 more");
+	expect(text).toContain("Script completed");
+	expect(text).toContain("Full output: /tmp/full.txt");
+});
+
+it("marks running, failed and cancelled nested calls and updates live", () => {
+	const card = new ToolExecutionComponent(
+		script(0, {
+			phase: "running",
+			result: null,
+			codemode: {
+				calls: [
+					call(1, { status: "running", durationMs: null }),
+					call(2, { status: "error", error: "no match", durationMs: null }),
+					call(3, { status: "cancelled", durationMs: null }),
+				],
+				omitted: 0,
+				fullOutputPath: null,
+			},
+		}),
+	);
+	let text = stripTerminalSequences(card.render(100).join("\n"));
+	expect(text).toContain(`${currentToolFrame()} read`);
+	expect(text).toContain("✗ read");
+	expect(text).toContain("no match");
+	expect(text).toContain("↷ read");
+	card.sync(script(1));
+	text = stripTerminalSequences(card.render(100).join("\n"));
+	expect(text).not.toContain("no match");
+	expect(text).toContain("✓ read");
+});
+
+it("shows model-controlled codemode text without terminal control sequences", () => {
+	const text = render(
+		script(0, {
+			summary: "\x1b[31mred\x1b[0m",
+			codemode: {
+				calls: [call(1, { name: "re\x1b]0;x\x07ad", args: "\x1b[2Jboom" })],
+				omitted: 0,
+				fullOutputPath: null,
+			},
+		}),
+	);
+	expect(text).not.toContain("\x1b");
+	expect(text).toContain("boom");
+});

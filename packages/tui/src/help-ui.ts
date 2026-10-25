@@ -149,6 +149,11 @@ export function helpLines(platform: string = process.platform, wsl: boolean = ru
 		["Enter", t("help.context.choose")],
 		["Esc", t("help.context.back")],
 	]);
+	section(t("help.section.codemode"), [
+		["/codemode", t("help.codemode.choose")],
+		["Enter", t("help.codemode.apply")],
+		["Esc", t("help.codemode.back")],
+	]);
 	section(t("help.section.language"), [["/language", t("help.language.choose")]]);
 	section(t("help.section.skills"), [
 		["U", t("help.skills.user")],

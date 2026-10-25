@@ -1,5 +1,13 @@
 import type { AssistantMessage, ModelThinkingLevel, Usage, UserMessage } from "@earendil-works/pi-ai";
-import type { ConversationView, LiveState, ToolDiagnostic, ToolSlot, UsageState } from "@earendil-works/pi-durable";
+import type {
+	ConversationView,
+	LiveState,
+	NestedToolSlot,
+	ToolDiagnostic,
+	ToolSlot,
+	UsageState,
+} from "@earendil-works/pi-durable";
+import { CODEMODE_NAME, CODEMODE_VIEW_LIMITS } from "./codemode-mode.ts";
 import type { CompactionRecord } from "./compaction.ts";
 import type { ChangeSummary } from "./file-changes.ts";
 import type { ImageMetadata } from "./image-metadata.ts";
@@ -135,6 +143,8 @@ export type ChatItem = { order?: number } & (
 			diffTruncated?: boolean;
 			/** Structured state of `todo` / `ask_user` calls, from the persisted tool details; never parsed from text. */
 			interaction?: ToolInteraction;
+			/** Nested calls of a `codemode` script; absent on other tools and on a gateway without codemode. */
+			codemode?: CodemodeView;
 	  }
 	| {
 			type: "system";
@@ -183,6 +193,25 @@ export type StreamingToolCall = {
 	diffAdded: number | null;
 	diffRemoved: number | null;
 	diffTruncated?: boolean;
+	codemode?: CodemodeView;
+};
+
+/** One tool call a codemode script made. Arguments and errors are bounded previews, never full results. */
+export type CodemodeCallView = {
+	id: number;
+	name: string;
+	args: string;
+	status: "running" | "ok" | "error" | "cancelled";
+	durationMs: number | null;
+	error: string | null;
+};
+
+export type CodemodeView = {
+	calls: CodemodeCallView[];
+	/** Calls beyond `CODEMODE_VIEW_LIMITS.maxCalls` that are not listed. */
+	omitted: number;
+	/** Temp file with the complete script output, when it was cut. */
+	fullOutputPath: string | null;
 };
 
 export type ToolSummary = {
@@ -268,6 +297,57 @@ const interactionField = (name: string, details: unknown): { interaction?: ToolI
 	return interaction ? { interaction } : {};
 };
 
+const clip = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
+
+function codemodeView(calls: CodemodeCallView[], fullOutputPath: string | null): CodemodeView {
+	const limit = CODEMODE_VIEW_LIMITS.maxCalls;
+	return { calls: calls.slice(0, limit), omitted: Math.max(0, calls.length - limit), fullOutputPath };
+}
+
+/** Nested calls of a running script, from the live slots; a finished slot without a summary was cancelled. */
+export function liveCodemodeView(live: LiveState, callId: string): CodemodeView {
+	const slots = (live.nestedTools ?? []).filter((slot: NestedToolSlot) => slot.parentCallId === callId);
+	return codemodeView(
+		slots.map((slot, index) => {
+			const key = /\/c(\d+)$/.exec(slot.callId)?.[1];
+			const summary = slot.summary;
+			return {
+				id: key === undefined ? index + 1 : Number(key),
+				name: slot.name,
+				args: clip(JSON.stringify(slot.arguments) ?? "", CODEMODE_VIEW_LIMITS.argsChars),
+				status:
+					slot.status !== "done" ? "running" : summary === undefined ? "cancelled" : summary.isError ? "error" : "ok",
+				durationMs: summary?.durationMs ?? null,
+				error: summary?.error === undefined ? null : clip(summary.error, CODEMODE_VIEW_LIMITS.errorChars),
+			};
+		}),
+		null,
+	);
+}
+
+/** Nested calls of a finished script, from the result's persisted details; anything unexpected yields `undefined`. */
+export function codemodeResultView(details: unknown): CodemodeView | undefined {
+	if (!isRecord(details) || !Array.isArray(details.calls)) return undefined;
+	const calls = details.calls.flatMap((call): CodemodeCallView[] => {
+		if (!isRecord(call) || typeof call.name !== "string") return [];
+		const { id, args, status, durationMs, error } = call;
+		return [
+			{
+				id: typeof id === "number" ? id : 0,
+				name: call.name,
+				args: typeof args === "string" ? clip(args, CODEMODE_VIEW_LIMITS.argsChars) : "",
+				status: status === "ok" || status === "error" || status === "cancelled" ? status : "running",
+				durationMs: typeof durationMs === "number" ? durationMs : null,
+				error: typeof error === "string" ? clip(error, CODEMODE_VIEW_LIMITS.errorChars) : null,
+			},
+		];
+	});
+	return codemodeView(calls, typeof details.fullOutputPath === "string" ? details.fullOutputPath : null);
+}
+
+const codemodeField = (name: string, view: CodemodeView | undefined): { codemode?: CodemodeView } =>
+	name === CODEMODE_NAME && view ? { codemode: view } : {};
+
 /** 内置工具的参数摘要；未知工具退回 JSON。 */
 export function summarizeToolCall(name: string, args: unknown): ToolSummary {
 	const record = (args ?? {}) as Record<string, unknown>;
@@ -300,6 +380,11 @@ export function summarizeToolCall(name: string, args: unknown): ToolSummary {
 				args: truncateMiddle(String(record.title ?? "").replace(/\s+/g, " "), 100),
 				detail: steps.map((step, index) => `${index + 1}. ${step}`).join("\n"),
 			};
+		}
+		case "codemode": {
+			const code = typeof record.code === "string" ? record.code : "";
+			const first = code.split("\n").find((line) => line.trim() !== "" && !line.trim().startsWith("// @options")) ?? "";
+			return { args: truncateMiddle(first.trim(), 100), detail: code };
 		}
 		case "subagent":
 			return {
@@ -478,6 +563,7 @@ export function projectChatView(
 				diffAdded: counts?.added ?? null,
 				diffRemoved: counts?.removed ?? null,
 				...interactionField(message.toolName, message.details),
+				...codemodeField(message.toolName, codemodeResultView(message.details)),
 			});
 		}
 	}
@@ -601,6 +687,7 @@ export function projectChatView(
 						diffRemoved: synthesized?.removed ?? null,
 						diffTruncated: synthesized?.truncated ?? false,
 						...interactionField(block.name, (slot as { details?: unknown } | undefined)?.details),
+						...codemodeField(block.name, slot?.status === "running" ? liveCodemodeView(live, block.id) : undefined),
 					});
 				}
 			}
@@ -734,6 +821,7 @@ function projectStreaming(live: LiveState): StreamingView | null {
 				diffAdded: synthesized?.added ?? null,
 				diffRemoved: synthesized?.removed ?? null,
 				diffTruncated: synthesized?.truncated ?? false,
+				...codemodeField(block.name, slot?.status === "running" ? liveCodemodeView(live, block.id) : undefined),
 			});
 		}
 	}

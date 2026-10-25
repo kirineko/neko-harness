@@ -1,4 +1,5 @@
 import { RUNNING_VERSION } from "@neko-harness/core/application-version";
+import { CODEMODE_VIEW_LIMITS } from "@neko-harness/core/codemode-mode";
 import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
 import { type Static, Type } from "typebox";
 import { Check } from "typebox/value";
@@ -170,6 +171,27 @@ export const MobileToolInteractionSchema = Type.Union([
 	}),
 ]);
 
+export const MobileCodemodeSchema = Type.Object({
+	calls: Type.Array(
+		Type.Object({
+			id: int,
+			name: str,
+			args: Type.String({ maxLength: CODEMODE_VIEW_LIMITS.argsChars }),
+			status: Type.Union([
+				Type.Literal("running"),
+				Type.Literal("ok"),
+				Type.Literal("error"),
+				Type.Literal("cancelled"),
+			]),
+			durationMs: opt(Type.Number()),
+			error: opt(Type.String({ maxLength: CODEMODE_VIEW_LIMITS.errorChars })),
+		}),
+		{ maxItems: CODEMODE_VIEW_LIMITS.maxCalls },
+	),
+	omitted: int,
+	fullOutputPath: opt(str),
+});
+
 export const MobileToolItemSchema = Type.Object({
 	callId: str,
 	name: str,
@@ -185,6 +207,7 @@ export const MobileToolItemSchema = Type.Object({
 	durationMs: opt(Type.Number()),
 	note: opt(str),
 	interaction: opt(MobileToolInteractionSchema),
+	codemode: opt(MobileCodemodeSchema),
 });
 
 /** 超过 8 KiB 的字符串字段只留 2 KiB 预览，并在 `refs` 中给出完整内容引用（每个字段至多一个）。 */

@@ -260,3 +260,54 @@ it("treats every image as a placeholder when no loader is provided", async () =>
 	expect(result.skippedImages).toBe(1);
 	expect(result.content).toContain("[image: img1.png · image/png · 4×2 — not embedded]");
 });
+
+const script = (extra: Partial<Extract<ChatItem, { type: "tool" }>> = {}) =>
+	tool({
+		name: "codemode",
+		summary: "const a = await tools.read()",
+		detail: "const a = await tools.read({ path: 'a' });\ntext(a);",
+		result: "Script completed\nOutput:\nhello",
+		codemode: {
+			calls: [
+				{ id: 1, name: "read", args: '{"path":"a"}', status: "ok", durationMs: 12, error: null },
+				{ id: 2, name: "edit", args: '{"path":"<b>"}', status: "error", durationMs: null, error: "no match" },
+			],
+			omitted: 3,
+			fullOutputPath: "/tmp/full.txt",
+		},
+		...extra,
+	});
+
+it("exports a codemode call as a script block, a call list and its output", async () => {
+	const markdown = (await exportConversation("markdown", source([user("go"), script()]), { includeThinking: false }))
+		.content;
+	expect(markdown).toContain("```javascript\nconst a = await tools.read({ path: 'a' });\ntext(a);\n```");
+	expect(markdown).toContain('read {"path":"a"} · ok · 12ms');
+	expect(markdown).toContain('edit {"path":"<b>"} · error · no match');
+	expect(markdown).toContain("… 3 more calls not listed");
+	expect(markdown).toContain("Script completed\nOutput:\nhello");
+	expect(markdown).not.toContain("/tmp/full.txt");
+
+	const html = (await exportConversation("html", source([user("go"), script()]), { includeThinking: false })).content;
+	expect(html).toContain("<pre>read {&quot;path&quot;:&quot;a&quot;} · ok · 12ms");
+	expect(html).toContain("&lt;b&gt;");
+	expect(html).not.toContain('<b>"}');
+
+	const json = JSON.parse(
+		(await exportConversation("json", source([user("go"), script()]), { includeThinking: false })).content,
+	);
+	expect(json.items[1].codemode.calls).toHaveLength(2);
+	expect(json.items[1].codemode.omitted).toBe(3);
+});
+
+it("keeps other tools unchanged when no codemode view is present", async () => {
+	const markdown = (
+		await exportConversation("markdown", source([user("go"), tool({ detail: "ls -la" })]), { includeThinking: false })
+	).content;
+	expect(markdown).not.toContain("javascript");
+	expect(markdown).not.toContain("Calls:");
+	const json = JSON.parse(
+		(await exportConversation("json", source([user("go"), tool()]), { includeThinking: false })).content,
+	);
+	expect(json.items[1]).not.toHaveProperty("codemode");
+});

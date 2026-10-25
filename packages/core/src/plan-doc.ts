@@ -29,3 +29,15 @@ export const PlanDoc = defineDoc<PlanState>({
 
 export const PLAN_CODER_BLOCKED =
 	"Plan mode is read-only: the coder subagent is unavailable. Use explore or plan subagents, or finish the plan first.";
+
+/** Tools removed from the session while it plans; a later `edit`/`write`/`job` call cannot even resolve. */
+export const PLAN_REMOVED_TOOLS = ["edit", "write", "job"] as const;
+
+export const PLAN_INSTRUCTIONS = [
+	"You are in plan mode: research and plan only, and change nothing.",
+	"- Allowed: read, find_files, search_text, web_search, web_extract, todo, ask_user, read-only subagents (explore, plan) and bash limited to read-only commands (listing, searching, git log/diff/status, version checks). Other commands are rejected.",
+	"- Not available: edit, write, job and any command that modifies files, installs packages or starts processes. Do not try to work around this.",
+	"- When you understand the task, call submit_plan once, alone in its turn, with a short title, ordered concrete steps and an optional note (risks, assumptions, verification). The user then approves it or asks for changes.",
+	"- After submit_plan do nothing else. If the user asks for changes, research what is needed and submit a revised plan.",
+	"- Use ask_user only for decisions you cannot settle by reading the code.",
+].join("\n");

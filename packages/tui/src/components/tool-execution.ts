@@ -1,5 +1,5 @@
 import { Box, Container, MouseRegion, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import type { ToolInteraction } from "@neko-harness/core";
+import type { CodemodeCallView, CodemodeView, ToolInteraction } from "@neko-harness/core";
 import type { PlanStatus } from "@neko-harness/core/interactions";
 import { localizeCoreText } from "../i18n/core-text.ts";
 import { getLanguage, t } from "../i18n/index.ts";
@@ -71,6 +71,8 @@ export type ToolCardState = {
 	readonly diffTruncated?: boolean;
 	/** Structured outcome of `todo` / `ask_user`, from the persisted tool details; never parsed from text. */
 	readonly interaction?: ToolInteraction;
+	/** Nested calls of a `codemode` script; absent on other tools and on a gateway without codemode. */
+	readonly codemode?: CodemodeView | undefined;
 };
 
 type Phase = ToolCardState["phase"];
@@ -79,6 +81,23 @@ type Phase = ToolCardState["phase"];
 function answerSummary(interaction: Extract<ToolInteraction, { kind: "ask_user" }>): string {
 	const parts = [...(interaction.labels ?? []), ...(interaction.text ? [interaction.text] : [])];
 	return plainLine(parts.join(", "), 80);
+}
+
+/** Nested calls listed under a collapsed codemode card; the rest is only counted. */
+const CODEMODE_COLLAPSED_CALLS = 8;
+
+function codemodeCallLine(call: CodemodeCallView): string {
+	const glyph =
+		call.status === "running"
+			? theme.accent(currentToolFrame())
+			: call.status === "ok"
+				? theme.ok("✓")
+				: call.status === "error"
+					? theme.error("✗")
+					: theme.dim("↷");
+	const duration = call.durationMs === null ? "" : theme.dim(` ${(call.durationMs / 1000).toFixed(1)}s`);
+	const error = call.error === null ? "" : `  ${theme.error(plainLine(call.error, 120))}`;
+	return `  ${glyph} ${plainLine(call.name, 40)} ${theme.dim(plainLine(call.args, 100))}${duration}${error}`;
 }
 
 /** 展开区 diff 行数上限,超出截断并提示剩余行数。 */
@@ -209,7 +228,11 @@ export class ToolExecutionComponent extends Container {
 	rebuild(): void {
 		const state = this.#state;
 		// Question, todo and plan text comes from the model: show it as plain text, never as terminal control.
-		const plain = state.name === "ask_user" || state.name === "todo" || state.name === "submit_plan";
+		const plain =
+			state.name === "ask_user" ||
+			state.name === "todo" ||
+			state.name === "submit_plan" ||
+			state.codemode !== undefined;
 		const parts = [
 			`${theme.toolTitle(`⚡ ${state.name}`)}`,
 			theme.dim((plain ? plainLine(state.summary) : state.summary) + diffCountSuffix(state)),
@@ -217,12 +240,22 @@ export class ToolExecutionComponent extends Container {
 		];
 		let text = parts.join("  ");
 
+		const codemode = state.codemode;
+		if (codemode !== undefined) {
+			const shown = this.#expanded ? codemode.calls : codemode.calls.slice(0, CODEMODE_COLLAPSED_CALLS);
+			if (this.#expanded && shown.length + codemode.omitted > 0)
+				text += `\n${theme.dim(t("tool.callsHeader", { count: shown.length + codemode.omitted }))}`;
+			for (const call of shown) text += `\n${codemodeCallLine(call)}`;
+			const rest = codemode.calls.length - shown.length + codemode.omitted;
+			if (rest > 0) text += `\n  ${theme.dim(t("tool.callsMore", { count: rest }))}`;
+		}
+
 		if (this.#expanded) {
 			// 完整 write diff 可替代 detail;截断时仍保留参数预览。
 			const detail = state.detail !== null && plain ? plainText(state.detail) : state.detail;
 			if (detail !== null && !(state.diff !== null && state.name === "write" && !state.diffTruncated)) {
 				const clipped = clipLines(detail, 20);
-				text += `\n${theme.dim(t("tool.argumentsHeader"))}\n${clipped.visible}`;
+				text += `\n${theme.dim(t(codemode === undefined ? "tool.argumentsHeader" : "tool.scriptHeader"))}\n${clipped.visible}`;
 				if (clipped.rest > 0) text += `\n${theme.dim(t("tool.moreLines", { count: clipped.rest }))}`;
 			}
 			if (state.diff !== null) {
@@ -243,6 +276,9 @@ export class ToolExecutionComponent extends Container {
 		}
 		if (this.#expanded && body !== null && body !== "") {
 			text += `\n${theme.toolOutput(body)}`;
+		}
+		if (this.#expanded && codemode?.fullOutputPath != null) {
+			text += `\n${theme.dim(t("tool.fullOutput", { path: plainLine(codemode.fullOutputPath, 300) }))}`;
 		}
 		if (state.note !== null) {
 			text += `\n${theme.error(localizeCoreText(state.note))}`;

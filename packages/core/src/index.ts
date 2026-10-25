@@ -1,3 +1,14 @@
+export {
+	CODEMODE_LIMITS,
+	CODEMODE_MODES,
+	CODEMODE_NAME,
+	CODEMODE_VIEW_LIMITS,
+	type CodemodeMode,
+	type CodemodeSettingSource,
+	type CodemodeSettings,
+	type CodemodeSettingsState,
+	isCodemodeMode,
+} from "./codemode-mode.ts";
 export type { CompactionRecord } from "./compaction.ts";
 export {
 	DEFAULT_NEKO_CONFIG,
@@ -93,6 +104,8 @@ export {
 	type ChatImage,
 	type ChatItem,
 	type ChatView,
+	type CodemodeCallView,
+	type CodemodeView,
 	projectChatView,
 	type StreamingToolCall,
 	type StreamingView,

@@ -257,6 +257,37 @@ describe("mobile chat projection", () => {
 		chat.dispose();
 	});
 
+	it("carries the bounded codemode call list on tool cards and omits null fields", () => {
+		const calls = Array.from({ length: 100 }, (_, i) => ({
+			id: i + 1,
+			name: "read",
+			args: "a".repeat(200),
+			status: i === 1 ? ("error" as const) : ("ok" as const),
+			durationMs: i === 0 ? null : 5,
+			error: i === 1 ? "e".repeat(200) : null,
+		}));
+		const plain = tool("plain", { phase: "done" });
+		const script = tool("script", {
+			name: "codemode",
+			phase: "done",
+			codemode: { calls, omitted: 7, fullOutputPath: null },
+		});
+		const { projection: chat } = projection(new FakeSource(baseView([user(1), plain, script])));
+		const snapshot = chat.snapshot();
+		expect(Check(MobileChatSnapshotSchema, snapshot)).toBe(true);
+		const [, plainCard, card] = snapshot.items as unknown as {
+			tool: { codemode?: { calls: Record<string, unknown>[]; omitted: number; fullOutputPath?: string } };
+		}[];
+		expect(plainCard?.tool.codemode).toBeUndefined();
+		expect(card?.tool.codemode?.omitted).toBe(7);
+		expect(card?.tool.codemode?.calls).toHaveLength(100);
+		expect(card?.tool.codemode?.calls[0]).not.toHaveProperty("durationMs");
+		expect(card?.tool.codemode?.calls[0]).not.toHaveProperty("error");
+		expect(card?.tool.codemode?.calls[1]).toMatchObject({ status: "error", error: "e".repeat(200) });
+		expect(card?.tool.codemode).not.toHaveProperty("fullOutputPath");
+		chat.dispose();
+	});
+
 	it("reports stale cursors", async () => {
 		const source = new FakeSource(baseView([user(1), user(2)]));
 		const { projection: chat } = projection(source);

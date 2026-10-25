@@ -189,6 +189,17 @@ export function mapChatItem(raw: RawItem, owner: ProjectionOwner): MobileChatIte
 			if (raw.durationMs !== null) tool.durationMs = raw.durationMs;
 			if (raw.note) tool.note = raw.note;
 			if (raw.interaction !== undefined) tool.interaction = raw.interaction;
+			if (raw.codemode !== undefined) {
+				tool.codemode = {
+					calls: raw.codemode.calls.map(({ durationMs, error, ...call }) => ({
+						...call,
+						...(durationMs === null ? {} : { durationMs }),
+						...(error === null ? {} : { error }),
+					})),
+					omitted: raw.codemode.omitted,
+					...(raw.codemode.fullOutputPath === null ? {} : { fullOutputPath: raw.codemode.fullOutputPath }),
+				};
+			}
 			item = { key: raw.key, type: "tool", tool, ...images(raw.images) };
 			break;
 		}

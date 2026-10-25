@@ -127,6 +127,7 @@ export async function startGateway(options: NekoGatewayOptions = {}): Promise<Ne
 		...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
 		...(searchProvider !== undefined ? { searchProvider } : {}),
 		...(fileConfig.context !== undefined ? { contextSettings: fileConfig.context } : {}),
+		...(fileConfig.codemode !== undefined ? { codemodeSettings: fileConfig.codemode } : {}),
 		// CLI --model 是本次启动的显式覆盖（source "cli"）；配置文件 defaultModel 只在配置存在时传，
 		// core 以 options.model 是否给出区分来源 "config" 与内置 "default"。
 		...(fileConfig.defaultModel !== undefined ? { model: fileConfig.defaultModel } : {}),

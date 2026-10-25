@@ -1,5 +1,6 @@
 /** Browser-safe Chord 1.3 contracts. All wire values are validated schemas. */
 import { type HostNamed, hostNamed, method, type Ref, type RemoteContract, remote } from "@earendil-works/chord";
+import { CODEMODE_MODES } from "@neko-harness/core/codemode-mode";
 import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
 import { type Static, type TSchema, Type } from "typebox";
 
@@ -66,6 +67,21 @@ const image = Type.Object({
 	contentIndex: integer,
 });
 const skill = Type.Object({ name: str, location: str, body: str, args: str });
+/** Nested calls of a codemode script; the projection bounds the list, previews and errors. */
+export const CodemodeViewSchema = Type.Object({
+	calls: Type.Array(
+		Type.Object({
+			id: integer,
+			name: str,
+			args: str,
+			status: Type.Enum(["running", "ok", "error", "cancelled"]),
+			durationMs: Type.Union([num, nil]),
+			error: nullableString,
+		}),
+	),
+	omitted: integer,
+	fullOutputPath: nullableString,
+});
 const call = Type.Object({
 	callId: str,
 	name: str,
@@ -77,6 +93,7 @@ const call = Type.Object({
 	diffAdded: Type.Union([num, nil]),
 	diffRemoved: Type.Union([num, nil]),
 	diffTruncated: Type.Optional(bool),
+	codemode: Type.Optional(CodemodeViewSchema),
 });
 export const DelegationSchema = Type.Object({
 	parentId: integer,
@@ -429,6 +446,7 @@ export const ChatViewSchema = Type.Object({
 				diffRemoved: Type.Union([num, nil]),
 				diffTruncated: Type.Optional(bool),
 				interaction: Type.Optional(ToolInteractionSchema),
+				codemode: Type.Optional(CodemodeViewSchema),
 			}),
 			Type.Object({
 				type: Type.Literal("system"),
@@ -789,6 +807,24 @@ export const NekoContextSettings = contract("neko.context-settings", {
 		},
 	},
 });
+export const CodemodeSettingsStateSchema = Type.Object({
+	revision: integer,
+	effective: Type.Object({ mode: Type.Enum([...CODEMODE_MODES]) }),
+	source: Type.Enum(["default", "config", "saved"]),
+});
+export const NekoCodemodeSettings = contract("neko.codemode-settings", {
+	version: 1,
+	input: Type.Object({}, { additionalProperties: false }),
+	variants: {
+		ready: {
+			state: { state: CodemodeSettingsStateSchema },
+			methods: {
+				set: rpc(Type.Object({ mode: Type.Enum([...CODEMODE_MODES]) }, { additionalProperties: false }), nil),
+				reset: rpc(Type.Object({}, { additionalProperties: false }), nil),
+			},
+		},
+	},
+});
 const defaultModelSource = Type.Enum(["cli", "saved", "config", "default"]);
 export const DefaultModelStateSchema = Type.Object({
 	effective: model,
@@ -903,6 +939,8 @@ export type NekoWorkspaceFiles = Ref<typeof NekoWorkspaceFiles>;
 export type NekoCredentials = Ref<typeof NekoCredentials>;
 export type NekoSearchSettings = Ref<typeof NekoSearchSettings>;
 export type NekoContextSettings = Ref<typeof NekoContextSettings>;
+export type NekoCodemodeSettings = Ref<typeof NekoCodemodeSettings>;
+export type NekoCodemodeSettingsState = Static<typeof CodemodeSettingsStateSchema>;
 export type NekoDefaultModel = Ref<typeof NekoDefaultModel>;
 export type NekoDefaultModelState = Static<typeof DefaultModelStateSchema>;
 export type NekoSkillMarket = Ref<typeof NekoSkillMarket>;

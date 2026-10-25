@@ -4,6 +4,8 @@
  */
 import { exportHtml } from "./conversation-export-html.ts";
 import {
+	codemodeCallLine,
+	codemodeOmittedLine,
 	type ExportOptions,
 	type ExportSource,
 	FALLBACK_EXPORT_TITLE,
@@ -96,11 +98,11 @@ export async function exportConversation(
 }
 
 /** Fenced block whose fence is longer than any backtick run in the content, so it cannot break out. */
-function block(content: string): string {
+function block(content: string, language = ""): string {
 	let longest = 0;
 	for (const run of content.matchAll(/`+/g)) longest = Math.max(longest, run[0].length);
 	const marks = "`".repeat(Math.max(3, longest + 1));
-	return `${marks}\n${content}\n${marks}`;
+	return `${marks}${language}\n${content}\n${marks}`;
 }
 const escapeInline = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
@@ -153,7 +155,13 @@ function markdownTool(item: ToolItem): string[] {
 		.filter(Boolean)
 		.join(" ");
 	const lines = ["<details>", `<summary>${escapeInline(label)}</summary>`, ""];
-	if (item.detail !== null && item.detail !== "") lines.push(block(item.detail), "");
+	if (item.detail !== null && item.detail !== "")
+		lines.push(block(item.detail, item.codemode === undefined ? "" : "javascript"), "");
+	if (item.codemode !== undefined && item.codemode.calls.length > 0) {
+		const calls = item.codemode.calls.map(codemodeCallLine);
+		if (item.codemode.omitted > 0) calls.push(codemodeOmittedLine(item.codemode.omitted));
+		lines.push("Calls:", "", block(calls.join("\n")), "");
+	}
 	const output = toolOutput(item);
 	if (output !== "") lines.push(status === "running" ? "Output so far:" : "Result:", "", block(output), "");
 	if (item.note !== null) lines.push(`> ${escapeInline(oneLine(item.note))}`, "");
@@ -194,6 +202,7 @@ function exportJson(source: ExportSource, options: ExportOptions): string {
 					status: item.phase,
 					isError: item.isError,
 					result: toolOutput(item),
+					...(item.codemode === undefined ? {} : { codemode: item.codemode }),
 					durationMs: item.durationMs,
 					note: item.note,
 					images: (item.images ?? []).map(({ name, mimeType, width, height, bytes }) => ({
