@@ -15,5 +15,6 @@
 
 - 面向用户的入口文档放在仓库根目录与 `docs/`；按主题建子目录（`dev/` 开发与发布、`mobile/` 手机协议、`releases/` 发布说明）。
 - 只属于某个包的文档跟随该包（如 `apps/mobile/README.md`）。
+- 文档用到的图片放在 `docs/assets/`（WebP，宽度不超过 1600 px），避免把大图塞进仓库根目录。
 - `docs/releases/` 的路径被 `.github/workflows/release.yml` 与 `scripts/release-preflight.ts` 使用，改动需同步。
 - 英文文档不含中文（语言名除外）；开发者内部文档只有中文。
