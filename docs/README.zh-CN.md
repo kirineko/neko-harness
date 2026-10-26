@@ -6,9 +6,7 @@
 
 > 本页是母版。若与英文版 [README.md](../README.md) 不一致，以本页为准。
 
-<p align="center">
-	<img src="assets/neko-poster-light.webp" alt="neko 编码助手：终端、桌面 Web 与手机，三端同步" width="640">
-</p>
+![neko 编码助手：终端、桌面 Web 与手机，三端同步](assets/neko-poster-light.webp)
 
 ## 目录
 

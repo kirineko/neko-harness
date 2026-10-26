@@ -6,9 +6,7 @@ A local AI coding assistant for the terminal, the browser and your phone: it rea
 
 > The Chinese version is the master copy. If this page and [`docs/README.zh-CN.md`](docs/README.zh-CN.md) disagree, the Chinese page is correct.
 
-<p align="center">
-	<img src="docs/assets/neko-poster-light.webp" alt="neko coding assistant: one agent for the terminal, the web UI and the phone" width="640">
-</p>
+![neko coding assistant: one agent for the terminal, the web UI and the phone](docs/assets/neko-poster-light.webp)
 
 ## Contents
 
