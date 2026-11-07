@@ -106,7 +106,7 @@ it("native read uses each workspace and persists image details, including for te
 				fauxAssistantMessage([fauxText("Seen")]),
 			]);
 			await session.waitAnswer(await session.submit("read image"));
-			const state = await session.viewState();
+			const state = await session.follow();
 			const tool = projectChatView(state.value, "test")
 				.items.filter((i) => i.type === "tool")
 				.at(-1)!;
@@ -123,7 +123,7 @@ it("native read uses each workspace and persists image details, including for te
 				fauxAssistantMessage([fauxText("error")]),
 			]);
 			await runtime.waitAnswer(await runtime.submit("read"));
-			const state = await runtime.viewState();
+			const state = await runtime.follow();
 			const tool = projectChatView(state.value, "test")
 				.items.filter((i) => i.type === "tool")
 				.at(-1)!;
@@ -136,7 +136,7 @@ it("native read uses each workspace and persists image details, including for te
 			fauxAssistantMessage([fauxText("error")]),
 		]);
 		await runtime.waitAnswer(await runtime.submit("read"));
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		expect(JSON.stringify(projectChatView(state.value, "test"))).toContain("placeholder");
 		state.dispose();
 	} finally {
@@ -173,7 +173,7 @@ it("keeps distinct filenames for identical image bytes and queued messages", asy
 		release();
 		await runtime.waitAnswer(one);
 		await runtime.waitAnswer(two);
-		const view = await runtime.viewState();
+		const view = await runtime.follow();
 		const projected = projectChatView(view.value, "test");
 		view.dispose();
 		expect(projected.items.filter((i) => i.type === "user").map((i) => i.images?.[0]?.name)).toEqual([
@@ -213,7 +213,7 @@ it("reports denied and changing files as image tool errors", async () => {
 			fauxAssistantMessage([fauxText("error reported")]),
 		]);
 		await runtime.waitAnswer(await runtime.submit("read image"));
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const tool = projectChatView(state.value, "test")
 			.items.filter((i) => i.type === "tool")
 			.at(-1)!;
@@ -334,7 +334,7 @@ it("projects actual resized read output at index zero with one diagnostic and pe
 		await rm(join(dir, "source.png"));
 		await runtime.close();
 		runtime = await createNekoRuntime(options);
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const tool = projectChatView(state.value, "test").items.find((item) => item.type === "tool")!;
 		if (tool.type !== "tool") throw new Error("No tool");
 		expect(tool.images?.[0]?.contentIndex).toBe(0);
@@ -373,7 +373,7 @@ it("keeps native read decode and processing-limit diagnostics without a successf
 				fauxAssistantMessage([fauxText("failed")]),
 			]);
 			await runtime.waitAnswer(await runtime.submit("read"));
-			const state = await runtime.viewState();
+			const state = await runtime.follow();
 			const item = projectChatView(state.value, "test")
 				.items.filter((item) => item.type === "tool")
 				.at(-1)!;

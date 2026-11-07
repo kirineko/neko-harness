@@ -22,8 +22,8 @@ for (const method of ["commit", "scanEntries"] as const) {
 			const operation =
 				method === "commit" ? runtime.submit("fail") : runtime.conversation.entries({}, 1, undefined, runtime.context);
 			await expect(operation).rejects.toBe(error);
-			expect((await runtime.closed).reason).toBe("failed");
-			expect((await watch.closed).reason).toBe("session_failed");
+			expect((await runtime.closed).kind).toBe("failed");
+			expect((await watch.closed).kind).toBe("failed");
 			await expect(runtime.submit("later")).rejects.toBeInstanceOf(SessionFailed);
 			expect(reports).toContain(error);
 		} finally {
@@ -53,7 +53,7 @@ it("keeps an invalid independent read non-fatal but fails an invalid storage com
 	});
 	try {
 		await expect(runtime.submit("fail commit")).rejects.toBe(error);
-		expect((await runtime.closed).reason).toBe("failed");
+		expect((await runtime.closed).kind).toBe("failed");
 	} finally {
 		commit.mockRestore();
 		await runtime.close();
@@ -89,7 +89,7 @@ it("rejects an already pending submission wait and cleans up idempotently", asyn
 	try {
 		await expect(runtime.conversation.entries({}, 1, undefined, runtime.context)).rejects.toThrow("disk failure");
 		expect(await pending).toBeInstanceOf(SessionFailed);
-		expect((await runtime.closed).reason).toBe("failed");
+		expect((await runtime.closed).kind).toBe("failed");
 	} finally {
 		spy.mockRestore();
 		await Promise.all([runtime.close(), runtime.close()]);

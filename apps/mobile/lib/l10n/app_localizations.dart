@@ -1735,6 +1735,78 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'[图片 {alt}]'**
   String markdownImage(String alt);
+
+  /// No description provided for @runFailureReasonModelError.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型请求失败'**
+  String get runFailureReasonModelError;
+
+  /// No description provided for @runFailureReasonNoModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可用的模型'**
+  String get runFailureReasonNoModel;
+
+  /// No description provided for @runFailureReasonAborted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停止'**
+  String get runFailureReasonAborted;
+
+  /// No description provided for @runFailureReasonReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开始新的上下文'**
+  String get runFailureReasonReset;
+
+  /// No description provided for @runFailureReasonFaulted.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行出错'**
+  String get runFailureReasonFaulted;
+
+  /// No description provided for @runFailureReasonOrphaned.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行无法继续'**
+  String get runFailureReasonOrphaned;
+
+  /// No description provided for @runFailureReasonInterrupted.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行被中断'**
+  String get runFailureReasonInterrupted;
+
+  /// No description provided for @runFailureReasonRestartLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'多次崩溃后已停止'**
+  String get runFailureReasonRestartLimit;
+
+  /// No description provided for @runFailureReasonNothingToAnswer.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有需要回答的内容'**
+  String get runFailureReasonNothingToAnswer;
+
+  /// No description provided for @runFailureReasonTurnLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'已达到轮次上限'**
+  String get runFailureReasonTurnLimit;
+
+  /// No description provided for @errorContinueBusy.
+  ///
+  /// In zh, this message translates to:
+  /// **'CONTINUE_BUSY: 会话正在运行，请等待它结束。'**
+  String get errorContinueBusy;
+
+  /// No description provided for @errorContinueUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'CONTINUE_UNAVAILABLE: 上一轮已得到回答，没有可继续的内容。'**
+  String get errorContinueUnavailable;
 }
 
 class _AppLocalizationsDelegate

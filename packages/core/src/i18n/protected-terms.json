@@ -3,6 +3,7 @@
 	"terms": [
 		{ "term": "/plan", "kind": "command" },
 		{ "term": "/compact", "kind": "command" },
+		{ "term": "/continue", "kind": "command" },
 		{ "term": "/model", "kind": "command" },
 		{ "term": "/login", "kind": "command" },
 		{ "term": "/jobs", "kind": "command" },
@@ -59,6 +60,8 @@
 		{ "term": "PROVIDER_KEY_REQUIRED", "kind": "code" },
 		{ "term": "PLAN_BUSY", "kind": "code" },
 		{ "term": "PLAN_UNSUPPORTED", "kind": "code" },
+		{ "term": "CONTINUE_BUSY", "kind": "code" },
+		{ "term": "CONTINUE_UNAVAILABLE", "kind": "code" },
 		{ "term": "QUEUE_UNSUPPORTED", "kind": "code" },
 		{ "term": "WORKSPACE_UNSUPPORTED", "kind": "code" },
 		{ "term": "nekopair:", "kind": "code" },

@@ -9,6 +9,7 @@ export {
 	type CodemodeSettingsState,
 	isCodemodeMode,
 } from "./codemode-mode.ts";
+export { onCommits } from "./commits.ts";
 export type { CompactionRecord } from "./compaction.ts";
 export {
 	DEFAULT_NEKO_CONFIG,
@@ -35,6 +36,7 @@ export {
 	PRUNING_DEFAULTS,
 	type PruningSettings,
 } from "./context-settings.ts";
+export { type ConversationFollower, followConversation } from "./conversation-follow.ts";
 export {
 	CREDENTIAL_PROVIDERS,
 	type CredentialProviderId,
@@ -122,6 +124,7 @@ export {
 export { stripFrontmatter } from "./prompt/frontmatter.ts";
 export { QUEUED_PREVIEW_CHARS, type QueuedInput } from "./queued.ts";
 export { type RenameWithRetryDeps, renameWithRetry } from "./rename-with-retry.ts";
+export { CONTINUE_BUSY, CONTINUE_UNAVAILABLE, RUN_FAILURE_REASONS } from "./run-failure.ts";
 export {
 	createNekoRuntime,
 	DEFAULT_MODEL,

@@ -1,5 +1,6 @@
 import type { AssistantMessage, ModelThinkingLevel, Usage, UserMessage } from "@earendil-works/pi-ai";
 import type {
+	CompactionReason,
 	ConversationView,
 	LiveState,
 	NestedToolSlot,
@@ -63,10 +64,14 @@ export type ChatView = {
 	/** Latest successful answer in the active context; unknown after compaction until a new answer. */
 	contextUsage?: { tokens: number | null; window: number; percent: number | null };
 	compaction?: {
-		active: (Omit<NonNullable<LiveState["compactions"]>[number], "taskId"> & { taskId: number })[];
+		active: ChatCompactionStatus[];
 		latest: CompactionRecord | null;
-		failure?: Omit<NonNullable<LiveState["compactionFailure"]>, "taskId"> & { taskId: number };
+		failure?: ChatCompactionFailure;
 	};
+	/** Why the newest run ended without an answer; absent while a run is active or after an answer. */
+	runFailure?: ChatRunFailure;
+	/** Present when the gateway accepts "continue"; absent on an older gateway. */
+	continuable?: true;
 	/** 模型标签，如 "deepseek/deepseek-flash"；pi.agent 有显式模型时取自它（切换后立即更新）。 */
 	model: string;
 	/** 当前会话生效的代理配置（pi.agent doc 投影，configure 提交后随视图推送更新）。 */
@@ -503,6 +508,20 @@ export function totalUsage(state: UsageState): Usage {
 	return total;
 }
 
+/** A running compaction; `reason` is Pi's `trigger` (what started it). */
+export type ChatCompactionStatus = {
+	taskId: number;
+	reason: CompactionReason;
+	blocking: boolean;
+	attempt: number;
+	retry?: { at: number; error: string };
+};
+export type ChatCompactionFailure = { taskId: number; reason: CompactionReason; error: string };
+/** Pi's `RunFailureReason` passed through as text, so a newer Pi reason never breaks an older client. */
+export type ChatRunFailure = { reason: string; detail?: string };
+/** Run failure details are broadcast on every change, so they are clipped. */
+export const RUN_FAILURE_DETAIL_CHARS = 500;
+
 /** pi.agent doc 在 ConversationView.docs 里的 JSON 形状（AgentState 的视图表示）。 */
 type AgentDocView = {
 	readonly cwd?: string;
@@ -516,7 +535,6 @@ export function projectChatView(
 	modelLabel: string,
 	options: {
 		models?: readonly NekoModelInfo[];
-		contextEntries?: ConversationView["entries"];
 		compaction?: CompactionRecord | null;
 	} = {},
 ): ChatView {
@@ -531,7 +549,7 @@ export function projectChatView(
 			(m) =>
 				`${m.provider}/${m.modelId}` === (agentModel ? `${agentModel.provider}/${agentModel.modelId}` : modelLabel),
 		)?.contextWindow ?? 0;
-	const tokens = contextTokens(options.contextEntries ?? view.entries);
+	const tokens = contextTokens(view.entries);
 
 	// 先按 callId 收集工具结果（pi.tool-result entry），再按序展开条目。
 	const results = new Map<string, Extract<ChatItem, { type: "tool" }>>();
@@ -718,10 +736,20 @@ export function projectChatView(
 			percent: tokens !== null && contextWindow > 0 ? (tokens / contextWindow) * 100 : null,
 		},
 		compaction: {
-			active: [...(live.compactions ?? [])],
+			active: (live.compactions ?? []).map(({ trigger, ...status }) => ({ ...status, reason: trigger })),
 			latest: options.compaction ?? null,
-			...(live.compactionFailure ? { failure: live.compactionFailure } : {}),
+			...(live.compactionFailure
+				? {
+						failure: {
+							taskId: live.compactionFailure.taskId,
+							reason: live.compactionFailure.trigger,
+							error: live.compactionFailure.error,
+						},
+					}
+				: {}),
 		},
+		...(live.run === undefined && live.runFailure ? { runFailure: runFailureView(live.runFailure) } : {}),
+		continuable: true,
 		model: agentModel !== null ? `${agentModel.provider}/${agentModel.modelId}` : modelLabel,
 		agent: {
 			model: agentModel,
@@ -740,6 +768,16 @@ export function projectChatView(
 		},
 		items,
 		streaming: projectStreaming(live),
+	};
+}
+
+function runFailureView(failure: NonNullable<LiveState["runFailure"]>): ChatRunFailure {
+	const detail = failure.detail?.replace(/\p{Cc}/gu, " ").trim();
+	return {
+		reason: failure.reason,
+		...(detail
+			? { detail: detail.length > RUN_FAILURE_DETAIL_CHARS ? `${detail.slice(0, RUN_FAILURE_DETAIL_CHARS)}…` : detail }
+			: {}),
 	};
 }
 
@@ -828,9 +866,15 @@ function projectStreaming(live: LiveState): StreamingView | null {
 	return { thinking, text, toolCalls };
 }
 
-/** Match Pi durable's footer: use the latest successful answer after the newest compaction. */
+/**
+ * Match Pi durable's footer: the latest successful answer after the newest head marker (a compaction or a new context).
+ * `entries` may be the whole transcript: head markers sit in place, so nothing before the newest one counts.
+ */
 export function contextTokens(entries: ConversationView["entries"]): number | null {
-	const compacted = entries.reduce((id, entry) => (entry.kind === "pi.compaction" ? Math.max(id, entry.id) : id), 0);
+	const compacted = entries.reduce(
+		(id, entry) => (entry.kind === "pi.compaction" || entry.kind === "pi.reset" ? Math.max(id, entry.id) : id),
+		0,
+	);
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const entry = entries[i]!;
 		const message = entry.model?.[0];

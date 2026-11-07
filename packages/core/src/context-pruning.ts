@@ -1,6 +1,7 @@
 import type { Context } from "@earendil-works/chord";
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { ContextEdit, ConversationId, EntryRecord, Harness } from "@earendil-works/pi-durable";
+import { onCommits } from "./commits.ts";
 import type { EffectiveContextSettings } from "./context-settings.ts";
 
 /** Application entry that carries the context edits; invisible to every frontend. */
@@ -111,7 +112,7 @@ export class ContextPruner {
 
 	constructor(options: ContextPrunerOptions) {
 		this.#options = options;
-		this.#unsubscribe = options.harness.subscribeCommits(({ changes }) => {
+		this.#unsubscribe = onCommits(options.harness, ({ changes }) => {
 			if (!options.settings().enabled) return;
 			for (const change of changes) {
 				if (change.type !== "entry" || change.value.kind !== "pi.assistant") continue;

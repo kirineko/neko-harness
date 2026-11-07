@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AttachedReplicatedState, Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type {
 	CredentialStore,
@@ -13,28 +13,30 @@ import { clampThinkingLevel, createModels, getSupportedThinkingLevels } from "@e
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { PI_ATTRIBUTION } from "@earendil-works/pi-ai/utils/identity";
 import {
-	type AgentEventStream,
+	type Agent,
 	AssistantEntry,
 	type Conversation,
+	ConversationBusy,
 	type ConversationId,
 	type ConversationRecord,
-	type ConversationView,
 	type ConversationWatch,
 	type Cursor,
+	configure,
 	createRegistry,
 	defineDoc,
 	type Extension,
 	Harness,
 	InboxDoc,
 	type InputEntry,
+	type InputSubmissionDraft,
 	LiveDoc as importLiveDoc,
 	MemoryStorage,
+	type Report,
 	type Submission,
 	type SubmissionId,
 	type Tx,
 	UsageDoc,
 	type UsageState,
-	watchEvents,
 } from "@earendil-works/pi-durable";
 import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -64,6 +66,7 @@ import {
 	type SavedContextSettings,
 	sanitizeSavedContextSettings,
 } from "./context-settings.ts";
+import { type ConversationFollower, followConversation } from "./conversation-follow.ts";
 import {
 	type CredentialProviderId,
 	type CredentialStatus,
@@ -103,6 +106,7 @@ import { createResourceLoader, scanSkillsByLevel } from "./prompt/resources.ts";
 import type { SkillLevel } from "./prompt/skills.ts";
 import { createResourceSnapshots } from "./prompt/snapshots.ts";
 import { queuedUserInput } from "./queued.ts";
+import { CONTINUE_BUSY, CONTINUE_UNAVAILABLE } from "./run-failure.ts";
 import {
 	DEFAULT_SEARCH_PROVIDER,
 	isSearchProvider,
@@ -164,7 +168,10 @@ export type NekoDefaultModelState = {
 export type NekoRuntimeOptions = {
 	/** Chord context for every runtime call; default `BACKGROUND_CONTEXT` (never cancels). */
 	readonly context?: Context;
-	readonly onReport?: (error: unknown) => void;
+	/** Host error channel: neko's own errors, and Pi's reports (the report itself as the second argument). */
+	readonly onReport?: (error: unknown, report?: Report) => void;
+	/** Tool rounds one run may take, set on new main sessions (sub-agents inherit it); unset means no limit. */
+	readonly maxTurns?: number;
 	/** "sqlite" persists to disk (default); "memory" keeps everything in process, for tests. */
 	readonly storage?: "sqlite" | "memory";
 	/** SQLite file path; default `~/.neko/neko.sqlite`. */
@@ -243,16 +250,19 @@ export type NekoSession = {
 	submit(content: UserMessage["content"], options?: NekoSubmitOptions): Promise<Submission>;
 	/** Wait for a submission and extract the answer text. */
 	waitAnswer(submission: Submission): Promise<NekoAnswer>;
-	/** The conversation's structural view as a read-only Chord state, updated after every commit. */
-	viewState(): Promise<AttachedReplicatedState<ConversationView>>;
-	/** The structural view as a serialized exact-frame watch with bounded pending frames. */
+	/** The conversation's view with its whole transcript, updated after every change; dispose it when done. */
+	follow(): Promise<ConversationFollower>;
+	/** Pi's structural view: a serialized watch over a bounded window of the transcript. */
 	watch(): Promise<ConversationWatch>;
-	/** Coding-agent style agent events (message/tool deltas) for this conversation. */
-	events(): Promise<AgentEventStream>;
 	/** Token and cost totals of this conversation's `pi.usage`. */
 	usage(): Promise<UsageState>;
 	/** Withdraw queued inputs and abort the current run. */
 	abort(): Promise<void>;
+	/**
+	 * Start a run on the context as it is, without a new user message, after a run that ended without an answer.
+	 * Rejects with `CONTINUE_BUSY` while running and `CONTINUE_UNAVAILABLE` when there is no such failure.
+	 */
+	continueRun(): Promise<void>;
 	/** Withdraw one queued user input (`ChatView.queued[].id`) without touching the run or the other queued inputs. */
 	withdraw(submissionId: number): Promise<NekoWithdrawal>;
 	/** Turn one queued user input into a steer (placed after the current tool round) without stopping the run. */
@@ -479,12 +489,10 @@ export type NekoRuntime = {
 	submit(content: UserMessage["content"], options?: NekoSubmitOptions): Promise<Submission>;
 	/** Wait for a submission on the root conversation and extract the answer text. */
 	waitAnswer(submission: Submission): Promise<NekoAnswer>;
-	/** The root conversation's structural view as a read-only Chord state, updated after every commit. */
-	viewState(id?: ConversationId): Promise<AttachedReplicatedState<ConversationView>>;
-	/** The structural view as a serialized exact-frame watch with bounded pending frames. */
+	/** A conversation's view with its whole transcript (default: root); dispose it when done. */
+	follow(id?: ConversationId): Promise<ConversationFollower>;
+	/** Pi's structural view: a serialized watch over a bounded window of the transcript. */
 	watch(id?: ConversationId): Promise<ConversationWatch>;
-	/** Coding-agent style agent events (message/tool deltas). */
-	events(id?: ConversationId): Promise<AgentEventStream>;
 	/** Token and cost totals of a conversation's `pi.usage` (default: root). */
 	usage(id?: ConversationId): Promise<UsageState>;
 	/** Withdraw queued inputs and abort the current run (default: root). */
@@ -569,6 +577,9 @@ export type NekoRuntime = {
  */
 export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promise<NekoRuntime> {
 	const context = options.context ?? BACKGROUND_CONTEXT;
+	if (options.maxTurns !== undefined && !(Number.isSafeInteger(options.maxTurns) && options.maxTurns >= 1))
+		throw new RangeError(`maxTurns must be an integer of 1 or more, got ${options.maxTurns}`);
+	const turnLimit = options.maxTurns === undefined ? {} : { maxTurns: options.maxTurns };
 	const defaultCwd = normalizeWorkspace(options.cwd);
 	const model: NekoModelRef = options.model ?? DEFAULT_MODEL;
 	const modelOverride = options.modelOverride;
@@ -724,7 +735,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 					return compactionFor(contextState);
 				},
 			},
-			onReport: options.onReport,
+			onReport: (report) => options.onReport?.(report.error, report),
 			conversationCreated: async (tx, record) => {
 				(await tx.doc(SessionMetadataDoc, record.id)).createdAt = Date.now();
 			},
@@ -792,6 +803,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			model: rootModel,
 			thinkingLevel: resolveLevel(rootModel, options.thinkingLevel ?? "high"),
 			cwd: defaultCwd,
+			...turnLimit,
 		},
 	});
 	enabled = new Set(
@@ -954,97 +966,117 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		});
 		if (change) await target.configure(change, context);
 	};
-	const submitTo = async (
+	/**
+	 * Everything an input needs before it is admitted: skill expansion and its resource snapshot (staged under the
+	 * request id), the provider check, image preparation and metadata. Discard the staged snapshot if admission fails.
+	 */
+	const prepareSubmission = async (
+		target: Conversation,
+		agent: Agent,
+		content: UserMessage["content"],
+		submitOptions?: NekoSubmitOptions,
+		extra?: Pick<InputData, "planDecision">,
+	): Promise<{ draft: InputSubmissionDraft; requestId: string }> => {
+		const workspace = executionWorkspace(agent.cwd);
+		const duplicate =
+			submitOptions?.requestId !== undefined &&
+			(await storage.submissionByRequest(target.id, submitOptions.requestId, context));
+		const data: InputData = { at: Date.now(), prompt: "", images: [], ...extra };
+		let invocationName: string | undefined;
+		if (!duplicate && typeof content === "string" && content.startsWith("/skill:")) {
+			const end = content.indexOf(" ");
+			invocationName = content.slice(7, end === -1 ? undefined : end);
+		}
+		const prepared = duplicate ? undefined : await loadResources(workspace, invocationName);
+		if (prepared && invocationName !== undefined && typeof content === "string") {
+			content = await expandSkillCommand(
+				content,
+				prepared.skills,
+				async (path) => {
+					if (prepared.invocation?.filePath !== path) throw new Error("Missing prepared skill content");
+					return prepared.invocation.content;
+				},
+				undefined,
+				(skill) => {
+					data.skill = skill;
+				},
+			);
+		}
+		if (!duplicate) await guardProvider(agent.model);
+		if (!duplicate && agent.model) {
+			const resolved = models.getModel(agent.model.provider, agent.model.modelId);
+			if (resolved) content = await prepareInput(content, resolved);
+		}
+
+		const requestId = submitOptions?.requestId ?? crypto.randomUUID();
+		data.prompt = imagePrompt(content);
+		if (!duplicate) {
+			const input = addDefaultImagePrompt(content);
+			content = input.content;
+			if (input.defaultImagePrompt) data.defaultImagePrompt = input.defaultImagePrompt;
+		}
+		if (!duplicate && Array.isArray(content)) {
+			let index = 0;
+			for (const [contentIndex, block] of content.entries()) {
+				if (block.type !== "image") continue;
+				const bytes = Buffer.from(block.data, "base64");
+				const { default: sharp } = await import("sharp");
+				const info = await sharp(bytes).metadata();
+				data.images.push({
+					contentIndex,
+					name: (submitOptions?.imageNames?.[index++] ?? "Image").replace(/\p{Cc}/gu, "").slice(0, 200),
+					mimeType: block.mimeType,
+					width: info.width!,
+					height: info.height!,
+					bytes: bytes.length,
+				});
+			}
+		}
+		if (prepared) resourceSnapshots.stage(target.id, requestId, workspace, prepared);
+		return {
+			draft: {
+				type: "input",
+				content,
+				entry: { kind: NekoInput.kind, data },
+				requestId,
+				...(submitOptions?.whenBusy !== undefined ? { whenBusy: submitOptions.whenBusy } : {}),
+			},
+			requestId,
+		};
+	};
+	/** Admit an input; the caller holds the session's admission turn (`admit`). */
+	const submitNow = async (
 		target: Conversation,
 		content: UserMessage["content"],
 		submitOptions?: NekoSubmitOptions,
 		extra?: Pick<InputData, "planDecision">,
-	): Promise<Submission> =>
-		admit(target.id, async () => {
-			await syncAgent(target);
-			const agent = await target.agent(context);
-			const workspace = executionWorkspace(agent.cwd);
-			const duplicate =
-				submitOptions?.requestId !== undefined &&
-				(await storage.submissionByRequest(target.id, submitOptions.requestId, context));
-			const data: InputData = { at: Date.now(), prompt: "", images: [], ...extra };
-			let invocationName: string | undefined;
-			if (!duplicate && typeof content === "string" && content.startsWith("/skill:")) {
-				const end = content.indexOf(" ");
-				invocationName = content.slice(7, end === -1 ? undefined : end);
-			}
-			const prepared = duplicate ? undefined : await loadResources(workspace, invocationName);
-			if (prepared && invocationName !== undefined && typeof content === "string") {
-				content = await expandSkillCommand(
-					content,
-					prepared.skills,
-					async (path) => {
-						if (prepared.invocation?.filePath !== path) throw new Error("Missing prepared skill content");
-						return prepared.invocation.content;
-					},
-					undefined,
-					(skill) => {
-						data.skill = skill;
-					},
-				);
-			}
-			if (!duplicate) await guardProvider(agent.model);
-			if (!duplicate && agent.model) {
-				const resolved = models.getModel(agent.model.provider, agent.model.modelId);
-				if (resolved) content = await prepareInput(content, resolved);
-			}
-
-			const requestId = submitOptions?.requestId ?? crypto.randomUUID();
-			data.prompt = imagePrompt(content);
-			if (!duplicate) {
-				const input = addDefaultImagePrompt(content);
-				content = input.content;
-				if (input.defaultImagePrompt) data.defaultImagePrompt = input.defaultImagePrompt;
-			}
-			if (!duplicate && Array.isArray(content)) {
-				let index = 0;
-				for (const [contentIndex, block] of content.entries()) {
-					if (block.type !== "image") continue;
-					const bytes = Buffer.from(block.data, "base64");
-					const { default: sharp } = await import("sharp");
-					const info = await sharp(bytes).metadata();
-					data.images.push({
-						contentIndex,
-						name: (submitOptions?.imageNames?.[index++] ?? "Image").replace(/\p{Cc}/gu, "").slice(0, 200),
-						mimeType: block.mimeType,
-						width: info.width!,
-						height: info.height!,
-						bytes: bytes.length,
-					});
-				}
-			}
-			if (prepared) resourceSnapshots.stage(target.id, requestId, workspace, prepared);
-			let result: Submission;
-			try {
-				result = await target.submit(
-					{
-						type: "input",
-						content,
-						entry: { kind: NekoInput.kind, data },
-						requestId,
-						...(submitOptions?.whenBusy !== undefined ? { whenBusy: submitOptions.whenBusy } : {}),
-					},
-					context,
-				);
-			} catch (error) {
-				resourceSnapshots.discard(target.id, requestId);
-				throw error;
-			}
-			if (!extra?.planDecision) await plans.supersedePending(target.id);
-			await touchConversation(target.id);
-			await metadata.reconcile(target.id);
-			return result;
-		});
+	): Promise<Submission> => {
+		await syncAgent(target);
+		const { draft, requestId } = await prepareSubmission(
+			target,
+			await target.agent(context),
+			content,
+			submitOptions,
+			extra,
+		);
+		let result: Submission;
+		try {
+			result = await target.submit(draft, context);
+		} catch (error) {
+			resourceSnapshots.discard(target.id, requestId);
+			throw error;
+		}
+		if (!extra?.planDecision) await plans.supersedePending(target.id);
+		await touchConversation(target.id);
+		await metadata.reconcile(target.id);
+		return result;
+	};
+	const submitTo: typeof submitNow = (target, ...args) => admit(target.id, () => submitNow(target, ...args));
 
 	/** Submit the input a settled plan decision calls for; the request id makes repeats and restarts harmless. */
-	const dispatchPlan = async (target: Conversation, item: PlanItem) => {
+	const dispatchPlan = async (target: Conversation, item: PlanItem, submit: typeof submitNow = submitTo) => {
 		const approve = item.status === "approved";
-		await submitTo(
+		await submit(
 			target,
 			approve ? approvedPlanPrompt(item) : planRevisionPrompt(item, item.feedback ?? ""),
 			{ requestId: `${approve ? "plan-exec" : "plan-revise"}:${item.version}`, whenBusy: "followUp" },
@@ -1092,14 +1124,11 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		waitAnswer(submission) {
 			return waitAnswerOf(target, submission);
 		},
-		viewState() {
-			return target.viewState(context);
+		follow() {
+			return followConversation(target, context);
 		},
 		watch() {
 			return target.watch(context);
-		},
-		events() {
-			return watchEvents(harness, target.id, context);
 		},
 		async usage() {
 			return mergeUsage(
@@ -1150,16 +1179,53 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		},
 		async respondPlan(version, decision) {
 			const parsed = validatePlanDecision(decision);
-			const known = await plans.get(target.id, version);
-			if (!known) throw new Error("Plan not found.");
-			if (known.status === "awaiting_approval") {
+			return admit(target.id, async () => {
+				const known = await plans.get(target.id, version);
+				if (!known) throw new Error("Plan not found.");
+				if (known.status !== "awaiting_approval") {
+					// A decision saved by an older release before its input was submitted.
+					const legacy = await plans.undispatched(target.id);
+					if (legacy?.version === version) await dispatchPlan(target, legacy, submitNow);
+					return known;
+				}
 				if (await isRunning(target.id)) throw new Error(PLAN_BUSY);
-				await guardProvider((await target.agent(context)).model);
-			}
-			const { record, item } = await plans.decide(target.id, version, parsed);
-			if ((item.status === "approved" || item.status === "revision_requested") && !item.dispatched)
-				await dispatchPlan(target, item);
-			return record;
+				await syncAgent(target);
+				const agent = await target.agent(context);
+				const approve = parsed.kind === "approve";
+				const feedback = parsed.kind === "revise" ? parsed.feedback : "";
+				const { draft, requestId } = await prepareSubmission(
+					target,
+					agent,
+					approve ? approvedPlanPrompt(known) : planRevisionPrompt(known, feedback),
+					{ requestId: `${approve ? "plan-exec" : "plan-revise"}:${version}`, whenBusy: "followUp" },
+					{
+						planDecision: {
+							version,
+							kind: approve ? "approve" : "revise",
+							title: known.title,
+							...(!approve && feedback ? { feedback } : {}),
+						},
+					},
+				);
+				const codemode = (await harness.snapshot(CodemodeDoc, target.id, context))?.mode ?? "off";
+				const leave = approve ? agentSyncChange(agent, { plan: "normal", codemode, role: "main" }) : undefined;
+				let record: PlanRecord;
+				try {
+					// The decision, the agent leaving plan mode and the input that acts on it are stored together.
+					record = await plans.decideWith(target.id, version, parsed, async (tx) => {
+						await target.submit(tx, draft);
+						if (leave) await configure(tx, target.id, leave);
+					});
+				} catch (error) {
+					resourceSnapshots.discard(target.id, requestId);
+					throw error;
+				}
+				if (record.status !== "approved" && record.status !== "revision_requested")
+					resourceSnapshots.discard(target.id, requestId);
+				await touchConversation(target.id);
+				await metadata.reconcile(target.id);
+				return record;
+			});
 		},
 		async workspaceDir(path, signal) {
 			return workspaceFiles.children(savedWorkspace((await target.agent(context)).cwd), path, signal ?? neverAborted());
@@ -1192,6 +1258,24 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		async abort() {
 			await target.abort(context);
 			await plans.cancelPending(target.id);
+		},
+		continueRun() {
+			return admit(target.id, async () => {
+				await syncAgent(target);
+				await guardProvider((await target.agent(context)).model);
+				const live = await harness.snapshot(importLiveDoc, target.id, context);
+				if (live?.run !== undefined) throw new Error(CONTINUE_BUSY);
+				if (live?.runFailure === undefined) throw new Error(CONTINUE_UNAVAILABLE);
+				try {
+					await target.submit({ type: "continue" }, context);
+				} catch (error) {
+					// A run that started after the check (another client's input) wins.
+					if (error instanceof ConversationBusy) throw new Error(CONTINUE_BUSY);
+					throw error;
+				}
+				await touchConversation(target.id);
+				await metadata.reconcile(target.id);
+			});
 		},
 		async withdraw(submissionId) {
 			const id = submissionId as SubmissionId;
@@ -1395,14 +1479,11 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		root: rootSession,
 		submit: rootSession.submit,
 		waitAnswer: rootSession.waitAnswer,
-		async viewState(id?: ConversationId) {
-			return (await sessionFor(id)).viewState();
+		async follow(id?: ConversationId) {
+			return (await sessionFor(id)).follow();
 		},
 		async watch(id?: ConversationId) {
 			return (await sessionFor(id)).watch();
-		},
-		async events(id?: ConversationId) {
-			return (await sessionFor(id)).events();
 		},
 		async usage(id?: ConversationId) {
 			return (await sessionFor(id)).usage();
@@ -1455,6 +1536,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 						model: effective,
 						thinkingLevel: resolveLevel(effective, createOptions?.thinkingLevel ?? options.thinkingLevel ?? "high"),
 						cwd: workspace.path,
+						...turnLimit,
 						...agentChangeFor({ plan: "normal", codemode: mode, role: "main" }),
 					},
 					init: async (tx, id) => {

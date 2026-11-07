@@ -102,6 +102,9 @@ describe("neko.config.json (2.4)", () => {
 		expect(() => parseNekoConfig('{"theme": "rainbow"}', "test.json", {})).toThrow(/theme/);
 		expect(() => parseNekoConfig('{"defaultModel": {"provider": "x"}}', "test.json", {})).toThrow(/defaultModel/);
 		expect(() => parseNekoConfig('{"gateway": {"port": "no"}}', "test.json", {})).toThrow(/gateway\.port/);
+		expect(() => parseNekoConfig('{"maxTurns": 0}', "test.json", {})).toThrow(/maxTurns/);
+		expect(() => parseNekoConfig('{"maxTurns": 2.5}', "test.json", {})).toThrow(/maxTurns/);
+		expect(parseNekoConfig('{"maxTurns": 3}', "test.json", {}).maxTurns).toBe(3);
 		expect(() => parseNekoConfig('{"gateway": {"socketPath": 1}}', "test.json", {})).toThrow(/gateway\.socketPath/);
 	});
 

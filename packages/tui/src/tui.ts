@@ -23,6 +23,7 @@ import { compactInstructions, downloadImage, type ImageFile, uploadImage } from 
 import { promptHistory } from "@neko-harness/core/input-history";
 import { sessionName } from "@neko-harness/core/session-display";
 import {
+	continueClient,
 	JOBS_UNSUPPORTED,
 	jobsClient,
 	PLAN_UNSUPPORTED,
@@ -69,6 +70,7 @@ import { PlanDock } from "./plan-dock.ts";
 import { isProviderRejection, modelKey, openModelPanel, providerSendBlock } from "./provider-ui.ts";
 import { canAutoOpen, QuestionDock } from "./question-dock.ts";
 import { QueueRow, queueKeyAction, restoreText, steerNotice, withdrawNotice } from "./queue-ui.ts";
+import { continueCommand, RunFailureRow } from "./run-failure-ui.ts";
 import { openSearchPanel } from "./search-ui.ts";
 import { createShellNotifier } from "./shell-notice.ts";
 import { openSkillMarket } from "./skill-market-ui.ts";
@@ -165,6 +167,7 @@ class NekoTuiApp {
 	#commandCaps = "";
 	#switching = false;
 	readonly #queueRow = new QueueRow();
+	readonly #failureRow = new RunFailureRow();
 	#searchStop: (() => void) | undefined;
 	#contextStop: (() => void) | undefined;
 	#codemodeStop: (() => void) | undefined;
@@ -434,6 +437,8 @@ class NekoTuiApp {
 				notices,
 				busy: this.#busyLoader,
 				busyVisible: () => this.#busyText !== undefined,
+				failure: this.#failureRow,
+				failureVisible: () => this.#failureRow.visible,
 				queue: this.#queueRow,
 				queueVisible: () => this.#queueRow.visible,
 				panelOpen: () => this.#panel.open || this.#login.open,
@@ -541,6 +546,10 @@ class NekoTuiApp {
 		}
 		if (trimmed === "/language") {
 			void this.openLanguageOverlay();
+			return;
+		}
+		if (trimmed === "/continue") {
+			void this.#continueRun();
 			return;
 		}
 		const instructions = compactInstructions(trimmed);
@@ -1322,6 +1331,15 @@ class NekoTuiApp {
 		});
 	}
 
+	/** `/continue`: run again on the context as it is after a run that ended without an answer. */
+	async #continueRun(): Promise<void> {
+		const chat = this.#chat;
+		if (!chat) return;
+		const session = this.#sessionId;
+		const notice = await continueCommand(continueClient(chat));
+		if (notice !== undefined && session === this.#sessionId) this.addNotice(notice, "warning", { wrap: true });
+	}
+
 	applyView(view: ChatView): void {
 		this.#lastView = view;
 		if (this.#historyItems !== view.items) {
@@ -1333,6 +1351,7 @@ class NekoTuiApp {
 		if (this.#agentsPanel) this.#panel.update(subagentItems(view.subagents ?? [], view.agents));
 		if (this.#jobsPanel) this.#panel.update(jobItems(view.jobs ?? []));
 		this.#queueRow.setItems(view.queued ?? []);
+		this.#failureRow.set(view.continuable && !view.busy ? view.runFailure : undefined);
 		this.#question.update(view.questions);
 		this.#plan.update(view.plan);
 		if (this.#commandCaps !== [...hiddenCommands(view)].join(",")) this.#syncCommands(view);
@@ -1734,6 +1753,7 @@ function hiddenCommands(view: ChatView): Set<string> {
 	if (view.todos === undefined) hidden.add("todos");
 	if (view.questions === undefined) hidden.add("question");
 	if (view.plan === undefined) hidden.add("plan");
+	if (view.continuable === undefined) hidden.add("continue");
 	return hidden;
 }
 

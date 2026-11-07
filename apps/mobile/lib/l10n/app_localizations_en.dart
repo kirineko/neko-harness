@@ -987,4 +987,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String markdownImage(String alt) {
     return '[Image $alt]';
   }
+
+  @override
+  String get runFailureReasonModelError => 'Model request failed';
+
+  @override
+  String get runFailureReasonNoModel => 'No model is available';
+
+  @override
+  String get runFailureReasonAborted => 'Stopped';
+
+  @override
+  String get runFailureReasonReset => 'A new context started';
+
+  @override
+  String get runFailureReasonFaulted => 'The run failed';
+
+  @override
+  String get runFailureReasonOrphaned => 'The run could not continue';
+
+  @override
+  String get runFailureReasonInterrupted => 'The run was interrupted';
+
+  @override
+  String get runFailureReasonRestartLimit => 'Stopped after repeated crashes';
+
+  @override
+  String get runFailureReasonNothingToAnswer => 'Nothing to answer';
+
+  @override
+  String get runFailureReasonTurnLimit => 'Turn limit reached';
+
+  @override
+  String get errorContinueBusy =>
+      'CONTINUE_BUSY: The session is running; wait for it to finish';
+
+  @override
+  String get errorContinueUnavailable =>
+      'CONTINUE_UNAVAILABLE: The last run was answered; there is nothing to continue';
 }

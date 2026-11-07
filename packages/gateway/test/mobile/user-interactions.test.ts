@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
-import { Check } from "typebox/value";
 import {
+	checkSchema,
 	MOBILE_API_V1_METHODS,
 	MOBILE_API_V1_NOTIFICATIONS,
 	MOBILE_CAPABILITIES,
@@ -31,7 +31,7 @@ type QuestionList = { revision: number; pending: Array<{ id: number; version: st
 type Patch = { upserts: Array<{ type: string; text?: string }>; status?: { busy: boolean } };
 
 const ok = (method: string, value: unknown) =>
-	expect(Check(MOBILE_API_V1_METHODS[method]?.result as never, value)).toBe(true);
+	expect(checkSchema(MOBILE_API_V1_METHODS[method]?.result as never, value)).toBe(true);
 const askRound = (args: Record<string, unknown>) =>
 	fauxAssistantMessage([fauxToolCall("ask_user", args as never)], { stopReason: "toolUse" });
 const choices = [
@@ -89,7 +89,7 @@ describe("mobile todos and questions", () => {
 		const { subscriptionId } = attached;
 		await phone.call("chat.submit", { subscriptionId, requestId: "q-1", text: "decide storage" });
 		const changed = await phone.notification("questions.changed", () => true);
-		expect(Check(MOBILE_API_V1_NOTIFICATIONS["questions.changed"] as never, changed)).toBe(true);
+		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["questions.changed"] as never, changed)).toBe(true);
 		await phone.notification("todos.changed", () => true);
 		const todos = await phone.call<{ revision: number; items: Array<{ status: string }> }>("todos.get", {
 			subscriptionId,

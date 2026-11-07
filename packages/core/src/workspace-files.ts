@@ -216,7 +216,7 @@ export class WorkspaceFiles {
 		watch.controller.abort();
 		const closing = watch.work
 			.catch(() => {})
-			.then(() => watch.watcher?.close(BACKGROUND_CONTEXT))
+			.then(() => watch.watcher?.stop(BACKGROUND_CONTEXT))
 			.then(() => {})
 			.catch(() => {})
 			.finally(() => this.#disposing.delete(closing));
@@ -263,7 +263,7 @@ export class WorkspaceFiles {
 							user.generation++;
 							user.loaded = 0;
 						}
-						if ("error" in change) {
+						if (change.kind === "failed") {
 							if (this.#watches.get(item.root) === current) this.#watches.delete(item.root);
 							for (const user of [...current.users]) this.#closeWatcher(user);
 						}
@@ -272,7 +272,7 @@ export class WorkspaceFiles {
 				);
 				if (result.ok) {
 					current.watcher = result.value;
-					if (current.controller.signal.aborted) await result.value.close(BACKGROUND_CONTEXT);
+					if (current.controller.signal.aborted) await result.value.stop(BACKGROUND_CONTEXT);
 				} else {
 					forget();
 				}

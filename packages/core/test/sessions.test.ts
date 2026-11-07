@@ -1,7 +1,7 @@
 import { fauxProvider } from "../../../test/faux.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 // core 会话管理 API：列出 / 创建 / 按 id 获取 / 归档（软删除），
-// 以及按会话 id 订阅 viewState/watch/events/usage。
+// 以及按会话 id 订阅 follow/watch/usage。
 
 import { describe, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
@@ -42,20 +42,20 @@ describe("conversation management", () => {
 			// The created session works end to end and is subscribable by id.
 			const answer = await created.waitAnswer(await created.submit("ping"));
 			expect(answer).toEqual({ status: "done", text: "pong" });
-			const view = await runtime.viewState(created.id);
+			const view = await runtime.follow(created.id);
 			expect(view.value.entries.length).toBeGreaterThan(0);
 			view.dispose();
 			const usage = await runtime.usage(created.id);
 			expect(Object.keys(usage.models)).toContain("faux/faux-1");
-			const events = await runtime.events(created.id);
-			await events.stop();
+			const watch = await runtime.watch(created.id);
+			await watch.stop();
 
 			// Archive (soft delete): hidden from listings and lookups.
 			await runtime.archiveConversation(created.id);
 			const after = await runtime.listConversations();
 			expect(after.map((info) => info.id)).toEqual([ROOT_CONVERSATION_ID]);
 			expect(await runtime.getConversation(created.id)).toBeUndefined();
-			await expect(runtime.viewState(created.id)).rejects.toThrow(/not available/);
+			await expect(runtime.follow(created.id)).rejects.toThrow(/not available/);
 		} finally {
 			await runtime.close();
 		}

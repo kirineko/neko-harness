@@ -1,4 +1,5 @@
 import {
+	CONTINUE_UNSUPPORTED,
 	JOBS_UNSUPPORTED,
 	PLAN_UNSUPPORTED,
 	QUESTIONS_UNSUPPORTED,
@@ -27,7 +28,10 @@ const EXACT: ReadonlyMap<string, PlainKey> = new Map<string, PlainKey>([
 	[TODOS_UNSUPPORTED, "core.unsupported.todos"],
 	[QUESTIONS_UNSUPPORTED, "core.unsupported.questions"],
 	[PLAN_UNSUPPORTED, "core.unsupported.plan"],
+	[CONTINUE_UNSUPPORTED, "core.unsupported.continue"],
 	["PLAN_BUSY: Wait for the current run to finish or stop it first.", "core.error.planBusy"],
+	["CONTINUE_BUSY: The session is running; wait for it to finish.", "core.error.continueBusy"],
+	["CONTINUE_UNAVAILABLE: The last run was answered; there is nothing to continue.", "core.error.continueUnavailable"],
 ]);
 
 const ERRORS: readonly { pattern: RegExp; show: (match: RegExpMatchArray) => string }[] = [

@@ -93,7 +93,7 @@ it("runs discover -> search -> native read through the actual runtime", async ()
 	try {
 		const answer = await runtime.waitAnswer(await runtime.submit("Find the answer definition"));
 		expect(answer).toEqual({ status: "done", text: "evidence.ts:1 defines answer = 42" });
-		const view = await runtime.viewState();
+		const view = await runtime.follow();
 		const saved = JSON.stringify(view.value.entries);
 		expect(saved).toContain("Search complete");
 		expect(saved).toContain("export const answer = 42");

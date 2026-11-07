@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { PLAN_LIMITS } from "@neko-harness/core/interactions";
-import { Check } from "typebox/value";
 import { planClient } from "../../src/client-session.ts";
 import {
+	checkSchema,
 	MOBILE_API_V1_METHODS,
 	MOBILE_API_V1_NOTIFICATIONS,
 	MOBILE_API_VERSIONS,
@@ -21,7 +21,7 @@ type SessionList = { sessions: Array<{ id: string; awaitingPlan?: boolean }> };
 const plan = { title: "Add flag", steps: ["Read the config", "Add the flag"], note: "Keep defaults." };
 const submitRound = () => fauxAssistantMessage([fauxToolCall("submit_plan", plan as never)], { stopReason: "toolUse" });
 const ok = (method: string, value: unknown) =>
-	expect(Check(MOBILE_API_V1_METHODS[method]?.result as never, value)).toBe(true);
+	expect(checkSchema(MOBILE_API_V1_METHODS[method]?.result as never, value)).toBe(true);
 
 let harness: MobileHarness | undefined;
 afterEach(async () => {
@@ -52,7 +52,7 @@ async function awaitPlan() {
 	const { subscriptionId } = attached;
 	await opened.phone.call("chat.submit", { subscriptionId, requestId: "p-1", text: "add a flag" });
 	const notice = await opened.phone.notification("plan.changed", () => true);
-	expect(Check(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
+	expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
 	const patch = await opened.phone.notification("chat.patch", (p) => (p as Patch).status?.plan?.pending === true);
 	const summary = (patch as unknown as Patch).status!.plan!;
 	expect(summary.revision).toBeGreaterThan(attached.snapshot.plan!.revision);
@@ -176,7 +176,7 @@ describe("mobile plan approval", () => {
 		ok("plan.exit", exited);
 		expect(exited.mode).toBe("normal");
 		const notice = await phone.notification("plan.changed", () => true);
-		expect(Check(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
+		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
 		expect(chat.view.value?.plan?.mode).toBe("normal");
 		const record = await phone.call<Plan>("plan.get", { subscriptionId, version });
 		expect(record.status).toBe("cancelled");
@@ -236,7 +236,7 @@ describe("mobile plan approval", () => {
 		const { phone, chat, subscriptionId, version } = await awaitPlan();
 		await chat.abort(null);
 		const notice = await phone.notification("plan.changed", () => true);
-		expect(Check(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
+		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
 		const record = await phone.call<Plan>("plan.get", { subscriptionId, version });
 		expect(record.status).toBe("cancelled");
 		const late = await phone.call<Plan>("plan.respond", { subscriptionId, version, decision: { kind: "approve" } });

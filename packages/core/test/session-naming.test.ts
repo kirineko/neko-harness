@@ -2,8 +2,9 @@ import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, Type } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
@@ -93,7 +94,7 @@ it("falls back after two invalid title responses without polluting the transcrip
 		expect(d.firstPromptPreview).toBe("first question");
 		expect(d.title).toBe("");
 		expect(Object.values(d.namingUsage.models)[0]?.totalTokens).toBeGreaterThan(0);
-		const view = await runtime.viewState();
+		const view = await runtime.follow();
 		expect(view.value.entries.filter((e) => e.kind === "pi.assistant")).toHaveLength(1);
 		view.dispose();
 	} finally {
@@ -250,7 +251,7 @@ it("names from the final tool answer while steer and follow-up keep their own ac
 	const tool = defineTool({
 		name: "naming_gate",
 		description: "test gate",
-		parameters: Type.Object({}),
+		parameters: obj({}, { open: true }),
 		execute: async () => {
 			entered = true;
 			await gate;

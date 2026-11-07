@@ -1,7 +1,7 @@
 import { expect, it } from "bun:test";
 import { type FauxResponseFactory, fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import { fauxProvider } from "../../../test/faux.ts";
-
+import { onCommits } from "../src/commits.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
 
 it("uses native compaction, distinguishes no-op and applied, preserves recency", async () => {
@@ -78,18 +78,18 @@ for (const [label, extra, expectedBlocking] of [
 			model: { provider: "faux", modelId: "threshold" },
 			providers: [faux.provider],
 		});
-		const states: { blocking: boolean; reason: string }[] = [];
-		const stop = runtime.harness.subscribeCommits(({ changes }) => {
+		const states: { blocking: boolean; trigger: string }[] = [];
+		const stop = onCommits(runtime.harness, ({ changes }) => {
 			for (const c of changes)
-				if (c.type === "document" && c.record.kind === "pi.live")
-					for (const status of (c.value?.compactions ?? []) as { blocking: boolean; reason: string }[])
+				if (c.type === "document" && c.kind === "change" && c.record.kind === "pi.live")
+					for (const status of (c.value.compactions ?? []) as { blocking: boolean; trigger: string }[])
 						states.push(status);
 		});
 		try {
 			await runtime.waitAnswer(await runtime.submit("a".repeat(80000)));
 			await runtime.waitAnswer(await runtime.submit("b".repeat(80000)));
 			await runtime.waitAnswer(await runtime.submit("c".repeat(extra)));
-			expect(states.some((s) => s.reason === "threshold" && s.blocking === expectedBlocking)).toBe(true);
+			expect(states.some((s) => s.trigger === "threshold" && s.blocking === expectedBlocking)).toBe(true);
 		} finally {
 			stop();
 			await runtime.close();
@@ -113,11 +113,11 @@ for (const mode of ["failure", "cancel", "retry", "overflow"] as const) {
 			providers: [faux.provider],
 			timings: { retryBaseDelayMs: 20 },
 		});
-		const statuses: { reason: string; retry?: unknown }[] = [];
-		const stop = runtime.harness.subscribeCommits(({ changes }) => {
+		const statuses: { trigger: string; retry?: unknown }[] = [];
+		const stop = onCommits(runtime.harness, ({ changes }) => {
 			for (const c of changes)
-				if (c.type === "document" && c.record.kind === "pi.live")
-					statuses.push(...((c.value?.compactions ?? []) as typeof statuses));
+				if (c.type === "document" && c.kind === "change" && c.record.kind === "pi.live")
+					statuses.push(...((c.value.compactions ?? []) as typeof statuses));
 		});
 		try {
 			faux.setResponses(Array.from({ length: 2 }, () => fauxAssistantMessage([fauxText("ok")])));
@@ -157,7 +157,7 @@ for (const mode of ["failure", "cancel", "retry", "overflow"] as const) {
 					fauxAssistantMessage([fauxText("retried answer")]),
 				]);
 				expect((await runtime.waitAnswer(await runtime.submit("continue"))).status).toBe("done");
-				expect(statuses.some((s) => s.reason === "overflow")).toBe(true);
+				expect(statuses.some((s) => s.trigger === "overflow")).toBe(true);
 			}
 			if (mode !== "overflow") expect((await runtime.listConversations())[0]!.lastMessageAt).toBe(before.lastMessageAt);
 		} finally {
@@ -314,14 +314,14 @@ it("keeps the native compaction failure visible after reopening and a later no-o
 		await untilPhase(runtime, "failed");
 		await runtime.close();
 		runtime = await createNekoRuntime(options);
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const { projectChatView } = await import("../src/projection.ts");
 		expect(projectChatView(state.value, "test").compaction?.failure?.error).toContain("invalid summary");
 		state.dispose();
 		await runtime.conversation.reset("empty", runtime.context);
 		await runtime.compact();
 		await untilPhase(runtime, "nothing");
-		const fresh = await runtime.viewState();
+		const fresh = await runtime.follow();
 		expect(projectChatView(fresh.value, "test").compaction?.failure?.error).toContain("invalid summary");
 		fresh.dispose();
 	} finally {
@@ -346,7 +346,7 @@ it("preserves the native bash nonzero result and diagnostic", async () => {
 	});
 	try {
 		await runtime.waitAnswer(await runtime.submit("execute"));
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const { projectChatView } = await import("../src/projection.ts");
 		const tool = projectChatView(state.value, "test").items.find((item) => item.type === "tool")!;
 		expect(tool.type === "tool" && tool.isError).toBe(true);

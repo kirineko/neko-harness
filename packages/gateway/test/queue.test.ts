@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 import { QUEUE_UNSUPPORTED, queueClient } from "../src/client-session.ts";
 import { ChatViewSchema, type NekoChat } from "../src/contract.ts";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
@@ -54,10 +54,10 @@ it("shows queued inputs to every client, withdraws one and keeps the rest", asyn
 			["followUp", "follow up"],
 		]);
 		expect(chatB.view.value!.queued).toEqual(chatA.view.value!.queued);
-		expect(Value.Check(ChatViewSchema, chatA.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chatA.view.value)).toBe(true);
 		// A view from a gateway without queue visibility is still valid.
 		const { queued: _queued, ...withoutQueued } = chatA.view.value!;
-		expect(Value.Check(ChatViewSchema, withoutQueued)).toBe(true);
+		expect(compile(ChatViewSchema).check(withoutQueued)).toBe(true);
 
 		const [steer] = chatA.view.value!.queued!;
 		expect(await chatB.withdraw({ id: steer!.id })).toEqual({ result: "withdrawn", text: "steer me", images: 0 });

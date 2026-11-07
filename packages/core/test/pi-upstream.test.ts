@@ -28,7 +28,7 @@ it("fails a tool call with malformed arguments before running it and shows the m
 	});
 	try {
 		await runtime.waitAnswer(await runtime.submit("write it"));
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const tool = projectChatView(state.value, "test")
 			.items.filter((item) => item.type === "tool")
 			.at(-1)!;

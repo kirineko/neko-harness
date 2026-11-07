@@ -46,6 +46,26 @@ String localizeCoreError(AppLocalizations l10n, String text) {
     if (match != null) return l10n.errorProviderKeyRequired(match.group(1)!);
   } else if (text.startsWith('PLAN_BUSY:')) {
     return l10n.errorPlanBusy;
+  } else if (text.startsWith('CONTINUE_BUSY:')) {
+    return l10n.errorContinueBusy;
+  } else if (text.startsWith('CONTINUE_UNAVAILABLE:')) {
+    return l10n.errorContinueUnavailable;
   }
   return text;
 }
+
+/// 运行失败原因代码 → 当前语言；较新 Pi 新增的原因按代码原样显示。
+String localizeRunFailure(AppLocalizations l10n, String reason) =>
+    switch (reason) {
+      'model_error' => l10n.runFailureReasonModelError,
+      'no_model' => l10n.runFailureReasonNoModel,
+      'aborted' => l10n.runFailureReasonAborted,
+      'reset' => l10n.runFailureReasonReset,
+      'faulted' => l10n.runFailureReasonFaulted,
+      'orphaned' => l10n.runFailureReasonOrphaned,
+      'interrupted' => l10n.runFailureReasonInterrupted,
+      'restart_limit' => l10n.runFailureReasonRestartLimit,
+      'nothing_to_answer' => l10n.runFailureReasonNothingToAnswer,
+      'turn_limit' => l10n.runFailureReasonTurnLimit,
+      _ => reason,
+    };

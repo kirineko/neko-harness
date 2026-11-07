@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import { createHost } from "@earendil-works/chord";
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 import {
 	ChatViewSchema,
 	DefaultModelStateSchema,
@@ -34,11 +34,13 @@ it("validates shared contract results and state before publishing them", async (
 
 it("accepts only known default-model sources in states", () => {
 	const state = { effective: { provider: "deepseek", modelId: "deepseek-flash" }, source: "default" };
-	expect(Value.Check(DefaultModelStateSchema, state)).toBe(true);
-	expect(Value.Check(DefaultModelStateSchema, { ...state, source: "saved" })).toBe(true);
-	expect(Value.Check(DefaultModelStateSchema, { ...state, source: "bogus" })).toBe(false);
-	expect(Value.Check(DefaultModelStateSchema, { effective: { provider: "deepseek" }, source: "default" })).toBe(false);
-	expect(Value.Check(DefaultModelStateSchema, { source: "default" })).toBe(false);
+	expect(compile(DefaultModelStateSchema).check(state)).toBe(true);
+	expect(compile(DefaultModelStateSchema).check({ ...state, source: "saved" })).toBe(true);
+	expect(compile(DefaultModelStateSchema).check({ ...state, source: "bogus" })).toBe(false);
+	expect(compile(DefaultModelStateSchema).check({ effective: { provider: "deepseek" }, source: "default" })).toBe(
+		false,
+	);
+	expect(compile(DefaultModelStateSchema).check({ source: "default" })).toBe(false);
 	expect(NekoDefaultModel.version).toBe(1);
 	expect(NekoDefaultModel.name).toBe("neko.default-model");
 });
@@ -83,14 +85,14 @@ it("accepts nullable diff fields on tool items and streaming calls", () => {
 		diffRemoved: null,
 	};
 	const view = { ...baseView, items: [toolItem], streaming: { thinking: "", text: "", toolCalls: [streamCall] } };
-	expect(Value.Check(ChatViewSchema, view)).toBe(true);
+	expect(compile(ChatViewSchema).check(view)).toBe(true);
 	const truncatedView = {
 		...view,
 		items: [{ ...toolItem, diffTruncated: true }],
 		streaming: { ...view.streaming, toolCalls: [{ ...streamCall, diffTruncated: true }] },
 	};
-	expect(Value.Check(ChatViewSchema, truncatedView)).toBe(true);
-	expect(Value.Check(ChatViewSchema, { ...truncatedView, items: [{ ...toolItem, diffTruncated: "true" }] })).toBe(
+	expect(compile(ChatViewSchema).check(truncatedView)).toBe(true);
+	expect(compile(ChatViewSchema).check({ ...truncatedView, items: [{ ...toolItem, diffTruncated: "true" }] })).toBe(
 		false,
 	);
 	// Fields are required-nullable: omitting them on a tool item is a contract violation.
@@ -98,7 +100,7 @@ it("accepts nullable diff fields on tool items and streaming calls", () => {
 		...view,
 		items: [Object.fromEntries(Object.entries(toolItem).filter(([key]) => key !== "diff"))],
 	};
-	expect(Value.Check(ChatViewSchema, missingDiff)).toBe(false);
+	expect(compile(ChatViewSchema).check(missingDiff)).toBe(false);
 });
 
 it("accepts the optional codemode view on tool items and streaming calls, and items without it", () => {
@@ -145,8 +147,8 @@ it("accepts the optional codemode view on tool items and streaming calls, and it
 		items: [item],
 		streaming: { thinking: "", text: "", toolCalls: [call] },
 	});
-	expect(Value.Check(ChatViewSchema, view(toolItem, streamCall))).toBe(true);
-	expect(Value.Check(ChatViewSchema, view({ ...toolItem, codemode }, { ...streamCall, codemode }))).toBe(true);
+	expect(compile(ChatViewSchema).check(view(toolItem, streamCall))).toBe(true);
+	expect(compile(ChatViewSchema).check(view({ ...toolItem, codemode }, { ...streamCall, codemode }))).toBe(true);
 	const bad = { ...codemode, calls: [{ ...codemode.calls[0], status: "weird" }] };
-	expect(Value.Check(ChatViewSchema, view({ ...toolItem, codemode: bad }, streamCall))).toBe(false);
+	expect(compile(ChatViewSchema).check(view({ ...toolItem, codemode: bad }, streamCall))).toBe(false);
 });

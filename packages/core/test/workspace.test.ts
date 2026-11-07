@@ -83,7 +83,7 @@ it("persists workspaces and activity, forks empty and populated sessions, and ex
 		await reopened.waitAnswer(await reopened.submit("tools"));
 		expect(readFileSync(join(b, "local.txt"), "utf8")).toBe("after");
 		expect(readFileSync(join(a, "outside.txt"), "utf8")).toBe("allowed");
-		const state = await reopened.viewState();
+		const state = await reopened.follow();
 		const view = projectChatView(state.value, "faux/faux-1");
 		state.dispose();
 		expect(view.cwd).toBe(b);

@@ -12,6 +12,7 @@ import {
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
+import { followConversation } from "../src/conversation-follow.ts";
 import {
 	CREDENTIAL_PROVIDERS,
 	DEFAULT_ENABLED_PROVIDERS,
@@ -143,7 +144,7 @@ it("rejects input for disabled providers without accepting it, and keeps history
 		await runtime.setProviderEnabled("openrouter", false);
 		await expect(runtime.submit("zzq-rejected")).rejects.toThrow("PROVIDER_DISABLED");
 		await expect(runtime.compact()).rejects.toThrow("PROVIDER_DISABLED");
-		const view = await runtime.conversation.viewState(runtime.context);
+		const view = await followConversation(runtime.conversation, runtime.context);
 		expect(JSON.stringify(view.value.entries)).toContain("first answer");
 		expect(JSON.stringify(view.value.entries)).not.toContain("zzq-rejected");
 		view.dispose();
@@ -195,7 +196,7 @@ it("blocks subagent launches once the main model's provider is disabled", async 
 		await runtime.setProviderEnabled("openrouter", true);
 		expect(await runtime.waitAnswer(await runtime.submit("delegate"))).toEqual({ status: "done", text: "done" });
 		expect(await listDelegations(runtime.harness, runtime.conversation.id, runtime.context)).toHaveLength(0);
-		const view = await runtime.conversation.viewState(runtime.context);
+		const view = await followConversation(runtime.conversation, runtime.context);
 		expect(JSON.stringify(view.value.entries)).toContain("PROVIDER_DISABLED");
 		view.dispose();
 	} finally {

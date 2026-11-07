@@ -5,8 +5,9 @@ import { InMemoryCredentialStore } from "../src/credentials.ts";
 // 参考 reference/pi/packages/durable/test/examples/31-reload-and-restart.ts。
 
 import { describe, expect, it } from "bun:test";
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult, ToolResultEntry } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { createNekoRuntime } from "../src/index.ts";
 
 function loadVersioned(version: string, gate: Promise<void>, started: () => void) {
@@ -16,7 +17,7 @@ function loadVersioned(version: string, gate: Promise<void>, started: () => void
 			defineTool({
 				name: "version",
 				description: "Report the tool's code version",
-				parameters: Type.Object({}),
+				parameters: obj({}, { open: true }),
 				execute: async (): Promise<ToolExecutionResult> => {
 					started();
 					await gate;

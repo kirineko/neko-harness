@@ -30,6 +30,7 @@ import {
 	type WireQuestionResponse,
 	type WireQuestionSummary,
 	type WireQueuedInput,
+	type WireRunFailure,
 	type WireSteerResult,
 	type WireTodoList,
 	type WireWithdrawResult,
@@ -196,6 +197,29 @@ export function planClient(chat: NekoChat): PlanClient {
 		async setMode(mode) {
 			if (!supported()) throw new Error(PLAN_UNSUPPORTED);
 			return chat.planMode({ mode });
+		},
+	};
+}
+export const CONTINUE_UNSUPPORTED = "This gateway cannot continue a run. Restart the gateway to enable it.";
+export type ContinueClient = {
+	/** False for a gateway built before "continue": the view carries no `continuable` marker. */
+	readonly supported: boolean;
+	/** Why the newest run ended without an answer; `undefined` when there is none or it is unsupported. */
+	failure(): WireRunFailure | undefined;
+	/** Run again on the context as it is; rejects with `CONTINUE_BUSY` / `CONTINUE_UNAVAILABLE` from the gateway. */
+	continueRun(): Promise<void>;
+};
+/** Capability-probed access to a chat's run failure and "continue"; an old gateway degrades instead of failing. */
+export function continueClient(chat: NekoChat): ContinueClient {
+	const supported = () => chat.view.value?.continuable === true;
+	return {
+		get supported() {
+			return supported();
+		},
+		failure: () => (supported() ? chat.view.value?.runFailure : undefined),
+		async continueRun() {
+			if (!supported()) throw new Error(CONTINUE_UNSUPPORTED);
+			await chat.continueRun(null);
 		},
 	};
 }

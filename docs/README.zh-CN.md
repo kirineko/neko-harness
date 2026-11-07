@@ -103,6 +103,7 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 | `/login`、`/model`、`/think` | 模型服务与 Key、模型、思考强度 |
 | `/new`、`/sessions`、`/fork`、`/archive` | 会话 |
 | `/compact`、`/context` | 压缩、裁剪及其设置 |
+| `/continue` | 一轮运行未得到回答就结束后，在原上下文上继续（Web 显示「继续」按钮） |
 | `/codemode` | 新会话的 codemode 模式（off、on、only） |
 | `/copy`、`/export` | 复制上一条回答、导出会话 |
 | `/agents`、`/jobs`、`/todos`、`/question`、`/plan` | 委派、后台任务、待办、提问、规划模式 |
@@ -175,6 +176,7 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 | `context.compaction` | `enabled`、`triggerPercent`（1–99）、`keepRecentTokens`；未设置的字段保持原生策略 |
 | `context.pruning` | `enabled`、`triggerPercent`（1–99）、`keepRecent`、`minChars`、`minSavePercent`；默认关闭 |
 | `codemode.mode` | `off`（默认）、`on` 或 `only`；只对新会话生效，界面保存的选择优先 |
+| `maxTurns` | 新会话及其子 agent 单次运行的工具轮次上限（≥ 1 的整数，未设置不限制）；达到上限的运行会停下，可用「继续」接着运行 |
 | `shell.path` | Windows 上的 Git Bash `bash.exe`（会拒绝 WSL 的 `bash.exe`） |
 
 ### 数据与环境变量

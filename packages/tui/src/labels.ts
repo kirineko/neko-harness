@@ -9,6 +9,7 @@ export const commands = (): SlashCommand[] => [
 	{ name: "help", description: t("command.help") },
 	{ name: "version", description: t("command.version") },
 	{ name: "compact", description: t("command.compact") },
+	{ name: "continue", description: t("command.continue") },
 	{ name: "copy", description: t("command.copy") },
 	{ name: "export", description: t("command.export") },
 	{ name: "exit", description: t("command.exit") },

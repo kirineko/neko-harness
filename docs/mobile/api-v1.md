@@ -1,7 +1,7 @@
 # neko mobile API v1
 
 手机 App 控制电脑上 Agent 的 JSON-RPC 2.0 协议（design D6/D8，`specs/mobile-api`）。
-形状以 `packages/gateway/src/mobile/protocol.ts` 的 TypeBox schemas 为准；
+形状以 `packages/gateway/src/mobile/protocol.ts` 的 pi-schema schemas 为准；
 `packages/gateway/test/fixtures/mobile-api-v1/*.json` 是每个方法的请求/结果/通知示例（TS 与 Dart 共用，由 `protocol-fixtures.test.ts` 对拍守护）。
 
 ## 传输与认证
@@ -63,7 +63,7 @@
 
 所有 chat/approvals/media 方法都携带 `subscriptionId`；它只在最近一次 `chat.attach` 有效，旧 id 返回 `gone`。同一连接同时只有一个主会话订阅与一个子 agent 订阅。
 
-- `chat.attach { sessionId } → { subscriptionId, sessionId, snapshot }`：快照 = 状态（`busy/queued?/status/usage/taskUsage/contextUsage/agent/subagents/agents/approvalCount/compaction`；`queued` 为用户排队输入 `[{ id, mode: steer|followUp, preview, images }]`，预览有界，系统输入不出现）+ 尾部 ≤ `pageItems` 条且 ≤ 128 KiB 的 `items` + `historyBefore`（无更早历史为 `null`）+ `streaming`（流式区，文本只带尾部 16K 字符，`textOmitted/thinkingOmitted` 为省略的前缀长度）。
+- `chat.attach { sessionId } → { subscriptionId, sessionId, snapshot }`：快照 = 状态（`busy/queued?/status/usage/taskUsage/contextUsage/agent/subagents/agents/approvalCount/compaction/runFailure?`；`runFailure` 为最近一轮未得到回答就结束的原因 `{ reason, detail? }`（`reason` 为开放的原因代码字符串，未知值按原样显示），运行中与已回答时缺省；`queued` 为用户排队输入 `[{ id, mode: steer|followUp, preview, images }]`，预览有界，系统输入不出现）+ 尾部 ≤ `pageItems` 条且 ≤ 128 KiB 的 `items` + `historyBefore`（无更早历史为 `null`）+ `streaming`（流式区，文本只带尾部 16K 字符，`textOmitted/thinkingOmitted` 为省略的前缀长度）。
 - `chat.detach { subscriptionId } → null`。
 - `chat.history { subscriptionId, before, limit? } → { items, historyBefore }`：游标不存在 → `stale_ref`（重新 attach）。
 - `chat.content { ref, offset } → { data, nextOffset, total, done }`：按 contentRef 读 UTF-8 字节的 base64 分块（≤ `chunkBytes`）；digest 不符 → `content_changed`。

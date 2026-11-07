@@ -10,10 +10,11 @@ import {
 	InboxDoc,
 	type ToolRegistration,
 	ToolTask,
+	type Tx,
 	wrapTool,
 } from "@earendil-works/pi-durable";
 import { createBashTool } from "@earendil-works/pi-durable/tools";
-import { Type } from "typebox";
+import { arr, obj, opt, str } from "@earendil-works/pi-schema";
 import {
 	InteractionInputError,
 	PLAN_LIMITS,
@@ -139,28 +140,32 @@ export class PlanService {
 	}
 
 	/**
-	 * The first valid decision wins. Only the waiting version can be decided; any other returns as it is. Approval also
-	 * leaves plan mode in the same commit, so no reader sees an approved plan in a plan-mode session.
+	 * The first valid decision wins. Only the waiting version can be decided; any other returns as it is, without
+	 * calling `act`. A decision is stored in the same commit as what `act` writes (the input that carries it out and,
+	 * for an approval, the agent leaving plan mode), and approval leaves plan mode there too, so no reader sees an
+	 * approved plan in a plan-mode session or a decision without its input.
 	 */
-	async decide(
+	async decideWith(
 		id: ConversationId,
 		version: string,
 		decision: PlanDecision,
-	): Promise<{ record: PlanRecord; item: PlanItem }> {
+		act: (tx: Tx) => Promise<void>,
+	): Promise<PlanRecord> {
 		return this.harness.commit(async (tx) => {
 			const state = await tx.doc(PlanDoc, id);
 			const item = state.items.find((i) => i.version === version);
 			if (!item) throw new Error("Plan not found.");
-			if (item.status === "awaiting_approval") {
-				if (decision.kind === "approve") {
-					settle(state, item, "approved");
-					state.mode = "normal";
-				} else {
-					settle(state, item, "revision_requested");
-					item.feedback = decision.feedback;
-				}
+			if (item.status !== "awaiting_approval") return toRecord(item as PlanItem);
+			await act(tx);
+			if (decision.kind === "approve") {
+				settle(state, item, "approved");
+				state.mode = "normal";
+			} else {
+				settle(state, item, "revision_requested");
+				item.feedback = decision.feedback;
 			}
-			return { record: toRecord(item), item: clone(item) };
+			item.dispatched = true;
+			return toRecord(item as PlanItem);
 		}, this.#context);
 	}
 
@@ -219,20 +224,15 @@ export function planRevisionPrompt(plan: Pick<PlanRecord, "title">, feedback: st
 	].join("\n");
 }
 
-const parameters = Type.Object(
-	{
-		title: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.titleChars, description: "Short name of the plan." }),
-		steps: Type.Array(Type.String({ minLength: 1, maxLength: PLAN_LIMITS.stepChars }), {
-			minItems: 1,
-			maxItems: PLAN_LIMITS.maxSteps,
-			description: "Ordered, concrete implementation steps.",
-		}),
-		note: Type.Optional(
-			Type.String({ maxLength: PLAN_LIMITS.noteChars, description: "Risks, assumptions and how to verify." }),
-		),
-	},
-	{ additionalProperties: false },
-);
+const parameters = obj({
+	title: str({ minLength: 1, maxLength: PLAN_LIMITS.titleChars, description: "Short name of the plan." }),
+	steps: arr(str({ minLength: 1, maxLength: PLAN_LIMITS.stepChars }), {
+		minItems: 1,
+		maxItems: PLAN_LIMITS.maxSteps,
+		description: "Ordered, concrete implementation steps.",
+	}),
+	note: opt(str({ maxLength: PLAN_LIMITS.noteChars, description: "Risks, assumptions and how to verify." })),
+});
 
 /** UI details persisted with the `submit_plan` result: what was submitted, identified by its version. */
 export type PlanDetails = { version: string; title: string; steps: string[]; note: string };

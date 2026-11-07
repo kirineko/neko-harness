@@ -1,9 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { TSchema } from "typebox";
-import { Check } from "typebox/value";
-import { asJsonRpcRequest, MOBILE_API_V1_METHODS, MOBILE_API_V1_NOTIFICATIONS } from "../../src/mobile/protocol.ts";
+import type { Schema } from "@earendil-works/pi-schema";
+import {
+	asJsonRpcRequest,
+	checkSchema,
+	MOBILE_API_V1_METHODS,
+	MOBILE_API_V1_NOTIFICATIONS,
+} from "../../src/mobile/protocol.ts";
 
 const FIXTURE_DIR = join(import.meta.dir, "../fixtures/mobile-api-v1");
 
@@ -26,7 +30,7 @@ function assertEnvelope(message: unknown): Record<string, unknown> {
 }
 
 function check(schema: unknown, value: unknown): void {
-	expect(Check(schema as TSchema, value)).toBe(true);
+	expect(checkSchema(schema as Schema, value)).toBe(true);
 }
 
 const requestFixtures: ReadonlyArray<readonly [string, string]> = [
@@ -93,6 +97,7 @@ const notificationFixtures: ReadonlyArray<readonly [string, string]> = [
 	["workspaces-changed-notification.json", "workspaces.changed"],
 	["sessions-changed-notification.json", "sessions.changed"],
 	["chat-patch-notification.json", "chat.patch"],
+	["chat-patch-run-failure-notification.json", "chat.patch"],
 	["chat-reset-notification.json", "chat.reset"],
 	["approvals-changed-notification.json", "approvals.changed"],
 	["todos-changed-notification.json", "todos.changed"],

@@ -39,6 +39,8 @@ const ERROR_RULES: Record<string, Rule> = {
 		render: (t, m) => t("core.error.providerKeyRequired", { provider: m[1] ?? "" }),
 	},
 	PLAN_BUSY: { pattern: /^/, render: (t) => t("core.error.planBusy") },
+	CONTINUE_BUSY: { pattern: /^/, render: (t) => t("core.error.continueBusy") },
+	CONTINUE_UNAVAILABLE: { pattern: /^/, render: (t) => t("core.error.continueUnavailable") },
 	WORKSPACE_UNKNOWN: { pattern: /^/, render: (t) => t("core.error.workspaceUnknown") },
 	WORKSPACE_LAST: { pattern: /^/, render: (t) => t("core.error.workspaceLast") },
 	WORKSPACE_BUSY: { pattern: /^/, render: (t) => t("core.error.workspaceBusy") },

@@ -3,8 +3,10 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { obj } from "@earendil-works/pi-schema";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
+import { followConversation } from "../src/conversation-follow.ts";
 import { createNekoRuntime, type NekoRuntime } from "../src/runtime.ts";
 import type { ToolApproval } from "../src/tool-approvals.ts";
 
@@ -41,7 +43,8 @@ for (const decision of ["allowed", "denied", "cancelled"] as const) {
 			const a = await pending(runtime);
 			expect(await Bun.file(join(dir, "result.txt")).exists()).toBe(false);
 			const { projectChatView } = await import("../src/projection.ts");
-			const childView = await (await runtime.harness.conversation(a.childId as never, runtime.context))!.viewState(
+			const childView = await followConversation(
+				(await runtime.harness.conversation(a.childId as never, runtime.context))!,
 				runtime.context,
 			);
 			expect(
@@ -258,7 +261,6 @@ for (const alteration of ["cwd", "arguments"] as const) {
 
 it("gates nested Bash and requires a fresh decision for repeated commands", async () => {
 	const { defineExtension, defineTool } = await import("@earendil-works/pi-durable");
-	const { Type } = await import("typebox");
 	const dir = await mkdtemp(join(tmpdir(), "neko-approval-nested-"));
 	const faux = fauxProvider();
 	const nested = defineExtension({
@@ -267,7 +269,7 @@ it("gates nested Bash and requires a fresh decision for repeated commands", asyn
 			defineTool({
 				name: "read",
 				description: "test nested call",
-				parameters: Type.Object({}),
+				parameters: obj({}, { open: true }),
 				replay: "safe",
 				execute: async (_args, api, ctx) => {
 					const result = await api.executeTool("bash", { command: "printf once >> result.txt" }, ctx, { key: "probe" });

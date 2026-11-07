@@ -152,4 +152,15 @@ void main() {
       ]),
     );
   });
+
+  test('运行失败原因：夹具列出的每个原因都有中英映射，未知原因原样显示', () {
+    for (final reason
+        in (fixture['runFailureReasons'] as List<dynamic>).cast<String>()) {
+      final inZh = localizeRunFailure(zh, reason);
+      expect(inZh, isNot(reason), reason: 'zh 下必须有映射：$reason');
+      expect(hasCjk(inZh), isTrue);
+      expect(hasCjk(localizeRunFailure(en, reason)), isFalse);
+    }
+    expect(localizeRunFailure(zh, 'brand_new'), 'brand_new');
+  });
 }

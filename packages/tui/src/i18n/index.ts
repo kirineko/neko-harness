@@ -60,6 +60,11 @@ export function translate(language: Language, key: MessageKey, params?: MessageP
 	return formatMessage(dictionaries[language][key], params);
 }
 
+/** Whether `key` names a message, for keys built from data such as a reason code. */
+export function hasMessage(key: string): key is MessageKey {
+	return Object.hasOwn(zh, key);
+}
+
 /** Message for the current language; dictionaries are `zh` (authoritative) and `en`. */
 export function t<K extends MessageKey>(key: K, ...args: ParamsArg<K>): string {
 	return translate(current, key, args[0] as MessageParams | undefined);

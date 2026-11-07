@@ -125,7 +125,7 @@ it("resolves saved, rotated and environment keys on actual Pi requests without n
 		const requestCount = requests.length;
 		expect((await runtime.submit("ignored replay", { requestId: "first" })).id).toBe(first.id);
 		expect(requests).toHaveLength(requestCount);
-		expect(JSON.stringify(await runtime.viewState())).not.toContain("test-saved");
+		expect(JSON.stringify(await runtime.follow())).not.toContain("test-saved");
 	} finally {
 		await runtime.close();
 		globalThis.fetch = originalFetch;

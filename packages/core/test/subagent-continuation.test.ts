@@ -6,6 +6,7 @@ import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { type ConversationId, UsageDoc } from "@earendil-works/pi-durable";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
+import { onCommits } from "../src/commits.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
 import { subagentUsageTotals } from "../src/subagent-usage.ts";
@@ -364,7 +365,7 @@ for (const checkpoint of ["admission", "deliver", "settle", "answer"] as const) 
 			let closing: Promise<void> | undefined;
 			let runnerId = 0;
 			const childId = (await listDelegations(runtime.harness, runtime.root.id, runtime.context))[0]!.childId;
-			stop = runtime.harness.subscribeCommits(({ changes }) => {
+			stop = onCommits(runtime.harness, ({ changes }) => {
 				if (closing) return;
 				for (const c of changes) {
 					if (
@@ -447,7 +448,7 @@ it("resumes durable cancellation after restart and releases the identity only af
 			reached = r;
 		});
 		let closing: Promise<void> | undefined;
-		stop = runtime.harness.subscribeCommits(({ changes }) => {
+		stop = onCommits(runtime.harness, ({ changes }) => {
 			if (closing) return;
 			if (changes.some((c) => c.type === "task" && c.value.id === second.runnerId && c.value.abortRequested)) {
 				closing = runtime.harness.close(runtime.context);

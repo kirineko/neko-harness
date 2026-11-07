@@ -1,0 +1,77 @@
+{
+	"description": "chat.patch 通知：运行未得到回答就结束后，状态携带可选的 runFailure（原因代码与有界详情）；新运行开始时该字段消失。",
+	"message": {
+		"jsonrpc": "2.0",
+		"method": "chat.patch",
+		"params": {
+			"subscriptionId": "chat-1a2b3c4d-1",
+			"seq": 42,
+			"upserts": [],
+			"status": {
+				"busy": false,
+				"status": null,
+				"usage": {
+					"input": 12040,
+					"output": 3210,
+					"cacheRead": 8000,
+					"cacheWrite": 0,
+					"totalTokens": 23250,
+					"cost": 0.0042
+				},
+				"taskUsage": {
+					"input": 840,
+					"output": 220,
+					"cacheRead": 0,
+					"cacheWrite": 0,
+					"totalTokens": 1060,
+					"cost": 0.0003
+				},
+				"contextUsage": {
+					"tokens": 15250,
+					"window": 200000,
+					"percent": 7.6
+				},
+				"agent": {
+					"model": "deepseek/deepseek-chat",
+					"thinkingLevel": "high"
+				},
+				"subagents": [
+					{
+						"taskId": 7,
+						"callId": "call_7",
+						"agentId": "agent-12",
+						"round": 1,
+						"role": "explore",
+						"title": "探索 pairing 模块",
+						"status": "running",
+						"approvalCount": 1,
+						"readonly": false,
+						"createdAt": 1730100000000,
+						"endedAt": null
+					}
+				],
+				"agents": [
+					{
+						"agentId": "agent-12",
+						"role": "explore",
+						"title": "探索 pairing 模块",
+						"status": "running",
+						"activeRoundId": 7,
+						"lastRoundId": 7,
+						"roundCount": 1,
+						"approvalCount": 1
+					}
+				],
+				"approvalCount": 1,
+				"compaction": {
+					"phase": "nothing",
+					"at": 1730099990000
+				},
+				"runFailure": {
+					"reason": "model_error",
+					"detail": "401 Unauthorized: invalid API key"
+				}
+			}
+		}
+	}
+}

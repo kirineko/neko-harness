@@ -248,7 +248,41 @@ it("repairs the agent configuration from the plan document before accepting inpu
 	}
 });
 
-it("submits an approved but undispatched decision exactly once after a restart", async () => {
+it("stores a decision only together with its input: a failed admission leaves the plan waiting", async () => {
+	const faux = fauxProvider();
+	faux.setResponses([call("submit_plan", plan1), fauxAssistantMessage("Executing.")]);
+	const runtime = await open(faux);
+	try {
+		await runtime.root.setPlanMode("plan");
+		await runtime.waitAnswer(await runtime.submit("plan the flag")).catch(() => {});
+		const plan = await awaitingPlan(runtime);
+		const conversation = runtime.root.conversation;
+		const original = conversation.submit.bind(conversation);
+		// Fail only the admission inside the decision's commit.
+		conversation.submit = ((...args: unknown[]) =>
+			args.length === 2 && typeof (args[0] as { doc?: unknown }).doc === "function"
+				? Promise.reject(new Error("admission refused"))
+				: (original as (...a: unknown[]) => unknown)(...args)) as typeof conversation.submit;
+		await expect(runtime.root.respondPlan(plan.version, { kind: "approve" })).rejects.toThrow("admission refused");
+		expect(await runtime.root.plan()).toMatchObject({ mode: "plan", current: { status: "awaiting_approval" } });
+		expect(await userTexts(runtime)).toHaveLength(1);
+		expect(await toolNames(runtime)).not.toContain("edit");
+		conversation.submit = original;
+		expect(await runtime.root.respondPlan(plan.version, { kind: "approve" })).toMatchObject({ status: "approved" });
+		const doc = await runtime.harness.snapshot(PlanDoc, runtime.conversation.id, runtime.context);
+		expect(doc?.items.find((i) => i.version === plan.version)?.dispatched).toBe(true);
+		await until(
+			() => userTexts(runtime),
+			(texts) => texts.length === 2,
+			"the execute input",
+		);
+		expect(await toolNames(runtime)).toContain("edit");
+	} finally {
+		await runtime.close();
+	}
+});
+
+it("submits a decision an older release saved without its input exactly once after a restart", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "neko-plan-restart-"));
 	const faux = fauxProvider();
 	faux.setResponses([call("submit_plan", plan1), fauxAssistantMessage("running the plan")]);
@@ -394,7 +428,7 @@ it("projects submit_plan as a structured tool item and a decision as a system re
 			(texts) => texts.length === 2,
 			"the execute input",
 		);
-		const state = await runtime.root.viewState();
+		const state = await runtime.root.follow();
 		const items = projectChatView(state.value, "faux").items;
 		const tool = items.find((i) => i.type === "tool" && i.name === "submit_plan");
 		expect(tool).toMatchObject({

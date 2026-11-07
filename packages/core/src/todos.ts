@@ -1,5 +1,6 @@
+import { StringEnum } from "@earendil-works/pi-ai";
 import { defineDoc, defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
-import { Type } from "typebox";
+import { arr, int, obj, opt, str } from "@earendil-works/pi-schema";
 import {
 	TODO_LIMITS,
 	TODO_STATUSES,
@@ -36,34 +37,25 @@ const TodoReceiptDoc = defineDoc<{ applied: boolean; revision: number; items: To
 	initial: () => ({ applied: false, revision: 0, items: [] }),
 });
 
-const itemSchema = Type.Object(
-	{
-		id: Type.String({
-			minLength: 1,
-			maxLength: TODO_LIMITS.idChars,
-			description: "Stable id; keep it when you update the same task.",
+const itemSchema = obj({
+	id: str({
+		minLength: 1,
+		maxLength: TODO_LIMITS.idChars,
+		description: "Stable id; keep it when you update the same task.",
+	}),
+	text: str({ minLength: 1, maxLength: TODO_LIMITS.textChars }),
+	status: StringEnum([...TODO_STATUSES]),
+});
+const parameters = obj({
+	action: StringEnum(["list", "replace"], { description: "list reads the list; replace overwrites it." }),
+	items: opt(
+		arr(itemSchema, {
+			maxItems: TODO_LIMITS.maxItems,
+			description: "Required for replace only: the complete ordered list; [] clears it.",
 		}),
-		text: Type.String({ minLength: 1, maxLength: TODO_LIMITS.textChars }),
-		status: Type.String({ enum: [...TODO_STATUSES] }),
-	},
-	{ additionalProperties: false },
-);
-const parameters = Type.Object(
-	{
-		action: Type.String({ enum: ["list", "replace"], description: "list reads the list; replace overwrites it." }),
-		items: Type.Optional(
-			Type.Array(itemSchema, {
-				maxItems: TODO_LIMITS.maxItems,
-				description: "Required for replace only: the complete ordered list; [] clears it.",
-			}),
-		),
-	},
-	{ additionalProperties: false },
-);
-const structuredOutputSchema = Type.Object(
-	{ revision: Type.Integer({ minimum: 0 }), items: Type.Array(itemSchema) },
-	{ additionalProperties: false },
-);
+	),
+});
+const structuredOutputSchema = obj({ revision: int({ minimum: 0 }), items: arr(itemSchema) });
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 

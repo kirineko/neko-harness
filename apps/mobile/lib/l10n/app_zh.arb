@@ -349,5 +349,18 @@
   "@transcriptImageLabel": { "placeholders": { "name": { "type": "String" } } },
   "transcriptReloadImage": "重新加载图片",
   "markdownImage": "[图片 {alt}]",
-  "@markdownImage": { "placeholders": { "alt": { "type": "String" } } }
+  "@markdownImage": { "placeholders": { "alt": { "type": "String" } } },
+
+  "runFailureReasonModelError": "模型请求失败",
+  "runFailureReasonNoModel": "没有可用的模型",
+  "runFailureReasonAborted": "已停止",
+  "runFailureReasonReset": "已开始新的上下文",
+  "runFailureReasonFaulted": "运行出错",
+  "runFailureReasonOrphaned": "运行无法继续",
+  "runFailureReasonInterrupted": "运行被中断",
+  "runFailureReasonRestartLimit": "多次崩溃后已停止",
+  "runFailureReasonNothingToAnswer": "没有需要回答的内容",
+  "runFailureReasonTurnLimit": "已达到轮次上限",
+  "errorContinueBusy": "CONTINUE_BUSY: 会话正在运行，请等待它结束。",
+  "errorContinueUnavailable": "CONTINUE_UNAVAILABLE: 上一轮已得到回答，没有可继续的内容。"
 }

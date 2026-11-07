@@ -816,6 +816,19 @@ class QueuedInput {
   bool get steer => mode == 'steer';
 }
 
+/// 最近一轮未得到回答就结束的原因：Pi 的原因代码（开放字符串）与有界详情。
+class RunFailure {
+  const RunFailure({required this.reason, this.detail});
+
+  factory RunFailure.fromJson(Json json) => RunFailure(
+    reason: _str(json['reason']),
+    detail: _strOrNull(json['detail']),
+  );
+
+  final String reason;
+  final String? detail;
+}
+
 class ChatStatus {
   const ChatStatus({
     this.busy = false,
@@ -833,6 +846,7 @@ class ChatStatus {
     this.todos,
     this.questions,
     this.plan,
+    this.runFailure,
   });
 
   factory ChatStatus.fromJson(Json json) {
@@ -864,6 +878,9 @@ class ChatStatus {
       plan: json['plan'] is Map
           ? PlanSummary.fromJson(_map(json['plan']))
           : null,
+      runFailure: json['runFailure'] is Map
+          ? RunFailure.fromJson(_map(json['runFailure']))
+          : null,
     );
   }
 
@@ -890,6 +907,9 @@ class ChatStatus {
 
   /// 缺省表示电脑端不支持计划；`pending == false` 表示支持但没有待批准计划。
   final PlanSummary? plan;
+
+  /// 最近一轮未得到回答的原因；运行中、已回答或旧电脑时缺省。
+  final RunFailure? runFailure;
 }
 
 class StreamingToolCall {

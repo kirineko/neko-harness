@@ -942,4 +942,41 @@ class AppLocalizationsZh extends AppLocalizations {
   String markdownImage(String alt) {
     return '[图片 $alt]';
   }
+
+  @override
+  String get runFailureReasonModelError => '模型请求失败';
+
+  @override
+  String get runFailureReasonNoModel => '没有可用的模型';
+
+  @override
+  String get runFailureReasonAborted => '已停止';
+
+  @override
+  String get runFailureReasonReset => '已开始新的上下文';
+
+  @override
+  String get runFailureReasonFaulted => '运行出错';
+
+  @override
+  String get runFailureReasonOrphaned => '运行无法继续';
+
+  @override
+  String get runFailureReasonInterrupted => '运行被中断';
+
+  @override
+  String get runFailureReasonRestartLimit => '多次崩溃后已停止';
+
+  @override
+  String get runFailureReasonNothingToAnswer => '没有需要回答的内容';
+
+  @override
+  String get runFailureReasonTurnLimit => '已达到轮次上限';
+
+  @override
+  String get errorContinueBusy => 'CONTINUE_BUSY: 会话正在运行，请等待它结束。';
+
+  @override
+  String get errorContinueUnavailable =>
+      'CONTINUE_UNAVAILABLE: 上一轮已得到回答，没有可继续的内容。';
 }

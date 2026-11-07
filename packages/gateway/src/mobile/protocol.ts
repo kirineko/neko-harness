@@ -1,8 +1,22 @@
+import {
+	arr,
+	bool,
+	compile,
+	int,
+	lit,
+	nul,
+	num,
+	obj,
+	opt,
+	type Schema,
+	type Static,
+	str,
+	union,
+	type Validator,
+} from "@earendil-works/pi-schema";
 import { RUNNING_VERSION } from "@neko-harness/core/application-version";
 import { CODEMODE_VIEW_LIMITS } from "@neko-harness/core/codemode-mode";
 import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
-import { type Static, Type } from "typebox";
-import { Check } from "typebox/value";
 
 export const MOBILE_LIMITS = {
 	maxFrameBytes: 262_144,
@@ -30,14 +44,20 @@ export const MOBILE_CLOSE_REVOKED = 4401;
 export const MOBILE_CLOSE_INCOMPATIBLE = 4402;
 export const MOBILE_CLOSE_SLOW_CONSUMER = 4408;
 
-export const MobileHelloParams = Type.Object({
-	apiVersions: Type.Array(Type.Integer(), { minItems: 1 }),
-	app: Type.Object({
-		version: Type.String({ minLength: 1, maxLength: 64 }),
-		platform: Type.String({ minLength: 1, maxLength: 64 }),
-		build: Type.String({ maxLength: 128 }),
-	}),
-});
+export const MobileHelloParams = obj(
+	{
+		apiVersions: arr(int(), { minItems: 1 }),
+		app: obj(
+			{
+				version: str({ minLength: 1, maxLength: 64 }),
+				platform: str({ minLength: 1, maxLength: 64 }),
+				build: str({ maxLength: 128 }),
+			},
+			{ open: true },
+		),
+	},
+	{ open: true },
+);
 
 export type MobileHelloParamsType = Static<typeof MobileHelloParams>;
 
@@ -72,8 +92,21 @@ export type MobileErrorCode =
 	| "rejected"
 	| "internal";
 
+const validators = new WeakMap<object, Validator<unknown>>();
+
+/** Validates `value` against a mobile protocol schema, compiling each schema once. */
+export function checkSchema(schema: Schema, value: unknown): boolean {
+	let validator = validators.get(schema);
+	if (!validator) {
+		validator = compile(schema as Schema<unknown>);
+		validators.set(schema, validator);
+	}
+	return validator.check(value);
+}
+
+const helloParams = compile(MobileHelloParams);
 export function isMobileHelloParams(value: unknown): value is MobileHelloParamsType {
-	return Check(MobileHelloParams, value);
+	return helloParams.check(value);
 }
 
 export function negotiateApiVersion(clientVersions: readonly number[]): number | undefined {
@@ -102,537 +135,618 @@ export function buildHelloResult(serverId: string, serverName: string, apiVersio
 
 // ——— mobile-api-v1 业务方法 schemas（fixtures 契约锚点；形状与 docs/mobile/api-v1.md 一致） ———
 
-const opt = Type.Optional;
-const str = Type.String();
-const int = Type.Integer({ minimum: 0 });
-const nullable = <T extends Parameters<typeof Type.Union>[0][number]>(schema: T) => Type.Union([schema, Type.Null()]);
+const text = str();
+const count = int({ minimum: 0 });
+const nullable = <T>(schema: Schema<T>) => union([schema, nul()]);
 
 /** 大字段引用：`agentId` 存在时指向子 agent 视图，否则指向主会话。 */
-export const MobileContentRefSchema = Type.Object({
-	sessionId: str,
-	agentId: opt(str),
-	key: str,
-	field: str,
-	digest: str,
-	bytes: int,
-});
+export const MobileContentRefSchema = obj(
+	{
+		sessionId: text,
+		agentId: opt(text),
+		key: text,
+		field: text,
+		digest: text,
+		bytes: count,
+	},
+	{ open: true },
+);
 
-export const MobileImageRefSchema = Type.Object({
-	name: str,
-	mimeType: str,
-	width: int,
-	height: int,
-	bytes: int,
-	entryId: int,
-	contentIndex: int,
-});
+export const MobileImageRefSchema = obj(
+	{
+		name: text,
+		mimeType: text,
+		width: count,
+		height: count,
+		bytes: count,
+		entryId: count,
+		contentIndex: count,
+	},
+	{ open: true },
+);
 
-const planStatus = Type.Union([
-	Type.Literal("awaiting_approval"),
-	Type.Literal("approved"),
-	Type.Literal("revision_requested"),
-	Type.Literal("superseded"),
-	Type.Literal("cancelled"),
+const planStatus = union([
+	lit("awaiting_approval"),
+	lit("approved"),
+	lit("revision_requested"),
+	lit("superseded"),
+	lit("cancelled"),
 ]);
 
-const questionStatus = Type.Union([
-	Type.Literal("pending"),
-	Type.Literal("answered"),
-	Type.Literal("skipped"),
-	Type.Literal("cancelled"),
-]);
+const questionStatus = union([lit("pending"), lit("answered"), lit("skipped"), lit("cancelled")]);
 
 /** Structured state of a todo / ask_user call in history; present only for those tools. */
-export const MobileToolInteractionSchema = Type.Union([
-	Type.Object({
-		kind: Type.Literal("ask_user"),
-		id: int,
-		question: str,
-		multiple: Type.Boolean(),
-		options: Type.Array(Type.Object({ id: str, label: str, recommended: opt(Type.Boolean()) })),
-		status: questionStatus,
-		optionIds: opt(Type.Array(str)),
-		labels: opt(Type.Array(str)),
-		text: opt(nullable(str)),
-	}),
-	Type.Object({
-		kind: Type.Literal("todo"),
-		action: Type.Union([Type.Literal("list"), Type.Literal("replace")]),
-		revision: int,
-		completed: int,
-		total: int,
-	}),
-	Type.Object({
-		kind: Type.Literal("submit_plan"),
-		version: str,
-		title: str,
-		steps: Type.Array(str),
-		note: str,
-	}),
+export const MobileToolInteractionSchema = union([
+	obj(
+		{
+			kind: lit("ask_user"),
+			id: count,
+			question: text,
+			multiple: bool(),
+			options: arr(obj({ id: text, label: text, recommended: opt(bool()) }, { open: true })),
+			status: questionStatus,
+			optionIds: opt(arr(text)),
+			labels: opt(arr(text)),
+			text: opt(nullable(text)),
+		},
+		{ open: true },
+	),
+	obj(
+		{
+			kind: lit("todo"),
+			action: union([lit("list"), lit("replace")]),
+			revision: count,
+			completed: count,
+			total: count,
+		},
+		{ open: true },
+	),
+	obj(
+		{
+			kind: lit("submit_plan"),
+			version: text,
+			title: text,
+			steps: arr(text),
+			note: text,
+		},
+		{ open: true },
+	),
 ]);
 
-export const MobileCodemodeSchema = Type.Object({
-	calls: Type.Array(
-		Type.Object({
-			id: int,
-			name: str,
-			args: Type.String({ maxLength: CODEMODE_VIEW_LIMITS.argsChars }),
-			status: Type.Union([
-				Type.Literal("running"),
-				Type.Literal("ok"),
-				Type.Literal("error"),
-				Type.Literal("cancelled"),
-			]),
-			durationMs: opt(Type.Number()),
-			error: opt(Type.String({ maxLength: CODEMODE_VIEW_LIMITS.errorChars })),
-		}),
-		{ maxItems: CODEMODE_VIEW_LIMITS.maxCalls },
-	),
-	omitted: int,
-	fullOutputPath: opt(str),
-});
+export const MobileCodemodeSchema = obj(
+	{
+		calls: arr(
+			obj(
+				{
+					id: count,
+					name: text,
+					args: str({ maxLength: CODEMODE_VIEW_LIMITS.argsChars }),
+					status: union([lit("running"), lit("ok"), lit("error"), lit("cancelled")]),
+					durationMs: opt(num()),
+					error: opt(str({ maxLength: CODEMODE_VIEW_LIMITS.errorChars })),
+				},
+				{ open: true },
+			),
+			{ maxItems: CODEMODE_VIEW_LIMITS.maxCalls },
+		),
+		omitted: count,
+		fullOutputPath: opt(text),
+	},
+	{ open: true },
+);
 
-export const MobileToolItemSchema = Type.Object({
-	callId: str,
-	name: str,
-	summary: str,
-	status: Type.Union([Type.Literal("running"), Type.Literal("done"), Type.Literal("error")]),
-	detail: opt(str),
-	output: opt(str),
-	result: opt(str),
-	diff: opt(str),
-	diffAdded: opt(Type.Number()),
-	diffRemoved: opt(Type.Number()),
-	diffTruncated: opt(Type.Boolean()),
-	durationMs: opt(Type.Number()),
-	note: opt(str),
-	interaction: opt(MobileToolInteractionSchema),
-	codemode: opt(MobileCodemodeSchema),
-});
+export const MobileToolItemSchema = obj(
+	{
+		callId: text,
+		name: text,
+		summary: text,
+		status: union([lit("running"), lit("done"), lit("error")]),
+		detail: opt(text),
+		output: opt(text),
+		result: opt(text),
+		diff: opt(text),
+		diffAdded: opt(num()),
+		diffRemoved: opt(num()),
+		diffTruncated: opt(bool()),
+		durationMs: opt(num()),
+		note: opt(text),
+		interaction: opt(MobileToolInteractionSchema),
+		codemode: opt(MobileCodemodeSchema),
+	},
+	{ open: true },
+);
 
 /** 超过 8 KiB 的字符串字段只留 2 KiB 预览，并在 `refs` 中给出完整内容引用（每个字段至多一个）。 */
-export const MobileChatItemSchema = Type.Object({
-	key: str,
-	type: Type.Union([
-		Type.Literal("user"),
-		Type.Literal("assistant"),
-		Type.Literal("tool"),
-		Type.Literal("error"),
-		Type.Literal("system"),
-	]),
-	text: opt(str),
-	thinking: opt(str),
-	note: opt(str),
-	/** assistant 的失败原因；与已生成文本并存。 */
-	error: opt(str),
-	skill: opt(str),
-	jobId: opt(str),
-	tool: opt(MobileToolItemSchema),
-	images: opt(Type.Array(MobileImageRefSchema)),
-	refs: opt(Type.Array(MobileContentRefSchema)),
-});
+export const MobileChatItemSchema = obj(
+	{
+		key: text,
+		type: union([lit("user"), lit("assistant"), lit("tool"), lit("error"), lit("system")]),
+		text: opt(text),
+		thinking: opt(text),
+		note: opt(text),
+		/** assistant 的失败原因；与已生成文本并存。 */
+		error: opt(text),
+		skill: opt(text),
+		jobId: opt(text),
+		tool: opt(MobileToolItemSchema),
+		images: opt(arr(MobileImageRefSchema)),
+		refs: opt(arr(MobileContentRefSchema)),
+	},
+	{ open: true },
+);
 
-export const MobileStreamingSchema = Type.Object({
-	text: str,
-	thinking: str,
-	/** 快照只携带尾部；被省略的前缀 UTF-16 长度。 */
-	textOmitted: int,
-	thinkingOmitted: int,
-	toolCalls: Type.Array(
-		Type.Object({
-			callId: str,
-			name: str,
-			summary: str,
-			status: Type.Union([Type.Literal("running"), Type.Literal("done")]),
-		}),
-	),
-});
+export const MobileStreamingSchema = obj(
+	{
+		text: text,
+		thinking: text,
+		/** 快照只携带尾部；被省略的前缀 UTF-16 长度。 */
+		textOmitted: count,
+		thinkingOmitted: count,
+		toolCalls: arr(
+			obj(
+				{
+					callId: text,
+					name: text,
+					summary: text,
+					status: union([lit("running"), lit("done")]),
+				},
+				{ open: true },
+			),
+		),
+	},
+	{ open: true },
+);
 
-export const MobileUsageSchema = Type.Object({
-	input: int,
-	output: int,
-	cacheRead: int,
-	cacheWrite: int,
-	totalTokens: int,
-	cost: Type.Number({ minimum: 0 }),
-});
+export const MobileUsageSchema = obj(
+	{
+		input: count,
+		output: count,
+		cacheRead: count,
+		cacheWrite: count,
+		totalTokens: count,
+		cost: num({ minimum: 0 }),
+	},
+	{ open: true },
+);
 
-export const MobileSubagentRoundSchema = Type.Object({
-	taskId: int,
-	/** 主会话中发起委派的工具调用，用于把工具卡关联到子详情。 */
-	callId: str,
-	agentId: str,
-	round: opt(int),
-	role: str,
-	title: str,
-	status: Type.Union([
-		Type.Literal("queued"),
-		Type.Literal("running"),
-		Type.Literal("completed"),
-		Type.Literal("failed"),
-		Type.Literal("cancelled"),
-	]),
-	approvalCount: int,
-	readonly: Type.Boolean(),
-	createdAt: Type.Number(),
-	endedAt: nullable(Type.Number()),
-	usage: opt(MobileUsageSchema),
-});
+export const MobileSubagentRoundSchema = obj(
+	{
+		taskId: count,
+		/** 主会话中发起委派的工具调用，用于把工具卡关联到子详情。 */
+		callId: text,
+		agentId: text,
+		round: opt(count),
+		role: text,
+		title: text,
+		status: union([lit("queued"), lit("running"), lit("completed"), lit("failed"), lit("cancelled")]),
+		approvalCount: count,
+		readonly: bool(),
+		createdAt: num(),
+		endedAt: nullable(num()),
+		usage: opt(MobileUsageSchema),
+	},
+	{ open: true },
+);
 
-export const MobileAgentSchema = Type.Object({
-	agentId: str,
-	role: str,
-	title: str,
-	status: Type.Union([Type.Literal("idle"), Type.Literal("queued"), Type.Literal("running")]),
-	activeRoundId: nullable(int),
-	lastRoundId: int,
-	roundCount: int,
-	approvalCount: int,
-});
+export const MobileAgentSchema = obj(
+	{
+		agentId: text,
+		role: text,
+		title: text,
+		status: union([lit("idle"), lit("queued"), lit("running")]),
+		activeRoundId: nullable(count),
+		lastRoundId: count,
+		roundCount: count,
+		approvalCount: count,
+	},
+	{ open: true },
+);
 
-export const MobileQueuedSchema = Type.Object({
-	id: int,
-	mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]),
-	preview: Type.String(),
-	images: int,
-});
+export const MobileQueuedSchema = obj(
+	{
+		id: count,
+		mode: union([lit("steer"), lit("followUp")]),
+		preview: str(),
+		images: count,
+	},
+	{ open: true },
+);
 
-export const MobileChatStatusSchema = Type.Object({
-	busy: Type.Boolean(),
+const mobileChatStatusProperties = {
+	busy: bool(),
 	/** Absent on a computer without queue visibility; empty means supported with none. */
-	queued: opt(Type.Array(MobileQueuedSchema)),
+	queued: opt(arr(MobileQueuedSchema)),
 	/** Absent on a computer without todos; present with `count: 0` when supported with none. */
-	todos: opt(Type.Object({ revision: int, count: int, completed: int })),
+	todos: opt(obj({ revision: count, count: count, completed: count }, { open: true })),
 	/** Absent on a computer without questions; `pendingCount: 0` means supported with none. */
-	questions: opt(Type.Object({ revision: int, pendingCount: int })),
+	questions: opt(obj({ revision: count, pendingCount: count }, { open: true })),
 	/**
 	 * Absent on a computer without plan mode; `pending: false` means supported with no plan awaiting approval.
 	 * `version` names the newest plan (the pending one when `pending`), absent before the first plan.
 	 */
-	plan: opt(Type.Object({ revision: int, pending: Type.Boolean(), version: opt(Type.String({ minLength: 1 })) })),
-	status: nullable(str),
+	plan: opt(obj({ revision: count, pending: bool(), version: opt(str({ minLength: 1 })) }, { open: true })),
+	status: nullable(text),
 	usage: MobileUsageSchema,
 	taskUsage: opt(MobileUsageSchema),
-	contextUsage: opt(
-		Type.Object({ tokens: nullable(Type.Number()), window: Type.Number(), percent: nullable(Type.Number()) }),
-	),
-	agent: Type.Object({ model: nullable(str), thinkingLevel: nullable(str) }),
-	subagents: Type.Array(MobileSubagentRoundSchema),
-	agents: Type.Array(MobileAgentSchema),
-	approvalCount: int,
-	compaction: opt(Type.Object({ phase: str, at: Type.Number() })),
-	readonly: opt(Type.Boolean()),
-});
+	contextUsage: opt(obj({ tokens: nullable(num()), window: num(), percent: nullable(num()) }, { open: true })),
+	agent: obj({ model: nullable(text), thinkingLevel: nullable(text) }, { open: true }),
+	subagents: arr(MobileSubagentRoundSchema),
+	agents: arr(MobileAgentSchema),
+	approvalCount: count,
+	compaction: opt(obj({ phase: text, at: num() }, { open: true })),
+	/** Why the newest run ended without an answer: Pi's reason code and a bounded detail; absent when there is none. */
+	runFailure: opt(obj({ reason: text, detail: opt(text) }, { open: true })),
+	readonly: opt(bool()),
+};
 
-export const MobileChatSnapshotSchema = Type.Object({
-	...MobileChatStatusSchema.properties,
-	items: Type.Array(MobileChatItemSchema),
-	historyBefore: nullable(str),
-	streaming: nullable(MobileStreamingSchema),
-});
+export const MobileChatStatusSchema = obj(mobileChatStatusProperties, { open: true });
 
-export const MobileWorkspaceSchema = Type.Object({ root: str, name: str });
+export const MobileChatSnapshotSchema = obj(
+	{
+		...mobileChatStatusProperties,
+		items: arr(MobileChatItemSchema),
+		historyBefore: nullable(text),
+		streaming: nullable(MobileStreamingSchema),
+	},
+	{ open: true },
+);
 
-export const MobileSessionSummarySchema = Type.Object({
-	id: str,
-	workspace: str,
-	title: str,
-	preview: str,
-	lastUsedAt: Type.Integer(),
-	lastMessageAt: Type.Integer(),
-	archived: Type.Boolean(),
-	/** A question of this session waits for an answer; absent when the computer cannot tell. */
-	awaitingAnswer: opt(Type.Boolean()),
-	/** A submitted plan of this idle session waits for approval; absent when the computer cannot tell. */
-	awaitingPlan: opt(Type.Boolean()),
-});
+export const MobileWorkspaceSchema = obj({ root: text, name: text }, { open: true });
 
-export const MobileApprovalSchema = Type.Object({
-	id: int,
-	version: str,
-	taskId: int,
-	agentId: opt(str),
-	title: opt(str),
-	command: str,
-	cwd: str,
-	timeoutSeconds: opt(Type.Number({ minimum: 0 })),
-	requestedAt: Type.Number(),
-});
+export const MobileSessionSummarySchema = obj(
+	{
+		id: text,
+		workspace: text,
+		title: text,
+		preview: text,
+		lastUsedAt: int(),
+		lastMessageAt: int(),
+		archived: bool(),
+		/** A question of this session waits for an answer; absent when the computer cannot tell. */
+		awaitingAnswer: opt(bool()),
+		/** A submitted plan of this idle session waits for approval; absent when the computer cannot tell. */
+		awaitingPlan: opt(bool()),
+	},
+	{ open: true },
+);
 
-export const MobileTodoItemSchema = Type.Object({
-	id: Type.String({ minLength: 1, maxLength: TODO_LIMITS.idChars }),
-	text: Type.String({ minLength: 1, maxLength: TODO_LIMITS.textChars }),
-	status: Type.Union([Type.Literal("pending"), Type.Literal("in_progress"), Type.Literal("completed")]),
-});
-export const MobileTodoListSchema = Type.Object({
-	revision: int,
-	items: Type.Array(MobileTodoItemSchema, { maxItems: TODO_LIMITS.maxItems }),
-});
-export const MobileQuestionOptionSchema = Type.Object({
-	id: Type.String({ minLength: 1, maxLength: QUESTION_LIMITS.optionIdChars }),
-	label: Type.String({ minLength: 1, maxLength: QUESTION_LIMITS.labelChars }),
-	description: opt(Type.String({ maxLength: QUESTION_LIMITS.descriptionChars })),
-	recommended: opt(Type.Boolean()),
-});
+export const MobileApprovalSchema = obj(
+	{
+		id: count,
+		version: text,
+		taskId: count,
+		agentId: opt(text),
+		title: opt(text),
+		command: text,
+		cwd: text,
+		timeoutSeconds: opt(num({ minimum: 0 })),
+		requestedAt: num(),
+	},
+	{ open: true },
+);
+
+export const MobileTodoItemSchema = obj(
+	{
+		id: str({ minLength: 1, maxLength: TODO_LIMITS.idChars }),
+		text: str({ minLength: 1, maxLength: TODO_LIMITS.textChars }),
+		status: union([lit("pending"), lit("in_progress"), lit("completed")]),
+	},
+	{ open: true },
+);
+export const MobileTodoListSchema = obj(
+	{
+		revision: count,
+		items: arr(MobileTodoItemSchema, { maxItems: TODO_LIMITS.maxItems }),
+	},
+	{ open: true },
+);
+export const MobileQuestionOptionSchema = obj(
+	{
+		id: str({ minLength: 1, maxLength: QUESTION_LIMITS.optionIdChars }),
+		label: str({ minLength: 1, maxLength: QUESTION_LIMITS.labelChars }),
+		description: opt(str({ maxLength: QUESTION_LIMITS.descriptionChars })),
+		recommended: opt(bool()),
+	},
+	{ open: true },
+);
 /** Bounded list entry; `questions.get` returns the full record. */
-export const MobileQuestionSummarySchema = Type.Object({
-	id: int,
-	version: str,
-	preview: Type.String({ maxLength: QUESTION_LIMITS.previewChars }),
-	multiple: Type.Boolean(),
-	optionCount: int,
-	createdAt: Type.Number(),
-});
-export const MobileQuestionListSchema = Type.Object({
-	revision: int,
-	pending: Type.Array(MobileQuestionSummarySchema, { maxItems: QUESTION_LIMITS.maxPending }),
-});
-export const MobileQuestionSchema = Type.Object({
-	id: int,
-	callId: str,
-	version: str,
-	question: Type.String({ maxLength: QUESTION_LIMITS.questionChars }),
-	multiple: Type.Boolean(),
-	options: Type.Array(MobileQuestionOptionSchema, { maxItems: QUESTION_LIMITS.maxOptions }),
-	status: questionStatus,
-	answer: nullable(
-		Type.Object({
-			optionIds: Type.Array(Type.String(), { maxItems: QUESTION_LIMITS.maxOptions }),
-			text: nullable(Type.String({ maxLength: QUESTION_LIMITS.textChars })),
-		}),
-	),
-	createdAt: Type.Number(),
-	settledAt: nullable(Type.Number()),
-});
-export const MobileQuestionResponseSchema = Type.Union([
-	Type.Object(
-		{
-			kind: Type.Literal("answer"),
-			optionIds: opt(Type.Array(Type.String(), { maxItems: QUESTION_LIMITS.maxOptions })),
-			text: opt(Type.String({ maxLength: QUESTION_LIMITS.textChars })),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object({ kind: Type.Literal("skip") }, { additionalProperties: false }),
+export const MobileQuestionSummarySchema = obj(
+	{
+		id: count,
+		version: text,
+		preview: str({ maxLength: QUESTION_LIMITS.previewChars }),
+		multiple: bool(),
+		optionCount: count,
+		createdAt: num(),
+	},
+	{ open: true },
+);
+export const MobileQuestionListSchema = obj(
+	{
+		revision: count,
+		pending: arr(MobileQuestionSummarySchema, { maxItems: QUESTION_LIMITS.maxPending }),
+	},
+	{ open: true },
+);
+export const MobileQuestionSchema = obj(
+	{
+		id: count,
+		callId: text,
+		version: text,
+		question: str({ maxLength: QUESTION_LIMITS.questionChars }),
+		multiple: bool(),
+		options: arr(MobileQuestionOptionSchema, { maxItems: QUESTION_LIMITS.maxOptions }),
+		status: questionStatus,
+		answer: nullable(
+			obj(
+				{
+					optionIds: arr(str(), { maxItems: QUESTION_LIMITS.maxOptions }),
+					text: nullable(str({ maxLength: QUESTION_LIMITS.textChars })),
+				},
+				{ open: true },
+			),
+		),
+		createdAt: num(),
+		settledAt: nullable(num()),
+	},
+	{ open: true },
+);
+export const MobileQuestionResponseSchema = union([
+	obj({
+		kind: lit("answer"),
+		optionIds: opt(arr(str(), { maxItems: QUESTION_LIMITS.maxOptions })),
+		text: opt(str({ maxLength: QUESTION_LIMITS.textChars })),
+	}),
+	obj({ kind: lit("skip") }),
 ]);
-export const MobilePlanSchema = Type.Object({
-	version: Type.String({ minLength: 1 }),
-	title: Type.String({ maxLength: PLAN_LIMITS.titleChars }),
-	steps: Type.Array(Type.String({ maxLength: PLAN_LIMITS.stepChars }), { maxItems: PLAN_LIMITS.maxSteps }),
-	note: Type.String({ maxLength: PLAN_LIMITS.noteChars }),
-	status: planStatus,
-	feedback: nullable(Type.String({ maxLength: PLAN_LIMITS.feedbackChars })),
-	createdAt: Type.Number(),
-	settledAt: nullable(Type.Number()),
-});
-export const MobilePlanDecisionSchema = Type.Union([
-	Type.Object({ kind: Type.Literal("approve") }, { additionalProperties: false }),
-	Type.Object(
-		{ kind: Type.Literal("revise"), feedback: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.feedbackChars }) },
-		{ additionalProperties: false },
-	),
+export const MobilePlanSchema = obj(
+	{
+		version: str({ minLength: 1 }),
+		title: str({ maxLength: PLAN_LIMITS.titleChars }),
+		steps: arr(str({ maxLength: PLAN_LIMITS.stepChars }), { maxItems: PLAN_LIMITS.maxSteps }),
+		note: str({ maxLength: PLAN_LIMITS.noteChars }),
+		status: planStatus,
+		feedback: nullable(str({ maxLength: PLAN_LIMITS.feedbackChars })),
+		createdAt: num(),
+		settledAt: nullable(num()),
+	},
+	{ open: true },
+);
+export const MobilePlanDecisionSchema = union([
+	obj({ kind: lit("approve") }),
+	obj({ kind: lit("revise"), feedback: str({ minLength: 1, maxLength: PLAN_LIMITS.feedbackChars }) }),
 ]);
 
-const sessionListParams = Type.Object({
-	workspace: str,
-	query: opt(str),
-	cursor: opt(str),
-});
-const sessionListResult = Type.Object({
-	sessions: Type.Array(MobileSessionSummarySchema),
-	nextCursor: opt(str),
-});
-const subscription = { subscriptionId: Type.String({ minLength: 1 }) };
-const pageResult = Type.Object({ items: Type.Array(MobileChatItemSchema), historyBefore: nullable(str) });
-const pageParams = Type.Object({
-	...subscription,
-	before: Type.String({ minLength: 1 }),
-	limit: opt(Type.Integer({ minimum: 1, maximum: 50 })),
-});
-const chunkResult = Type.Object({ data: str, nextOffset: int, total: int, done: Type.Boolean() });
+const sessionListParams = obj(
+	{
+		workspace: text,
+		query: opt(text),
+		cursor: opt(text),
+	},
+	{ open: true },
+);
+const sessionListResult = obj(
+	{
+		sessions: arr(MobileSessionSummarySchema),
+		nextCursor: opt(text),
+	},
+	{ open: true },
+);
+const subscription = { subscriptionId: str({ minLength: 1 }) };
+const pageResult = obj({ items: arr(MobileChatItemSchema), historyBefore: nullable(text) }, { open: true });
+const pageParams = obj(
+	{
+		...subscription,
+		before: str({ minLength: 1 }),
+		limit: opt(int({ minimum: 1, maximum: 50 })),
+	},
+	{ open: true },
+);
+const chunkResultProperties = { data: text, nextOffset: count, total: count, done: bool() };
+const chunkResult = obj(chunkResultProperties, { open: true });
 
 export const MOBILE_API_V1_METHODS: Readonly<Record<string, { readonly params: unknown; readonly result: unknown }>> = {
 	"server.hello": { params: MobileHelloParams, result: buildHelloResultSchema() },
-	"workspaces.list": { params: Type.Null(), result: Type.Object({ workspaces: Type.Array(MobileWorkspaceSchema) }) },
+	"workspaces.list": { params: nul(), result: obj({ workspaces: arr(MobileWorkspaceSchema) }, { open: true }) },
 	"sessions.list": { params: sessionListParams, result: sessionListResult },
-	"sessions.create": { params: Type.Object({ workspace: str }), result: MobileSessionSummarySchema },
+	"sessions.create": { params: obj({ workspace: text }, { open: true }), result: MobileSessionSummarySchema },
 	"chat.attach": {
-		params: Type.Object({ sessionId: Type.String({ minLength: 1 }) }),
-		result: Type.Object({ subscriptionId: str, sessionId: str, snapshot: MobileChatSnapshotSchema }),
+		params: obj({ sessionId: str({ minLength: 1 }) }, { open: true }),
+		result: obj({ subscriptionId: text, sessionId: text, snapshot: MobileChatSnapshotSchema }, { open: true }),
 	},
-	"chat.detach": { params: Type.Object(subscription), result: Type.Null() },
+	"chat.detach": { params: obj(subscription, { open: true }), result: nul() },
 	"chat.history": { params: pageParams, result: pageResult },
 	"chat.content": {
-		params: Type.Object({ ref: MobileContentRefSchema, offset: int }),
+		params: obj({ ref: MobileContentRefSchema, offset: count }, { open: true }),
 		result: chunkResult,
 	},
 	"chat.submit": {
-		params: Type.Object({
-			...subscription,
-			requestId: Type.String({ minLength: 1, maxLength: 128 }),
-			text: Type.String({ minLength: 1, maxLength: 65_536 }),
-			mode: opt(Type.Literal("steer")),
-		}),
-		result: Type.Object({ accepted: Type.Literal(true), queued: Type.Boolean() }),
+		params: obj(
+			{
+				...subscription,
+				requestId: str({ minLength: 1, maxLength: 128 }),
+				text: str({ minLength: 1, maxLength: 65_536 }),
+				mode: opt(lit("steer")),
+			},
+			{ open: true },
+		),
+		result: obj({ accepted: lit(true), queued: bool() }, { open: true }),
 	},
 	"chat.submissionStatus": {
-		params: Type.Object({ ...subscription, requestId: Type.String({ minLength: 1, maxLength: 128 }) }),
-		result: Type.Object({ status: Type.Union([Type.Literal("accepted"), Type.Literal("unknown")]) }),
+		params: obj({ ...subscription, requestId: str({ minLength: 1, maxLength: 128 }) }, { open: true }),
+		result: obj({ status: union([lit("accepted"), lit("unknown")]) }, { open: true }),
 	},
 	"chat.steer": {
-		params: Type.Object({ ...subscription, id: int }),
-		result: Type.Object({
-			result: Type.Union([
-				Type.Literal("steered"),
-				Type.Literal("withdrawn"),
-				Type.Literal("placed"),
-				Type.Literal("settled"),
-				Type.Literal("unknown"),
-			]),
-			id: opt(int),
-			text: opt(Type.String()),
-			images: opt(int),
-		}),
+		params: obj({ ...subscription, id: count }, { open: true }),
+		result: obj(
+			{
+				result: union([lit("steered"), lit("withdrawn"), lit("placed"), lit("settled"), lit("unknown")]),
+				id: opt(count),
+				text: opt(str()),
+				images: opt(count),
+			},
+			{ open: true },
+		),
 	},
 	"chat.withdraw": {
-		params: Type.Object({ ...subscription, id: int }),
-		result: Type.Object({
-			result: Type.Union([
-				Type.Literal("withdrawn"),
-				Type.Literal("placed"),
-				Type.Literal("settled"),
-				Type.Literal("unknown"),
-			]),
-			text: opt(Type.String()),
-			images: opt(int),
-		}),
+		params: obj({ ...subscription, id: count }, { open: true }),
+		result: obj(
+			{
+				result: union([lit("withdrawn"), lit("placed"), lit("settled"), lit("unknown")]),
+				text: opt(str()),
+				images: opt(count),
+			},
+			{ open: true },
+		),
 	},
-	"chat.abort": { params: Type.Object(subscription), result: Type.Object({ accepted: Type.Boolean() }) },
+	"chat.abort": { params: obj(subscription, { open: true }), result: obj({ accepted: bool() }, { open: true }) },
 	"subagents.open": {
-		params: Type.Object({ ...subscription, agentId: opt(Type.String({ minLength: 1 })), taskId: opt(int) }),
-		result: Type.Object({
-			subagentSubscriptionId: str,
-			agentId: str,
-			snapshot: MobileChatSnapshotSchema,
-		}),
+		params: obj({ ...subscription, agentId: opt(str({ minLength: 1 })), taskId: opt(count) }, { open: true }),
+		result: obj(
+			{
+				subagentSubscriptionId: text,
+				agentId: text,
+				snapshot: MobileChatSnapshotSchema,
+			},
+			{ open: true },
+		),
 	},
 	"subagents.history": {
-		params: Type.Object({
-			subagentSubscriptionId: Type.String({ minLength: 1 }),
-			before: Type.String({ minLength: 1 }),
-			limit: opt(Type.Integer({ minimum: 1, maximum: 50 })),
-		}),
+		params: obj(
+			{
+				subagentSubscriptionId: str({ minLength: 1 }),
+				before: str({ minLength: 1 }),
+				limit: opt(int({ minimum: 1, maximum: 50 })),
+			},
+			{ open: true },
+		),
 		result: pageResult,
 	},
 	"subagents.close": {
-		params: Type.Object({ subagentSubscriptionId: Type.String({ minLength: 1 }) }),
-		result: Type.Null(),
+		params: obj({ subagentSubscriptionId: str({ minLength: 1 }) }, { open: true }),
+		result: nul(),
 	},
 	"subagents.stop": {
-		params: Type.Object({ ...subscription, taskId: int }),
-		result: Type.Object({ stopped: Type.Boolean() }),
+		params: obj({ ...subscription, taskId: count }, { open: true }),
+		result: obj({ stopped: bool() }, { open: true }),
 	},
 	"approvals.list": {
-		params: Type.Object(subscription),
-		result: Type.Object({ approvals: Type.Array(MobileApprovalSchema) }),
+		params: obj(subscription, { open: true }),
+		result: obj({ approvals: arr(MobileApprovalSchema) }, { open: true }),
 	},
-	"approvals.get": { params: Type.Object({ ...subscription, id: int }), result: MobileApprovalSchema },
+	"approvals.get": { params: obj({ ...subscription, id: count }, { open: true }), result: MobileApprovalSchema },
 	"approvals.decide": {
-		params: Type.Object({
-			...subscription,
-			taskId: int,
-			id: int,
-			version: Type.String({ minLength: 1 }),
-			decision: Type.Union([Type.Literal("allow"), Type.Literal("deny")]),
-		}),
-		result: Type.Object({
-			status: Type.Union([
-				Type.Literal("pending"),
-				Type.Literal("allowed"),
-				Type.Literal("denied"),
-				Type.Literal("cancelled"),
-			]),
-		}),
+		params: obj(
+			{
+				...subscription,
+				taskId: count,
+				id: count,
+				version: str({ minLength: 1 }),
+				decision: union([lit("allow"), lit("deny")]),
+			},
+			{ open: true },
+		),
+		result: obj(
+			{
+				status: union([lit("pending"), lit("allowed"), lit("denied"), lit("cancelled")]),
+			},
+			{ open: true },
+		),
 	},
-	"todos.get": { params: Type.Object(subscription), result: MobileTodoListSchema },
-	"questions.list": { params: Type.Object(subscription), result: MobileQuestionListSchema },
-	"questions.get": { params: Type.Object({ ...subscription, id: int }), result: MobileQuestionSchema },
+	"todos.get": { params: obj(subscription, { open: true }), result: MobileTodoListSchema },
+	"questions.list": { params: obj(subscription, { open: true }), result: MobileQuestionListSchema },
+	"questions.get": { params: obj({ ...subscription, id: count }, { open: true }), result: MobileQuestionSchema },
 	"questions.respond": {
-		params: Type.Object({
-			...subscription,
-			id: int,
-			version: Type.String({ minLength: 1 }),
-			response: MobileQuestionResponseSchema,
-		}),
+		params: obj(
+			{
+				...subscription,
+				id: count,
+				version: str({ minLength: 1 }),
+				response: MobileQuestionResponseSchema,
+			},
+			{ open: true },
+		),
 		result: MobileQuestionSchema,
 	},
 	"plan.get": {
-		params: Type.Object({ ...subscription, version: Type.String({ minLength: 1 }) }),
+		params: obj({ ...subscription, version: str({ minLength: 1 }) }, { open: true }),
 		result: MobilePlanSchema,
 	},
 	"plan.respond": {
-		params: Type.Object({
-			...subscription,
-			version: Type.String({ minLength: 1 }),
-			decision: MobilePlanDecisionSchema,
-		}),
+		params: obj(
+			{
+				...subscription,
+				version: str({ minLength: 1 }),
+				decision: MobilePlanDecisionSchema,
+			},
+			{ open: true },
+		),
 		result: MobilePlanSchema,
 	},
 	"plan.exit": {
-		params: Type.Object(subscription),
-		result: Type.Object({ mode: Type.Literal("normal"), revision: int }),
+		params: obj(subscription, { open: true }),
+		result: obj({ mode: lit("normal"), revision: count }, { open: true }),
 	},
 	"media.read": {
-		params: Type.Object({
-			...subscription,
-			agentId: opt(Type.String({ minLength: 1 })),
-			entryId: int,
-			contentIndex: int,
-			offset: int,
-		}),
-		result: Type.Object({ ...chunkResult.properties, mimeType: str }),
+		params: obj(
+			{
+				...subscription,
+				agentId: opt(str({ minLength: 1 })),
+				entryId: count,
+				contentIndex: count,
+				offset: count,
+			},
+			{ open: true },
+		),
+		result: obj({ ...chunkResultProperties, mimeType: text }, { open: true }),
 	},
 };
 
 function buildHelloResultSchema() {
-	return Type.Object({
-		apiVersion: Type.Integer({ minimum: 1 }),
-		serverId: str,
-		serverName: str,
-		gatewayVersion: str,
-		capabilities: Type.Array(str),
-		limits: Type.Object({
-			maxFrameBytes: Type.Integer(),
-			maxPayloadBytes: Type.Integer(),
-			pageItems: Type.Integer(),
-			chunkBytes: Type.Integer(),
-			maxConcurrentRequests: Type.Integer(),
-			maxSendBufferBytes: Type.Integer(),
-		}),
-	});
+	return obj(
+		{
+			apiVersion: int({ minimum: 1 }),
+			serverId: text,
+			serverName: text,
+			gatewayVersion: text,
+			capabilities: arr(text),
+			limits: obj(
+				{
+					maxFrameBytes: int(),
+					maxPayloadBytes: int(),
+					pageItems: int(),
+					chunkBytes: int(),
+					maxConcurrentRequests: int(),
+					maxSendBufferBytes: int(),
+				},
+				{ open: true },
+			),
+		},
+		{ open: true },
+	);
 }
 
 const patchBody = {
-	seq: Type.Integer({ minimum: 1 }),
-	upserts: Type.Array(MobileChatItemSchema),
+	seq: int({ minimum: 1 }),
+	upserts: arr(MobileChatItemSchema),
 	status: opt(MobileChatStatusSchema),
 	/** 整段替换流式区（含结束时置 null）。 */
 	streaming: opt(nullable(MobileStreamingSchema)),
 	/** 在当前流式文本末尾追加。 */
-	streamingAppend: opt(Type.Object({ text: opt(str), thinking: opt(str) })),
+	streamingAppend: opt(obj({ text: opt(text), thinking: opt(text) }, { open: true })),
 };
 
 export const MOBILE_API_V1_NOTIFICATIONS: Readonly<Record<string, unknown>> = {
-	"workspaces.changed": Type.Object({ revision: Type.Integer({ minimum: 1 }) }),
-	"sessions.changed": Type.Object({ revision: Type.Integer({ minimum: 1 }) }),
-	"chat.patch": Type.Object({ subscriptionId: str, ...patchBody }),
-	"chat.reset": Type.Object({ subscriptionId: str, seq: Type.Integer({ minimum: 1 }) }),
-	"subagents.patch": Type.Object({ subagentSubscriptionId: str, ...patchBody }),
-	"subagents.reset": Type.Object({ subagentSubscriptionId: str, seq: Type.Integer({ minimum: 1 }) }),
-	"approvals.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
+	"workspaces.changed": obj({ revision: int({ minimum: 1 }) }, { open: true }),
+	"sessions.changed": obj({ revision: int({ minimum: 1 }) }, { open: true }),
+	"chat.patch": obj({ subscriptionId: text, ...patchBody }, { open: true }),
+	"chat.reset": obj({ subscriptionId: text, seq: int({ minimum: 1 }) }, { open: true }),
+	"subagents.patch": obj({ subagentSubscriptionId: text, ...patchBody }, { open: true }),
+	"subagents.reset": obj({ subagentSubscriptionId: text, seq: int({ minimum: 1 }) }, { open: true }),
+	"approvals.changed": obj({ subscriptionId: text, revision: int({ minimum: 1 }) }, { open: true }),
 	/** Invalidation hint: read `todos.get`; revisions only grow, so accept a result no older than the one held. */
-	"todos.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
-	"questions.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
+	"todos.changed": obj({ subscriptionId: text, revision: int({ minimum: 1 }) }, { open: true }),
+	"questions.changed": obj({ subscriptionId: text, revision: int({ minimum: 1 }) }, { open: true }),
 	/** Invalidation hint: read `plan.get` for the version the status names, or re-attach for the latest plan. */
-	"plan.changed": Type.Object({ subscriptionId: str, revision: Type.Integer({ minimum: 1 }) }),
+	"plan.changed": obj({ subscriptionId: text, revision: int({ minimum: 1 }) }, { open: true }),
 };

@@ -54,7 +54,7 @@ describe("createNekoRuntime", () => {
 			const usage = await runtime.usage();
 			expect(Object.keys(usage.models).length).toBeGreaterThan(0);
 
-			const view = await runtime.viewState();
+			const view = await runtime.follow();
 			expect(view.value.entries.length).toBeGreaterThan(0);
 			view.dispose();
 		} finally {

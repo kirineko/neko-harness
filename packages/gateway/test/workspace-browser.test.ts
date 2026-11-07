@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 import { removeDirSync, trySymlink } from "../../../test/temp-dir.ts";
 import { WORKSPACE_UNSUPPORTED, workspaceClient } from "../src/client-session.ts";
 import {
@@ -36,11 +36,11 @@ it("browses a session's workspace read-only and refuses escapes and credentials"
 		expect(files.summary()).toEqual({ revision: 0, files: 0, added: 0, removed: 0 });
 
 		const root = await files.dir("");
-		expect(Value.Check(WorkspaceDirSchema, root)).toBe(true);
+		expect(compile(WorkspaceDirSchema).check(root)).toBe(true);
 		expect(root.entries.map((e) => e.name)).toEqual(["src", ".env", ...(linked ? ["link.txt"] : [])]);
 		expect((await files.dir("src")).entries.map((e) => e.path)).toEqual(["src/a.ts"]);
 		const file = await files.file("src/a.ts");
-		expect(Value.Check(WorkspaceFileSchema, file)).toBe(true);
+		expect(compile(WorkspaceFileSchema).check(file)).toBe(true);
 		expect(file).toMatchObject({ kind: "text", content: "export const a = 1;\n", truncated: false });
 
 		const secret = await files.file(".env");
@@ -53,7 +53,7 @@ it("browses a session's workspace read-only and refuses escapes and credentials"
 		const aborted = new AbortController();
 		aborted.abort();
 		await expect(files.dir("src", aborted.signal)).rejects.toThrow();
-		expect(Value.Check(ChatViewSchema, chat.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chat.view.value)).toBe(true);
 	} finally {
 		await client.close();
 		await cleanup(target);
@@ -87,16 +87,16 @@ it("publishes agent changes live with a revision, a list and per-file diffs, sub
 		const summary = chat.view.value!.changes!;
 		expect(summary.revision).toBe(3);
 		expect(summary.added).toBeGreaterThanOrEqual(3);
-		expect(Value.Check(ChatViewSchema, chat.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chat.view.value)).toBe(true);
 
 		const list = await files.changes();
-		expect(Value.Check(ChangeListSchema, list)).toBe(true);
+		expect(compile(ChangeListSchema).check(list)).toBe(true);
 		expect(list.revision).toBe(summary.revision);
 		expect(list.files.map((f) => f.path).sort()).toEqual(["child.txt", "main.txt", "seed.txt"]);
 		expect(list.files.find((f) => f.path === "child.txt")?.agents[0]).not.toBe("main");
 
 		const detail = (await files.change("seed.txt"))!;
-		expect(Value.Check(ChangeDetailSchema, detail)).toBe(true);
+		expect(compile(ChangeDetailSchema).check(detail)).toBe(true);
 		expect(detail.ops).toHaveLength(1);
 		expect(detail.ops[0]).toMatchObject({ tool: "edit", agent: "main" });
 		expect(detail.ops[0]!.diff).toContain("gamma");
@@ -120,7 +120,7 @@ it("treats a view without the changes summary as an old gateway", async () => {
 		await expect(files.dir("")).rejects.toThrow(WORKSPACE_UNSUPPORTED);
 		await expect(files.changes()).rejects.toThrow(WORKSPACE_UNSUPPORTED);
 		const { changes: _drop, ...view } = chat.view.value!;
-		expect(Value.Check(ChatViewSchema, view)).toBe(true);
+		expect(compile(ChatViewSchema).check(view)).toBe(true);
 	} finally {
 		await client.close();
 		await cleanup(target);

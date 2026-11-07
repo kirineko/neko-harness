@@ -1,23 +1,87 @@
 {
 	"$comment": "Exact English strings core sends to the frontends (webErrors: only the Web client shows and maps them). Pinned by packages/core/test/core-ui-strings.test.ts; Web, TUI and Mobile map them to the UI language.",
 	"status": [
-		{ "id": "thinking", "text": "Thinking..." },
-		{ "id": "running", "text": "Running bash...", "params": { "tool": "bash" } },
-		{ "id": "retrying", "text": "Retrying (attempt 2)...", "params": { "attempt": "2" } }
+		{
+			"id": "thinking",
+			"text": "Thinking..."
+		},
+		{
+			"id": "running",
+			"text": "Running bash...",
+			"params": {
+				"tool": "bash"
+			}
+		},
+		{
+			"id": "retrying",
+			"text": "Retrying (attempt 2)...",
+			"params": {
+				"attempt": "2"
+			}
+		}
 	],
 	"systemRows": [
-		{ "id": "compacted", "text": "[context compacted]" },
-		{ "id": "newContext", "text": "[new context]" }
+		{
+			"id": "compacted",
+			"text": "[context compacted]"
+		},
+		{
+			"id": "newContext",
+			"text": "[new context]"
+		}
 	],
-	"toolNotes": [{ "id": "notRun", "text": "Not run: response interrupted." }],
+	"toolNotes": [
+		{
+			"id": "notRun",
+			"text": "Not run: response interrupted."
+		}
+	],
 	"errors": [
-		{ "code": "PROVIDER_DISABLED", "text": "PROVIDER_DISABLED: OpenRouter is not enabled. Enable it in /login or Web settings, or switch model." },
-		{ "code": "PROVIDER_KEY_REQUIRED", "text": "PROVIDER_KEY_REQUIRED: Configure a DeepSeek API key in /login or Web settings." },
-		{ "code": "PLAN_BUSY", "text": "PLAN_BUSY: Wait for the current run to finish or stop it first." }
+		{
+			"code": "PROVIDER_DISABLED",
+			"text": "PROVIDER_DISABLED: OpenRouter is not enabled. Enable it in /login or Web settings, or switch model."
+		},
+		{
+			"code": "PROVIDER_KEY_REQUIRED",
+			"text": "PROVIDER_KEY_REQUIRED: Configure a DeepSeek API key in /login or Web settings."
+		},
+		{
+			"code": "PLAN_BUSY",
+			"text": "PLAN_BUSY: Wait for the current run to finish or stop it first."
+		},
+		{
+			"code": "CONTINUE_BUSY",
+			"text": "CONTINUE_BUSY: The session is running; wait for it to finish."
+		},
+		{
+			"code": "CONTINUE_UNAVAILABLE",
+			"text": "CONTINUE_UNAVAILABLE: The last run was answered; there is nothing to continue."
+		}
 	],
 	"webErrors": [
-		{ "code": "WORKSPACE_UNKNOWN", "text": "WORKSPACE_UNKNOWN: This workspace is not in the list." },
-		{ "code": "WORKSPACE_LAST", "text": "WORKSPACE_LAST: Keep at least one workspace." },
-		{ "code": "WORKSPACE_BUSY", "text": "WORKSPACE_BUSY: Stop or finish the running sessions of this workspace first." }
+		{
+			"code": "WORKSPACE_UNKNOWN",
+			"text": "WORKSPACE_UNKNOWN: This workspace is not in the list."
+		},
+		{
+			"code": "WORKSPACE_LAST",
+			"text": "WORKSPACE_LAST: Keep at least one workspace."
+		},
+		{
+			"code": "WORKSPACE_BUSY",
+			"text": "WORKSPACE_BUSY: Stop or finish the running sessions of this workspace first."
+		}
+	],
+	"runFailureReasons": [
+		"model_error",
+		"no_model",
+		"aborted",
+		"reset",
+		"faulted",
+		"orphaned",
+		"interrupted",
+		"restart_limit",
+		"nothing_to_answer",
+		"turn_limit"
 	]
 }

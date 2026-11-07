@@ -8,9 +8,9 @@ import {
 	fauxToolCall,
 	getCurrentSystemMessage,
 	type TranscriptContext,
-	Type,
 } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, SystemEntry } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -43,7 +43,7 @@ function gatedTool(started: Gate, release: Gate, onStart = () => {}) {
 			defineTool({
 				name: "prompt_gate",
 				description: "Hold a tool round while prompt resources change",
-				parameters: Type.Object({}),
+				parameters: obj({}, { open: true }),
 				execute: async () => {
 					onStart();
 					started.resolve();

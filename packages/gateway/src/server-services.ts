@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { ChordError, type Context, type Ctx, type Host, local, method, type Self } from "@earendil-works/chord";
-import type { ConversationId } from "@earendil-works/pi-durable";
-import { CREDENTIAL_PROVIDERS, type CredentialProviderId, isModelProvider, type NekoRuntime } from "@neko-harness/core";
+import type { CommitPublication, ConversationId } from "@earendil-works/pi-durable";
+import { nul, obj } from "@earendil-works/pi-schema";
+import {
+	CREDENTIAL_PROVIDERS,
+	type CredentialProviderId,
+	isModelProvider,
+	type NekoRuntime,
+	onCommits,
+} from "@neko-harness/core";
 import { UpdateChecker, type UpdateCheckerOptions } from "@neko-harness/core/application-updates";
 import type { UpdateState } from "@neko-harness/core/application-version";
-import { Type } from "typebox";
 import {
 	ApplicationInfoSchema,
 	CodemodeSettingsStateSchema,
@@ -37,7 +43,7 @@ import { browseWorkspaces } from "./workspaces.ts";
 
 const ServerState = local("neko.server-state", {
 	version: 1,
-	input: Type.Object({}),
+	input: obj({}, { open: true }),
 	members: {
 		directory: DirectoryStateSchema,
 		workspaces: WorkspaceStateSchema,
@@ -46,11 +52,11 @@ const ServerState = local("neko.server-state", {
 		contextSettings: ContextSettingsStateSchema,
 		codemodeSettings: CodemodeSettingsStateSchema,
 		defaultModel: DefaultModelStateSchema,
-		refreshCredentials: method(Type.Null(), Type.Null()),
-		refreshSearchSettings: method(Type.Null(), Type.Null()),
-		refreshContextSettings: method(Type.Null(), Type.Null()),
-		refreshCodemodeSettings: method(Type.Null(), Type.Null()),
-		refreshDefaultModel: method(Type.Null(), Type.Null()),
+		refreshCredentials: method(nul(), nul()),
+		refreshSearchSettings: method(nul(), nul()),
+		refreshContextSettings: method(nul(), nul()),
+		refreshCodemodeSettings: method(nul(), nul()),
+		refreshDefaultModel: method(nul(), nul()),
 	},
 });
 export async function createNekoServerServices(options: {
@@ -239,7 +245,7 @@ export async function createNekoServerServices(options: {
 			};
 			self.on(
 				"directory",
-				{ subscribe: runtime.harness.subscribeCommits.bind(runtime.harness) },
+				{ subscribe: (listener: (publication: CommitPublication) => void) => onCommits(runtime.harness, listener) },
 				async (event, ctx) => {
 					if (
 						!event.changes.some(

@@ -8,9 +8,9 @@ import {
 	fauxToolCall,
 	getCurrentSystemMessage,
 	type TranscriptContext,
-	Type,
 } from "@earendil-works/pi-ai";
 import { ConversationBusy, defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -52,7 +52,7 @@ function gatedTool(started: Gate, release: Gate) {
 			defineTool({
 				name: "skill_gate",
 				description: "Hold a tool round while skill inputs are prepared",
-				parameters: Type.Object({}),
+				parameters: obj({}, { open: true }),
 				execute: async () => {
 					started.resolve();
 					await release.promise;
@@ -423,7 +423,7 @@ it("persists skill display data without reparsing XML or rereading the source on
 		await runtime.submit(`/skill:literal changed`, { requestId: "literal" });
 		await runtime.close();
 		runtime = await createNekoRuntime(options);
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const { projectChatView } = await import("../src/projection.ts");
 		const item = projectChatView(state.value, "test").items.find((item) => item.type === "user")!;
 		expect(item.type === "user" && item.skill).toMatchObject({
@@ -434,7 +434,7 @@ it("persists skill display data without reparsing XML or rereading the source on
 		state.dispose();
 		faux.setResponses([fauxAssistantMessage([fauxText("ok")])]);
 		await runtime.waitAnswer(await runtime.submit('<skill name="manual">plain XML</skill>'));
-		const manual = await runtime.viewState();
+		const manual = await runtime.follow();
 		const latest = projectChatView(manual.value, "test")
 			.items.filter((item) => item.type === "user")
 			.at(-1)!;

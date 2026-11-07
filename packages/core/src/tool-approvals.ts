@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { createBashTool } from "@earendil-works/pi-durable/tools";
 import { enabledTools } from "./agent-change.ts";
+import { onCommits } from "./commits.ts";
 import { DelegationsDoc, SubagentDoc, SubagentsDoc } from "./subagents.ts";
 
 export type ToolApproval = {
@@ -48,7 +49,7 @@ export class ToolApprovals {
 	#parents = new Set<ConversationId>();
 	constructor(harness: Harness, context: Context) {
 		this.harness = harness;
-		const stop = harness.subscribeCommits(({ changes }) => {
+		const stop = onCommits(harness, ({ changes }) => {
 			if (!changes.some((c) => c.type === "task" && (c.value.abortRequested || c.value.state.status === "terminal")))
 				return;
 			for (const parent of this.#parents) void this.list(parent, context).catch(() => {});
@@ -95,13 +96,11 @@ export class ToolApprovals {
 		}, context);
 	}
 	async wait(parent: ConversationId, id: number, context: Context): Promise<ToolApproval> {
-		const state = await this.harness.documentState(ApprovalsDoc, parent, context);
-		if (!state) throw new Error("Approval unavailable");
+		const watch = await this.harness.watchDoc(ApprovalsDoc, parent, context);
+		if (!watch) throw new Error("Approval unavailable");
 		try {
 			return await new Promise((resolve, reject) => {
-				let stop = () => {};
 				const cleanup = () => {
-					stop();
 					context.abortSignal?.removeEventListener("abort", abort);
 				};
 				const abort = () => {
@@ -109,19 +108,21 @@ export class ToolApprovals {
 					reject(context.abortSignal?.reason ?? new Error("Cancelled"));
 				};
 				const check = () => {
-					const item = state.value?.items.find((a) => a.id === id);
+					const item = watch.value.items.find((a) => a.id === id);
 					if (item && item.status !== "pending") {
 						cleanup();
 						resolve(structuredClone(item));
 					}
 				};
-				stop = state.subscribe(check);
+				watch.start(async (call) => {
+					if (call.kind === "value") check();
+				});
 				context.abortSignal?.addEventListener("abort", abort, { once: true });
 				if (context.abortSignal?.aborted) abort();
 				else check();
 			});
 		} finally {
-			state.dispose();
+			await watch.stop();
 		}
 	}
 	async ensure(

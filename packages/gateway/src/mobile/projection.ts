@@ -291,6 +291,14 @@ export function mapStatus(view: ChatView, options: { readonly readonly?: boolean
 		agents,
 		approvalCount,
 		...(latest ? { compaction: { phase: latest.phase, at: latest.at } } : {}),
+		...(view.runFailure === undefined
+			? {}
+			: {
+					runFailure: {
+						reason: view.runFailure.reason,
+						...(view.runFailure.detail === undefined ? {} : { detail: view.runFailure.detail }),
+					},
+				}),
 		...(options.readonly === undefined ? {} : { readonly: options.readonly }),
 	};
 }

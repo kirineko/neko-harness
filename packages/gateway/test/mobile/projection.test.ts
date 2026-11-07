@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import type { ChatView } from "@neko-harness/core";
-import { Check } from "typebox/value";
 import {
 	MobileChatProjection,
 	mapStatus,
@@ -9,6 +8,7 @@ import {
 	type ProjectionSource,
 } from "../../src/mobile/projection.ts";
 import {
+	checkSchema,
 	MOBILE_API_V1_METHODS,
 	MOBILE_API_V1_NOTIFICATIONS,
 	MOBILE_LIMITS,
@@ -114,14 +114,14 @@ describe("mobile chat projection", () => {
 		const source = new FakeSource(baseView(items));
 		const { projection: chat } = projection(source);
 		const snapshot = chat.snapshot();
-		expect(Check(MobileChatSnapshotSchema, snapshot)).toBe(true);
+		expect(checkSchema(MobileChatSnapshotSchema, snapshot)).toBe(true);
 		expect(snapshot.items.length).toBeLessThanOrEqual(MOBILE_LIMITS.pageItems);
 		expect(bytes(snapshot)).toBeLessThanOrEqual(MOBILE_LIMITS.maxPayloadBytes);
 		const seen = snapshot.items.map((item) => item.key);
 		let cursor = snapshot.historyBefore;
 		while (cursor !== null) {
 			const page = await chat.history(cursor);
-			expect(Check(MOBILE_API_V1_METHODS["chat.history"]?.result as never, page)).toBe(true);
+			expect(checkSchema(MOBILE_API_V1_METHODS["chat.history"]?.result as never, page)).toBe(true);
 			expect(page.items.length).toBeGreaterThan(0);
 			expect(page.items.length).toBeLessThanOrEqual(MOBILE_LIMITS.pageItems);
 			expect(bytes(page)).toBeLessThanOrEqual(MOBILE_LIMITS.maxPayloadBytes);
@@ -161,7 +161,7 @@ describe("mobile chat projection", () => {
 				tool: { callId: "c1", name: "bash", summary: "ls", status: "done", result: "ok" },
 			},
 		]);
-		expect(Check(patchSchema, { subscriptionId: "chat-1", ...patch.params })).toBe(true);
+		expect(checkSchema(patchSchema, { subscriptionId: "chat-1", ...patch.params })).toBe(true);
 
 		source.set({ ...baseView([...updated, assistant(4, "你好世界")]), busy: false });
 		chat.flush();
@@ -274,7 +274,7 @@ describe("mobile chat projection", () => {
 		});
 		const { projection: chat } = projection(new FakeSource(baseView([user(1), plain, script])));
 		const snapshot = chat.snapshot();
-		expect(Check(MobileChatSnapshotSchema, snapshot)).toBe(true);
+		expect(checkSchema(MobileChatSnapshotSchema, snapshot)).toBe(true);
 		const [, plainCard, card] = snapshot.items as unknown as {
 			tool: { codemode?: { calls: Record<string, unknown>[]; omitted: number; fullOutputPath?: string } };
 		}[];
@@ -362,7 +362,22 @@ describe("mobile status queue", () => {
 			queued: [{ id: 4, mode: "steer", preview: "hi", images: 1, skill: { name: "pdf", args: "x" } }],
 		});
 		expect(queued.queued).toEqual([{ id: 4, mode: "steer", preview: "hi", images: 1 }]);
-		expect(Check(MobileChatSnapshotSchema, { ...queued, items: [], historyBefore: null, streaming: null })).toBe(true);
+		expect(checkSchema(MobileChatSnapshotSchema, { ...queued, items: [], historyBefore: null, streaming: null })).toBe(
+			true,
+		);
 		expect(mapStatus({ ...view, queued: [] }).queued).toEqual([]);
+	});
+});
+
+describe("mobile status run failure", () => {
+	it("carries the run failure with its detail and omits it when there is none", () => {
+		const view = baseView([]);
+		expect("runFailure" in mapStatus(view)).toBe(false);
+		const failed = mapStatus({ ...view, runFailure: { reason: "model_error", detail: "401 invalid key" } });
+		expect(failed.runFailure).toEqual({ reason: "model_error", detail: "401 invalid key" });
+		expect(mapStatus({ ...view, runFailure: { reason: "aborted" } }).runFailure).toEqual({ reason: "aborted" });
+		expect(checkSchema(MobileChatSnapshotSchema, { ...failed, items: [], historyBefore: null, streaming: null })).toBe(
+			true,
+		);
 	});
 });

@@ -2,7 +2,7 @@ import { afterEach, expect, it, spyOn } from "bun:test";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type FileListing, ok, type WatchChange } from "@earendil-works/pi-durable/env";
+import { type FileChange, type FileListing, ok } from "@earendil-works/pi-durable/env";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { Connection, LocalExecutionEnv } from "@earendil-works/pi-env";
 import { rm } from "../../../test/temp-dir.ts";
@@ -37,13 +37,13 @@ async function setup(limits = FILE_CACHE_LIMITS) {
 	restores.push(() => info.mockRestore());
 	const session = spyOn(Connection.prototype, "session").mockResolvedValue(1);
 	restores.push(() => session.mockRestore());
-	const watches: ((change: WatchChange) => void)[] = [];
+	const watches: ((change: FileChange) => void)[] = [];
 	let closed = 0;
 	const watch = spyOn(NodeExecutionEnv.prototype, "watch").mockImplementation(async (_targets, change) => {
 		watches.push(change);
 		return ok({
 			mode: "native",
-			async close() {
+			async stop() {
 				closed++;
 			},
 		});
@@ -93,10 +93,10 @@ it("coalesces scans, isolates canceled waiters, rejects late scans after invalid
 	expect(list).toHaveBeenCalledTimes(1);
 	complete(ok(empty));
 	expect((await second).incomplete).toBe(false);
-	watches[0]!({ overflow: true });
+	watches[0]!({ kind: "overflow" });
 	const late = files.search(root, "", new AbortController().signal);
 	for (let i = 0; i < 100 && list.mock.calls.length < 2; i++) await Bun.sleep(1);
-	watches[0]!({ paths: ["new.ts"] });
+	watches[0]!({ kind: "paths", paths: ["new.ts"] });
 	complete(ok(empty));
 	await expect(late).rejects.toThrow("changed");
 	list.mockResolvedValue(ok(empty));

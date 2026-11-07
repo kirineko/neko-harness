@@ -8,7 +8,7 @@ import {
 	type Extension,
 	type Tx,
 } from "@earendil-works/pi-durable";
-import { Type } from "typebox";
+import { int, lit, num, obj, opt, str, union } from "@earendil-works/pi-schema";
 import { NekoInput } from "./input.ts";
 import {
 	isTerminalJob,
@@ -203,19 +203,18 @@ const delay = (ms: number, signal?: AbortSignal) =>
 		else signal?.addEventListener("abort", done, { once: true });
 	});
 
-const action = Type.Union([Type.Literal("start"), Type.Literal("output"), Type.Literal("stop"), Type.Literal("list")]);
-const parameters = Type.Object({
-	action,
-	command: Type.Optional(
-		Type.String({ description: "start: shell command to run in the session's working directory." }),
-	),
-	title: Type.Optional(Type.String({ description: "start: short label shown in the job list." })),
-	timeout: Type.Optional(Type.Number({ description: "start: optional timeout in seconds; no default timeout." })),
-	jobId: Type.Optional(Type.String({ description: "output/stop: the job id returned by start or list." })),
-	since: Type.Optional(
-		Type.Integer({ description: "output: resume after this offset, as returned by the previous output call." }),
-	),
-});
+const action = union([lit("start"), lit("output"), lit("stop"), lit("list")]);
+const parameters = obj(
+	{
+		action,
+		command: opt(str({ description: "start: shell command to run in the session's working directory." })),
+		title: opt(str({ description: "start: short label shown in the job list." })),
+		timeout: opt(num({ description: "start: optional timeout in seconds; no default timeout." })),
+		jobId: opt(str({ description: "output/stop: the job id returned by start or list." })),
+		since: opt(int({ description: "output: resume after this offset, as returned by the previous output call." })),
+	},
+	{ open: true },
+);
 
 const stringField = (value: unknown, name: string) => {
 	if (typeof value !== "string" || !value.trim())

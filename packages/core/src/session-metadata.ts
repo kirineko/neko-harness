@@ -15,6 +15,7 @@ import {
 	type TaskId,
 	type UsageState,
 } from "@earendil-works/pi-durable";
+import { onCommits } from "./commits.ts";
 import { type InputData, NekoInput } from "./input.ts";
 import { PlanDoc } from "./plan-doc.ts";
 import { QuestionsDoc } from "./user-questions.ts";
@@ -271,7 +272,7 @@ export class SessionMetadataManager {
 		this.context = context;
 		this.report = report;
 		registry.install(defineExtension({ name: "neko-naming", tasks: [this.task] }));
-		this.#unsubscribe = harness.subscribeCommits(({ changes }) => {
+		this.#unsubscribe = onCommits(harness, ({ changes }) => {
 			const ids = new Set<ConversationId>();
 			const submissions = new Map<ConversationId, SubmissionRecord[]>();
 			let notice = false;
@@ -290,7 +291,7 @@ export class SessionMetadataManager {
 					)
 						ids.add(c.conversationId);
 					if (c.record.kind === "pi.live") {
-						const running = c.value?.run !== undefined;
+						const running = c.kind === "change" && c.value.run !== undefined;
 						if (this.#live.get(c.conversationId) !== running) {
 							this.#live.set(c.conversationId, running);
 							ids.add(c.conversationId);

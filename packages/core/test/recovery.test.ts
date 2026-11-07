@@ -8,8 +8,9 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Context } from "@earendil-works/chord";
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult, ToolResultEntry } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { rm } from "../../../test/temp-dir.ts";
 import { createNekoRuntime, type NekoRuntimeOptions } from "../src/index.ts";
 
@@ -34,7 +35,7 @@ function gatedTool(name: string, replay?: "safe") {
 	return defineTool({
 		name,
 		description: `Gated test tool ${name}: blocks until released or the call is aborted.`,
-		parameters: Type.Object({}),
+		parameters: obj({}, { open: true }),
 		...(replay !== undefined ? { replay } : {}),
 		execute: async (_args, _api, context): Promise<ToolExecutionResult> => {
 			attempts.push(name);

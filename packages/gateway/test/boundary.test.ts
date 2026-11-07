@@ -120,7 +120,7 @@ it("closes both transports and clears Web busy state after fatal storage failure
 		await expect(
 			target.gateway.runtime.conversation.entries({}, 1, undefined, target.gateway.runtime.context),
 		).rejects.toThrow("disk read failure");
-		expect((await target.gateway.runtime.closed).reason).toBe("failed");
+		expect((await target.gateway.runtime.closed).kind).toBe("failed");
 		await waitFor(() => peer.link.closed && view === null, "closed links and idle Web");
 		await expect(chat.submit({ content: "later" })).rejects.toThrow();
 	} finally {

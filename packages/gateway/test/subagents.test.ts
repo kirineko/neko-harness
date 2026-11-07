@@ -1,5 +1,6 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { obj } from "@earendil-works/pi-schema";
 import { totalUsage } from "@neko-harness/core";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
 
@@ -134,16 +135,16 @@ it("shares one native child observer across clients and releases it after both c
 		if (!child || id === target.gateway.runtime.root.id) return child;
 		return new Proxy(child, {
 			get(object, key) {
-				if (key === "viewState")
-					return async (...args: Parameters<typeof child.viewState>) => {
+				if (key === "watch")
+					return async (...args: Parameters<typeof child.watch>) => {
 						opened++;
-						const view = await child.viewState(...args);
+						const view = await child.watch(...args);
 						return new Proxy(view, {
 							get(target, property) {
-								if (property === "dispose")
+								if (property === "stop")
 									return () => {
 										closed++;
-										view.dispose();
+										return view.stop();
 									};
 								const value = Reflect.get(target, property);
 								return typeof value === "function" ? value.bind(target) : value;
@@ -180,7 +181,6 @@ it("shares one native child observer across clients and releases it after both c
 
 it("reads child tool images in chunks and rejects parent/child cross reads", async () => {
 	const { defineExtension, defineTool } = await import("@earendil-works/pi-durable");
-	const { Type } = await import("typebox");
 	const { downloadImage } = await import("@neko-harness/core/image-transfer");
 	const target = await makeGateway();
 	const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
@@ -191,7 +191,7 @@ it("reads child tool images in chunks and rejects parent/child cross reads", asy
 				defineTool({
 					name: "fixture_image",
 					description: "Return image",
-					parameters: Type.Object({}),
+					parameters: obj({}, { open: true }),
 					execute: async () => ({ output: [{ type: "image", mimeType: "image/png", data: png }] }),
 				}),
 			],
@@ -408,7 +408,9 @@ it("groups continued rounds into one agent, accounts once and binds stop to the 
 		const total = totalUsage(await target.gateway.runtime.globalUsage());
 		expect(chat.view.value!.taskUsage!.input).toBe(total.input);
 		expect(chat.view.value!.taskUsage!.cost).toBe(total.cost.total);
-		expect(child.view.value!.rounds![0]!.roundUsage!.input).toBeGreaterThan(0);
+		const roundUsage = child.view.value!.rounds![0]!.roundUsage!;
+		// Pi 1.5's faux provider reports the prompt as cache reads and writes, not as input.
+		expect(roundUsage.input + roundUsage.cacheRead + roundUsage.cacheWrite).toBeGreaterThan(0);
 	} finally {
 		stop();
 		await client.close();

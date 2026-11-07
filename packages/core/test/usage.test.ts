@@ -4,8 +4,9 @@ import { InMemoryCredentialStore } from "../src/credentials.ts";
 // 且带 usage 的失败工具结果也计入。
 
 import { describe, expect, it } from "bun:test";
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type, type Usage } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxText, fauxToolCall, type Usage } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { createNekoRuntime } from "../src/index.ts";
 
 const meteredUsage = (input: number, output: number): Usage => ({
@@ -23,7 +24,7 @@ const Metered = defineExtension({
 		defineTool({
 			name: "metered",
 			description: "Succeeds and reports usage.",
-			parameters: Type.Object({}),
+			parameters: obj({}, { open: true }),
 			execute: async () => ({
 				output: [{ type: "text", text: "metered ok" }],
 				usage: meteredUsage(3, 2),
@@ -32,7 +33,7 @@ const Metered = defineExtension({
 		defineTool({
 			name: "metered_fail",
 			description: "Fails and still reports usage.",
-			parameters: Type.Object({}),
+			parameters: obj({}, { open: true }),
 			execute: async () => ({
 				isError: true,
 				output: [{ type: "text", text: "boom" }],
@@ -68,7 +69,8 @@ describe("usage accounting (2.5)", () => {
 			// (totalTokens = input + output + cache reads/writes).
 			const model = usage.models["faux/faux-1"];
 			expect(model).toBeDefined();
-			expect(model!.input).toBeGreaterThan(0);
+			// Pi 1.5's faux provider reports the prompt as cache reads and writes, not as input.
+			expect(model!.input + model!.cacheRead + model!.cacheWrite).toBeGreaterThan(0);
 			expect(model!.totalTokens).toBe(model!.input + model!.output + model!.cacheRead + model!.cacheWrite);
 			// Tools bucket, keyed by tool name.
 			expect(usage.tools.metered).toMatchObject({ input: 3, output: 2, totalTokens: 5 });

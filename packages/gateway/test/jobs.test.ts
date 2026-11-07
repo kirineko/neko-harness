@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 import { JOBS_UNSUPPORTED, jobsClient } from "../src/client-session.ts";
 import type { NekoChat } from "../src/contract.ts";
 import { ChatViewSchema } from "../src/contract.ts";
@@ -45,11 +45,11 @@ it("always sends a bounded job summary list without output", async () => {
 		expect(job).toMatchObject({ jobId: "job-1", title: "server", status: "running", exitCode: null });
 		expect(job!.command.length).toBeLessThanOrEqual(1001);
 		expect(JSON.stringify(chat.view.value!.jobs)).not.toContain("SECRET-OUTPUT\n");
-		expect(Value.Check(ChatViewSchema, chat.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chat.view.value)).toBe(true);
 		// A view from a gateway without jobs is still valid, and unknown extra fields do not break validation.
 		const { jobs: _jobs, ...withoutJobs } = chat.view.value!;
-		expect(Value.Check(ChatViewSchema, withoutJobs)).toBe(true);
-		expect(Value.Check(ChatViewSchema, { ...chat.view.value, futureField: 1 })).toBe(true);
+		expect(compile(ChatViewSchema).check(withoutJobs)).toBe(true);
+		expect(compile(ChatViewSchema).check({ ...chat.view.value, futureField: 1 })).toBe(true);
 		await chat.jobStop({ jobId: "job-1" });
 	} finally {
 		await second.close();

@@ -8,7 +8,8 @@ import {
 	TODOS_UNSUPPORTED,
 } from "@neko-harness/gateway/client-session";
 import { localizeCoreText, localizeError, localizeStatus } from "../src/i18n/core-text.ts";
-import { setLanguage, t } from "../src/i18n/index.ts";
+import { hasMessage, setLanguage, t } from "../src/i18n/index.ts";
+import { runFailureReason } from "../src/run-failure-ui.ts";
 import "./support/lang-en.ts";
 
 type Sample = { id: string; text: string; params?: Record<string, string> };
@@ -19,6 +20,7 @@ const fixture = JSON.parse(
 	systemRows: Sample[];
 	toolNotes: Sample[];
 	errors: { code: string; text: string }[];
+	runFailureReasons: string[];
 };
 
 afterEach(() => setLanguage("en"));
@@ -112,4 +114,11 @@ it("returns the original text when nothing matches", () => {
 			expect(localizeError(text)).toBe(text);
 		}
 	}
+});
+
+it("localizes every run failure reason core lists and shows an unknown one as its code", () => {
+	for (const reason of fixture.runFailureReasons) expect(hasMessage(`runFailure.reason.${reason}`)).toBe(true);
+	setLanguage("zh");
+	expect(runFailureReason("model_error")).toBe("模型请求失败");
+	expect(runFailureReason("brand_new")).toBe("brand_new");
 });

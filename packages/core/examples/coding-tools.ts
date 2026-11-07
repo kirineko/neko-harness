@@ -1,10 +1,10 @@
 // 真实 DeepSeek API 验证 2：工具调用。让模型在 /tmp/neko-test 下创建 hello.txt 并读回内容，
-// 通过 agent events 流打印工具调用轨迹，最后核对磁盘上的真实文件内容。
+// 通过会话视图（pi.live 工具槽与工具结果条目）打印工具调用轨迹，最后核对磁盘上的真实文件内容。
 // 运行（需要 DEEPSEEK_API_KEY）:
 //   bun --conditions=neko-source packages/core/examples/coding-tools.ts
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ToolResultEntry } from "@earendil-works/pi-durable";
+import { type LiveState, ToolResultEntry } from "@earendil-works/pi-durable";
 import { createNekoRuntime } from "../src/index.ts";
 
 const dir = "/tmp/neko-test";
@@ -13,21 +13,26 @@ await mkdir(dir, { recursive: true });
 
 const runtime = await createNekoRuntime({ cwd: dir });
 try {
-	const events = await runtime.events();
-	void events.start(async (batch) => {
-		for (const event of batch) {
-			if (event.type === "tool_execution_start") {
-				console.log(`tool start  ${event.toolName}: ${JSON.stringify(event.args)}`);
-			} else if (event.type === "tool_execution_end" && event.entry !== undefined) {
-				if (!ToolResultEntry.is(event.entry)) continue;
-				const result = event.entry.model?.[0];
-				const text =
-					result?.role === "toolResult"
-						? result.content.map((item) => (item.type === "text" ? item.text : "")).join("")
-						: "";
-				const clipped = text.length > 300 ? `${text.slice(0, 300)}…` : text;
-				console.log(`tool end    ${event.toolName}: ${JSON.stringify(clipped)}`);
-			}
+	// Pi 1.5 renders state, not events: tool slots in `pi.live.tools`, results as appended entries.
+	const watch = await runtime.watch();
+	const started = new Set<string>();
+	const printed = new Set<number>();
+	watch.start(async (call) => {
+		if (call.kind !== "value") return;
+		const live = call.value.docs["pi.live"] as LiveState | undefined;
+		for (const slot of live?.tools ?? []) {
+			if (started.has(slot.callId)) continue;
+			started.add(slot.callId);
+			console.log(`tool start  ${slot.name}`);
+		}
+		for (const entry of call.value.entries) {
+			if (printed.has(entry.id) || !ToolResultEntry.is(entry)) continue;
+			printed.add(entry.id);
+			const result = entry.model?.[0];
+			if (result?.role !== "toolResult") continue;
+			const text = result.content.map((item) => (item.type === "text" ? item.text : "")).join("");
+			const clipped = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+			console.log(`tool end    ${result.toolName}: ${JSON.stringify(clipped)}`);
 		}
 	});
 
@@ -40,7 +45,7 @@ try {
 	} else {
 		console.log(`A: ${answer.text}`);
 	}
-	await events.stop();
+	await watch.stop();
 } finally {
 	await runtime.close();
 }

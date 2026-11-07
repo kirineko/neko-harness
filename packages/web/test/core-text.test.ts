@@ -1,7 +1,7 @@
 import { expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { localizeCoreError, localizeCoreText } from "../src/client/lib/i18n/core-text.ts";
-import { translator } from "../src/client/lib/i18n/index.ts";
+import { DICTIONARIES, translator } from "../src/client/lib/i18n/index.ts";
 
 type Fixture = {
 	status: { id: string; text: string; params?: Record<string, string> }[];
@@ -9,6 +9,7 @@ type Fixture = {
 	toolNotes: { id: string; text: string }[];
 	errors: { code: string; text: string }[];
 	webErrors: { code: string; text: string }[];
+	runFailureReasons: string[];
 };
 
 const fixture = JSON.parse(
@@ -83,4 +84,10 @@ it("falls back to the original text when nothing matches", () => {
 		expect(localizeCoreError(text, en)).toBe(text);
 		expect(localizeCoreError(text, zh)).toBe(text);
 	}
+});
+
+it("has a dictionary entry in both languages for every run failure reason core lists", () => {
+	for (const reason of fixture.runFailureReasons)
+		for (const dictionary of [DICTIONARIES.zh, DICTIONARIES.en])
+			expect(`runFailure.reason.${reason}` in dictionary).toBe(true);
 });

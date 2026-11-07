@@ -649,7 +649,7 @@ it("projects the question and its settlement from persisted details, not from re
 	faux.setResponses([ask(multi), fauxAssistantMessage("done")]);
 	const runtime = await open(faux);
 	const toolItem = async () => {
-		const view = await runtime.root.viewState();
+		const view = await runtime.root.follow();
 		try {
 			return projectChatView(view.value, "faux").items.find((i) => i.type === "tool" && i.name === "ask_user");
 		} finally {

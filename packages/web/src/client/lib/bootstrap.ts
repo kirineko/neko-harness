@@ -182,6 +182,9 @@ export const appActions = {
 	submit(content: string, files: ImageFile[] = [], requestId?: string, sessionId?: string): Promise<void> {
 		return requireConnection().submit(content, files, requestId, sessionId);
 	},
+	continueRun(sessionId: string) {
+		return requireConnection().continueRun(sessionId);
+	},
 	steer(sessionId: string, id: number) {
 		return requireConnection().steer(sessionId, id);
 	},

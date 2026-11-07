@@ -1,16 +1,17 @@
 import { ChordError, type Context, type Host, local, opaque } from "@earendil-works/chord";
-import { type ConversationId, type EntryId, type TaskId, UsageDoc } from "@earendil-works/pi-durable";
+import { type ConversationId, type EntryId, type EntryRecord, type TaskId, UsageDoc } from "@earendil-works/pi-durable";
+import { int, obj, str } from "@earendil-works/pi-schema";
 import {
 	agentIdFor,
 	type ChatView,
 	listDelegations,
 	type NekoRuntime,
+	onCommits,
 	projectChatView,
 	SubagentsDoc,
 	subagentUsageTotals,
 	subtractSubagentUsage,
 } from "@neko-harness/core";
-import { Type } from "typebox";
 import { NekoSubagent } from "./contract.ts";
 import { IMAGE_CHUNK_BYTES } from "./image-uploads.ts";
 import type { GatewayPrincipal } from "./principal.ts";
@@ -26,12 +27,17 @@ async function openReader(
 ) {
 	const child = await runtime.harness.conversation(childId as ConversationId, context);
 	if (!child) throw new ChordError("gone", "Subagent unavailable");
-	const native = await child.viewState(context);
-	if (through !== undefined) native.dispose();
-	const project = (entries: typeof native.value.entries, streaming = true): ChatView => {
+	// Only the documents and live state come from the view; entries are paged below.
+	const native = await child.watch(context);
+	const listeners = new Set<() => void>();
+	if (through !== undefined) await native.stop();
+	else
+		native.start(async () => {
+			for (const listener of listeners) listener();
+		});
+	const project = (entries: readonly EntryRecord[], streaming = true): ChatView => {
 		const result = projectChatView({ ...native.value, entries: [...entries].sort((a, b) => a.id - b.id) }, "", {
 			models: runtime.listModels(),
-			contextEntries: native.value.entries,
 		});
 		if (!streaming || through !== undefined) {
 			result.streaming = null;
@@ -87,8 +93,10 @@ async function openReader(
 	return {
 		subscribe: (fn: (event: null) => void) => {
 			if (through !== undefined) return () => {};
-			const stop = native.subscribe(() => fn(null));
-			const stopApprovals = runtime.harness.subscribeCommits(({ changes }) => {
+			const listener = () => fn(null);
+			listeners.add(listener);
+			const stop = () => listeners.delete(listener);
+			const stopApprovals = onCommits(runtime.harness, ({ changes }) => {
 				if (
 					changes.some(
 						(c) =>
@@ -162,20 +170,23 @@ async function openReader(
 				mimeType: image.mimeType,
 			};
 		},
-		close: () => native.dispose(),
+		close: () => {
+			listeners.clear();
+			void native.stop();
+		},
 	};
 }
 const ChildProjection = local("neko.subagent-projection", {
 	version: 1,
-	input: Type.Object({ parentId: Type.Integer(), agentId: Type.String() }),
+	input: obj({ parentId: int(), agentId: str() }, { open: true }),
 	members: {
-		revision: Type.Integer(),
+		revision: int(),
 		reader: opaque<Awaited<ReturnType<typeof openReader>>>("neko.subagent-reader@1"),
 	},
 });
 export function installSubagentHost(host: Host<GatewayPrincipal>, runtime: NekoRuntime, context: Context) {
 	host.serve(ChildProjection, (input, _principal, self) => {
-		const revision = self.state("revision", Type.Integer(), 0);
+		const revision = self.state("revision", int(), 0);
 		const reader = self.resource("reader", {
 			version: 1,
 			async open() {
@@ -235,7 +246,7 @@ export function installSubagentHost(host: Host<GatewayPrincipal>, runtime: NekoR
 			parentId: Number(input.sessionId),
 			agentId: input.agentId ?? `round-${input.taskId}`,
 		});
-		const authorizedRevision = self.state("authorizedRevision", Type.Integer(), 0);
+		const authorizedRevision = self.state("authorizedRevision", int(), 0);
 		self.on("authorizedView", shared.revision, async (value, ctx) => {
 			try {
 				void target.value;

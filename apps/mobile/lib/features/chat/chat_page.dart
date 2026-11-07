@@ -197,6 +197,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   pending: PendingTray(chat: chat),
                   queue: QueueTray(chat: chat),
                 ),
+                RunFailureTray(chat: chat),
                 if (chat.sessionId != null)
                   Composer(chat: chat, focusNode: _composerFocus),
               ],
@@ -628,6 +629,39 @@ class NoticeBanner extends StatelessWidget {
             icon: const NekoIcon(NekoIcons.close),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 最近一轮未得到回答就结束的原因（只读，手机不提供继续）；详情按纯文本显示。
+class RunFailureTray extends StatelessWidget {
+  const RunFailureTray({super.key, required this.chat});
+
+  final ChatController chat;
+
+  @override
+  Widget build(BuildContext context) {
+    final failure = chat.runFailure;
+    if (failure == null) return const SizedBox.shrink();
+    final tokens = NekoTokens.of(context);
+    final detail = failure.detail?.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return Material(
+      key: const Key('run-failure'),
+      color: tokens.surfaceMuted,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: NekoSpace.md,
+          vertical: NekoSpace.xs,
+        ),
+        child: Text(
+          detail == null || detail.isEmpty
+              ? localizeRunFailure(context.l10n, failure.reason)
+              : '${localizeRunFailure(context.l10n, failure.reason)}: $detail',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: context.small(tokens.textMuted),
+        ),
       ),
     );
   }

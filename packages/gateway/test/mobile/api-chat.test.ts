@@ -4,10 +4,9 @@ import { EventEmitter } from "node:events";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { downloadImage, uploadImage } from "@neko-harness/core/image-transfer";
 import sharp from "sharp";
-import { Check } from "typebox/value";
 import type { WebSocket } from "ws";
 import { MobileAdapter } from "../../src/mobile/adapter.ts";
-import { MOBILE_API_V1_METHODS, MOBILE_API_V1_NOTIFICATIONS } from "../../src/mobile/protocol.ts";
+import { checkSchema, MOBILE_API_V1_METHODS, MOBILE_API_V1_NOTIFICATIONS } from "../../src/mobile/protocol.ts";
 import { IS_WINDOWS } from "../helpers.ts";
 import { eventually, type MobileHarness, rpcError, startMobileHarness } from "./harness.ts";
 
@@ -21,7 +20,7 @@ type Attached = { subscriptionId: string; sessionId: string; snapshot: Snapshot 
 type Patch = { subscriptionId: string; upserts: Array<{ type: string; text?: string }>; status?: Snapshot };
 
 const resultOk = (method: string, value: unknown) =>
-	expect(Check(MOBILE_API_V1_METHODS[method]?.result as never, value)).toBe(true);
+	expect(checkSchema(MOBILE_API_V1_METHODS[method]?.result as never, value)).toBe(true);
 const hasAssistant = (text: string) => (params: Record<string, unknown>) =>
 	(params as Patch).upserts.some((item) => item.type === "assistant" && item.text === text);
 
@@ -58,7 +57,7 @@ describe("mobile chat api", () => {
 			queued: false,
 		});
 		const patch = await phone.notification("chat.patch", hasAssistant("pong"));
-		expect(Check(MOBILE_API_V1_NOTIFICATIONS["chat.patch"] as never, patch)).toBe(true);
+		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["chat.patch"] as never, patch)).toBe(true);
 		expect(patch.subscriptionId).toBe(subscriptionId);
 		expect(await phone.call<unknown>("chat.submissionStatus", { subscriptionId, requestId: "r-1" })).toEqual({
 			status: "accepted",
@@ -154,7 +153,7 @@ describe("mobile chat api", () => {
 			["followUp", "drop me", 0],
 			["steer", "keep me", 0],
 		]);
-		expect(Check(MOBILE_API_V1_NOTIFICATIONS["chat.patch"] as never, patch)).toBe(true);
+		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["chat.patch"] as never, patch)).toBe(true);
 		// 桌面前端看到同一份排队列表，并在手机撤回后同步消失。
 		const desktop = await harness.desktop();
 		const desktopChat = await desktop.attach(String(harness.gateway.runtime.root.id));
@@ -249,7 +248,7 @@ describe("mobile chat api", () => {
 		const { subscriptionId } = await phone.call<Attached>("chat.attach", { sessionId });
 		await phone.call("chat.submit", { subscriptionId, requestId: "ap-1", text: "Investigate" });
 		const changed = await phone.notification("approvals.changed");
-		expect(Check(MOBILE_API_V1_NOTIFICATIONS["approvals.changed"] as never, changed)).toBe(true);
+		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["approvals.changed"] as never, changed)).toBe(true);
 		const listed = await phone.call<{
 			approvals: Array<{ id: number; version: string; taskId: number; command: string; timeoutSeconds?: number }>;
 		}>("approvals.list", { subscriptionId });

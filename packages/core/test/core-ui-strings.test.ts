@@ -7,6 +7,7 @@ import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/index.ts";
 import { PLAN_BUSY } from "../src/plan.ts";
 import { projectChatView } from "../src/projection.ts";
+import { CONTINUE_BUSY, CONTINUE_UNAVAILABLE, RUN_FAILURE_REASONS } from "../src/run-failure.ts";
 import { WORKSPACE_BUSY, WORKSPACE_LAST, WORKSPACE_UNKNOWN } from "../src/workspace.ts";
 
 interface Sample {
@@ -20,6 +21,7 @@ const fixture = JSON.parse(readFileSync(new URL("./fixtures/core-ui-strings.json
 	toolNotes: Sample[];
 	errors: { code: string; text: string }[];
 	webErrors: { code: string; text: string }[];
+	runFailureReasons: string[];
 };
 
 const USAGE = { totalTokens: 10, input: 8, output: 2, cacheRead: 0, cacheWrite: 0 };
@@ -102,6 +104,8 @@ describe("core UI strings contract", () => {
 			await disabled.close();
 		}
 		messages.set("PLAN_BUSY", PLAN_BUSY);
+		messages.set("CONTINUE_BUSY", CONTINUE_BUSY);
+		messages.set("CONTINUE_UNAVAILABLE", CONTINUE_UNAVAILABLE);
 		messages.set("WORKSPACE_UNKNOWN", WORKSPACE_UNKNOWN);
 		messages.set("WORKSPACE_LAST", WORKSPACE_LAST);
 		messages.set("WORKSPACE_BUSY", WORKSPACE_BUSY);
@@ -109,5 +113,9 @@ describe("core UI strings contract", () => {
 			expect(messages.get(code)).toBe(text);
 			expect(text.startsWith(`${code}:`)).toBe(true);
 		}
+	});
+
+	it("lists every run failure reason frontends localize", () => {
+		expect(fixture.runFailureReasons).toEqual([...RUN_FAILURE_REASONS]);
 	});
 });

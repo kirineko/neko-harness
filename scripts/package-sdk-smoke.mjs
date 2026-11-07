@@ -19,12 +19,12 @@ const connection=new Connection({command:[daemon]});
 const env=new LocalExecutionEnv({connection,cwd:root});
 let pid;
 try{
- const info=await connection.info();pid=info.pid;if(info.version!=="1.4.0"||!info.features.includes("listFiles"))throw new Error("Invalid packaged daemon");
+ const info=await connection.info();pid=info.pid;if(info.version!=="1.5.0"||!info.features.includes("listFiles"))throw new Error("Invalid packaged daemon");
  await writeFile("cache-first.txt","file body");
  let changed=false;const watch=await env.watch([{path:root}],()=>{changed=true;},context);if(!watch.ok)throw watch.error;
  const first=await env.listFiles(".",{maxEntries:100,exclude:["node_modules"]},context);if(!first.ok||!first.value.entries.some(entry=>entry.path==="cache-first.txt"))throw new Error("Initial discovery failed");
  await writeFile("cache-after.txt","next");for(let i=0;i<200&&!changed;i++)await new Promise(resolve=>setTimeout(resolve,25));if(!changed)throw new Error("Watch did not invalidate");
- const refreshed=await env.listFiles(".",{maxEntries:100,exclude:["node_modules"]},context);if(!refreshed.ok||!refreshed.value.entries.some(entry=>entry.path==="cache-after.txt"))throw new Error("Refresh failed");await watch.value.close(context);
+ const refreshed=await env.listFiles(".",{maxEntries:100,exclude:["node_modules"]},context);if(!refreshed.ok||!refreshed.value.entries.some(entry=>entry.path==="cache-after.txt"))throw new Error("Refresh failed");await watch.value.stop(context);
  const processor=await createNodePhotonImages({idleMs:30});
  const read=createReadTool({images:processor});
  const api={env,agent:async()=>({model:{provider:"fixture",modelId:"vision"}}),models:{getModel:()=>({input:["text","image"],inputLimits:{images:{resize:{maxWidth:16,maxHeight:16,maxBytes:100000}}}})}};
@@ -35,6 +35,6 @@ try{
  await unlink("resize.png");await unlink("convert.bmp");
  const sandbox=new CodemodeSandbox({memoryLimitBytes:256*1024*1024});
  try{const ran=await sandbox.execute("return 6*7;");if(!ran.ok||ran.value!==42)throw new Error("Packaged codemode script failed: "+JSON.stringify(ran));}finally{sandbox.close();}
- console.log(`Pi 1.4 production SDK smoke passed (${process.platform}/${process.arch}, daemon pid ${pid})`);
+ console.log(`Pi 1.5 production SDK smoke passed (${process.platform}/${process.arch}, daemon pid ${pid})`);
 }finally{connection.close();}
 if(pid){let stopped=false;for(let i=0;i<100;i++){try{process.kill(pid,0);}catch{stopped=true;break;}await new Promise(resolve=>setTimeout(resolve,10));}if(!stopped)throw new Error("Packaged helper did not exit");}

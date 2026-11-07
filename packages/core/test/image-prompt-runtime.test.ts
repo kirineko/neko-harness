@@ -103,7 +103,7 @@ it("preserves saved versions, old unmarked history and manual same-text messages
 		runtime = await createNekoRuntime(options);
 		for (const id of [runtime.root.id, fork.id]) {
 			const session = (await runtime.getConversation(id))!;
-			const reader = await session.viewState();
+			const reader = await session.follow();
 			const users = projectChatView(reader.value, "test").items.filter((item) => item.type === "user");
 			reader.dispose();
 			expect(users[0]?.defaultImagePrompt).toEqual(saved);

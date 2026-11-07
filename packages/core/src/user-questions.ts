@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "@earendil-works/chord";
+import { StringEnum } from "@earendil-works/pi-ai";
 import {
 	type ConversationId,
 	defineDoc,
@@ -11,7 +12,8 @@ import {
 	type TaskId,
 	type Tx,
 } from "@earendil-works/pi-durable";
-import { Type } from "typebox";
+import { arr, bool, nul, obj, opt, str, union } from "@earendil-works/pi-schema";
+import { onCommits } from "./commits.ts";
 import {
 	answerLabels,
 	InteractionInputError,
@@ -106,7 +108,7 @@ export class UserQuestions {
 	constructor(harness: Harness, context: Context) {
 		this.harness = harness;
 		this.#context = context;
-		const stop = harness.subscribeCommits(({ changes }) => {
+		const stop = onCommits(harness, ({ changes }) => {
 			if (!changes.some((c) => c.type === "task" && (c.value.abortRequested || c.value.state.status === "terminal")))
 				return;
 			void this.reconcileAll();
@@ -216,26 +218,29 @@ export class UserQuestions {
 					done = true;
 					action();
 				};
-				const check = (value: Readonly<QuestionRecord> | null) => {
+				const check = (value: Readonly<QuestionRecord> | undefined) => {
 					if (value && value.status !== "pending") finish(() => resolve(clone(value) as QuestionRecord));
 				};
 				onAbort = () => finish(() => reject(signal?.reason ?? new Error("Cancelled")));
 				signal?.addEventListener("abort", onAbort, { once: true });
 				if (signal?.aborted) return onAbort();
 				void watch.closed.then((end) => {
-					if (end.reason === "stopped") return;
+					if (end.kind === "stopped") return;
 					finish(() =>
 						reject(
 							signal?.aborted
 								? signal.reason
-								: end.reason === "listener_error" || end.reason === "session_failed"
+								: end.kind === "listener_error" || end.kind === "failed"
 									? end.error
-									: new Error(`Question watch ended: ${end.reason}`),
+									: new Error(`Question watch ended: ${end.kind}`),
 						),
 					);
 				});
 				check(watch.value);
-				if (!done) watch.start(async (value) => check(value));
+				if (!done)
+					watch.start(async (call) => {
+						if (call.kind === "value") check(call.value);
+					});
 			});
 		} finally {
 			signal?.removeEventListener("abort", onAbort);
@@ -299,44 +304,31 @@ export class UserQuestions {
 	}
 }
 
-const optionSchema = Type.Object(
-	{
-		id: Type.String({
-			minLength: 1,
-			maxLength: QUESTION_LIMITS.optionIdChars,
-			description: "Unique within the question.",
-		}),
-		label: Type.String({
-			minLength: 1,
-			maxLength: QUESTION_LIMITS.labelChars,
-			description: "Short, unique, readable alone.",
-		}),
-		description: Type.Optional(Type.String({ maxLength: QUESTION_LIMITS.descriptionChars })),
-		recommended: Type.Optional(
-			Type.Boolean({ description: "Your suggested choice; shown as a hint, never preselected." }),
-		),
-	},
-	{ additionalProperties: false },
-);
-const parameters = Type.Object(
-	{
-		question: Type.String({ minLength: 1, maxLength: QUESTION_LIMITS.questionChars }),
-		multiple: Type.Optional(
-			Type.Boolean({ description: "Let the user pick several options; needs at least 2 options. Default false." }),
-		),
-		options: Type.Optional(Type.Array(optionSchema, { maxItems: QUESTION_LIMITS.maxOptions })),
-	},
-	{ additionalProperties: false },
-);
-const structuredOutputSchema = Type.Object(
-	{
-		status: Type.String({ enum: ["answered", "skipped", "cancelled"] }),
-		optionIds: Type.Optional(Type.Array(Type.String())),
-		labels: Type.Optional(Type.Array(Type.String())),
-		text: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-	},
-	{ additionalProperties: false },
-);
+const optionSchema = obj({
+	id: str({
+		minLength: 1,
+		maxLength: QUESTION_LIMITS.optionIdChars,
+		description: "Unique within the question.",
+	}),
+	label: str({
+		minLength: 1,
+		maxLength: QUESTION_LIMITS.labelChars,
+		description: "Short, unique, readable alone.",
+	}),
+	description: opt(str({ maxLength: QUESTION_LIMITS.descriptionChars })),
+	recommended: opt(bool({ description: "Your suggested choice; shown as a hint, never preselected." })),
+});
+const parameters = obj({
+	question: str({ minLength: 1, maxLength: QUESTION_LIMITS.questionChars }),
+	multiple: opt(bool({ description: "Let the user pick several options; needs at least 2 options. Default false." })),
+	options: opt(arr(optionSchema, { maxItems: QUESTION_LIMITS.maxOptions })),
+});
+const structuredOutputSchema = obj({
+	status: StringEnum(["answered", "skipped", "cancelled"]),
+	optionIds: opt(arr(str())),
+	labels: opt(arr(str())),
+	text: opt(union([str(), nul()])),
+});
 
 /** What the model reads back; labels as well as ids, so an answer never needs decoding. */
 export function questionOutput(record: QuestionRecord): string {

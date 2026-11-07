@@ -1,6 +1,6 @@
 import type { Context } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import { arr, num, obj, opt, str } from "@earendil-works/pi-schema";
 import { truncate, WebToolError } from "./http.ts";
 import type { WebSearchProvider } from "./provider.ts";
 
@@ -37,12 +37,15 @@ export function createWebSearchTools(resolveProvider: WebProviderResolver) {
 				name: "web_search",
 				description:
 					"Search the live web for current or unknown information. Returns ranked sources (title, URL, bounded excerpts). Keep the query short and focused (ideally under 128 characters). Use only when up-to-date or external information is needed; use web_extract to read a known URL.",
-				parameters: Type.Object({
-					query: Type.String({ minLength: 1, maxLength: 4096, description: "The search query" }),
-					maxResults: Type.Optional(
-						Type.Number({ description: `Maximum number of results (1-${MAX_RESULTS}, default ${DEFAULT_RESULTS})` }),
-					),
-				}),
+				parameters: obj(
+					{
+						query: str({ minLength: 1, maxLength: 4096, description: "The search query" }),
+						maxResults: opt(
+							num({ description: `Maximum number of results (1-${MAX_RESULTS}, default ${DEFAULT_RESULTS})` }),
+						),
+					},
+					{ open: true },
+				),
 				async execute({ query, maxResults }, _api, context) {
 					try {
 						if (!query.trim() || query.length > 4096)
@@ -70,13 +73,16 @@ export function createWebSearchTools(resolveProvider: WebProviderResolver) {
 				name: "web_extract",
 				description:
 					"Extract bounded markdown excerpts from web pages by URL. Every requested URL has a result or failure entry; long content is truncated.",
-				parameters: Type.Object({
-					urls: Type.Array(Type.String({ maxLength: 2048, description: "http(s) URL" }), {
-						minItems: 1,
-						maxItems: MAX_URLS,
-						description: `URLs to extract (1-${MAX_URLS})`,
-					}),
-				}),
+				parameters: obj(
+					{
+						urls: arr(str({ maxLength: 2048, description: "http(s) URL" }), {
+							minItems: 1,
+							maxItems: MAX_URLS,
+							description: `URLs to extract (1-${MAX_URLS})`,
+						}),
+					},
+					{ open: true },
+				),
 				async execute({ urls }, _api, context) {
 					try {
 						if (!urls.length || urls.length > MAX_URLS)

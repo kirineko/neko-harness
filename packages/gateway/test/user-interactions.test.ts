@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 import { QUESTIONS_UNSUPPORTED, questionsClient, TODOS_UNSUPPORTED, todosClient } from "../src/client-session.ts";
 import {
 	ChatViewSchema,
@@ -28,14 +28,14 @@ it("publishes todos and questions as optional supported fields and keeps the vie
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		expect(chat.view.value?.todos).toEqual({ revision: 0, items: [] });
 		expect(chat.view.value?.questions).toEqual({ revision: 0, pending: [] });
-		expect(Value.Check(ChatViewSchema, chat.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chat.view.value)).toBe(true);
 		expect(todosClient(chat).supported).toBe(true);
 		expect(questionsClient(chat).supported).toBe(true);
 		expect(questionsClient(chat).pending()).toEqual([]);
 		// A view from a gateway built before these fields is still valid.
 		const { todos: _t, questions: _q, ...old } = chat.view.value!;
-		expect(Value.Check(ChatViewSchema, old)).toBe(true);
-		expect(Value.Check(DirectoryStateSchema, client.directory.state.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(old)).toBe(true);
+		expect(compile(DirectoryStateSchema).check(client.directory.state.value)).toBe(true);
 		expect(client.directory.state.value?.sessions[0]?.awaitingAnswer).toBe(false);
 	} finally {
 		await client.close();
@@ -69,7 +69,7 @@ it("shares todos and a pending question with every client and settles it once", 
 		const summary = pendingId(chatA)!;
 		expect(summary).toMatchObject({ preview: "Which database?", multiple: false, optionCount: 2 });
 		expect(chatA.view.value!.busy).toBe(true);
-		expect(Value.Check(ChatViewSchema, chatA.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chatA.view.value)).toBe(true);
 		const interaction = toolItems(chatA).find((t) => t.type === "tool" && t.name === "ask_user");
 		expect(interaction).toMatchObject({ interaction: { kind: "ask_user", status: "pending" } });
 		await waitFor(
@@ -79,7 +79,7 @@ it("shares todos and a pending question with every client and settles it once", 
 		expect(a.directory.state.value?.sessions[0]?.status).toBe("running");
 
 		const record = await chatB.questionGet({ id: summary.id });
-		expect(Value.Check(QuestionRecordSchema, record)).toBe(true);
+		expect(compile(QuestionRecordSchema).check(record)).toBe(true);
 		expect(record).toMatchObject({ id: summary.id, version: summary.version, status: "pending", answer: null });
 		expect(record!.options[0]).toMatchObject({ id: "pg", recommended: true });
 
@@ -244,6 +244,6 @@ it("degrades on a gateway without the fields: no method is called and the error 
 	} as unknown as NekoChat;
 	expect(todosClient(supported).supported).toBe(true);
 	expect(questionsClient(supported).supported).toBe(true);
-	expect(Value.Check(QuestionResponseSchema, { kind: "answer", optionIds: [], text: "x" })).toBe(true);
-	expect(Value.Check(QuestionResponseSchema, { kind: "skip", text: "x" })).toBe(false);
+	expect(compile(QuestionResponseSchema).check({ kind: "answer", optionIds: [], text: "x" })).toBe(true);
+	expect(compile(QuestionResponseSchema).check({ kind: "skip", text: "x" })).toBe(false);
 });

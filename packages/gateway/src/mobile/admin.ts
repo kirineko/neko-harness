@@ -1,77 +1,84 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { ChordError, type Ref } from "@earendil-works/chord";
-import { Type } from "typebox";
+import { arr, bool, int, lit, nul, obj, opt, str, union } from "@earendil-works/pi-schema";
 import { contract, rpc } from "../contract.ts";
 import { type GatewayPrincipal, isMobilePrincipal } from "../principal.ts";
 import type { MobileGateway } from "./listener.ts";
 import { MobileStore } from "./store.ts";
 
-const listenerStateSchema = Type.Union([
-	Type.Object({ status: Type.Literal("disabled") }),
-	Type.Object({ status: Type.Literal("starting") }),
-	Type.Object({
-		status: Type.Literal("listening"),
-		address: Type.String(),
-		port: Type.Integer({ minimum: 1, maximum: 65535 }),
-		bindAddress: Type.Optional(Type.String()),
-		mode: Type.Optional(Type.Union([Type.Literal("direct"), Type.Literal("wsl-relay")])),
-	}),
-	Type.Object({ status: Type.Literal("error"), error: Type.String() }),
-	Type.Object({ status: Type.Literal("stopping") }),
+const listenerStateSchema = union([
+	obj({ status: lit("disabled") }, { open: true }),
+	obj({ status: lit("starting") }, { open: true }),
+	obj(
+		{
+			status: lit("listening"),
+			address: str(),
+			port: int({ minimum: 1, maximum: 65535 }),
+			bindAddress: opt(str()),
+			mode: opt(union([lit("direct"), lit("wsl-relay")])),
+		},
+		{ open: true },
+	),
+	obj({ status: lit("error"), error: str() }, { open: true }),
+	obj({ status: lit("stopping") }, { open: true }),
 ]);
 
-const adminDeviceSchema = Type.Object({
-	deviceId: Type.String(),
-	name: Type.String(),
-	pairedAt: Type.Integer(),
-	lastSeenAt: Type.Integer(),
-	online: Type.Boolean(),
-});
+const adminDeviceSchema = obj(
+	{
+		deviceId: str(),
+		name: str(),
+		pairedAt: int(),
+		lastSeenAt: int(),
+		online: bool(),
+	},
+	{ open: true },
+);
 
 export const NekoMobileAdmin = contract("neko.mobile-admin", {
 	version: 1,
-	input: Type.Object({ token: Type.String() }),
+	input: obj({ token: str() }, { open: true }),
 	variants: {
 		admin: {
 			methods: {
 				state: rpc(
-					Type.Null(),
-					Type.Object({
-						state: listenerStateSchema,
-						candidates: Type.Array(Type.String()),
-						port: Type.Integer({ minimum: 1, maximum: 65535 }),
-						certificate: Type.Union([
-							Type.Object({ fingerprint: Type.String(), expiresAt: Type.Integer() }),
-							Type.Null(),
-						]),
-						devices: Type.Array(adminDeviceSchema),
-						lastConnectedAddress: Type.Union([Type.String(), Type.Null()]),
-						wsl: Type.Optional(
-							Type.Union([
-								Type.Object({ interop: Type.Boolean(), error: Type.Union([Type.String(), Type.Null()]) }),
-								Type.Null(),
-							]),
-						),
-					}),
+					nul(),
+					obj(
+						{
+							state: listenerStateSchema,
+							candidates: arr(str()),
+							port: int({ minimum: 1, maximum: 65535 }),
+							certificate: union([obj({ fingerprint: str(), expiresAt: int() }, { open: true }), nul()]),
+							devices: arr(adminDeviceSchema),
+							lastConnectedAddress: union([str(), nul()]),
+							wsl: opt(union([obj({ interop: bool(), error: union([str(), nul()]) }, { open: true }), nul()])),
+						},
+						{ open: true },
+					),
 				),
 				enable: rpc(
-					Type.Object({
-						address: Type.String(),
-						port: Type.Optional(Type.Integer({ minimum: 1, maximum: 65535 })),
-					}),
-					Type.Object({
-						status: Type.Literal("listening"),
-						address: Type.String(),
-						port: Type.Integer({ minimum: 1, maximum: 65535 }),
-						bindAddress: Type.Optional(Type.String()),
-						mode: Type.Optional(Type.Union([Type.Literal("direct"), Type.Literal("wsl-relay")])),
-					}),
+					obj(
+						{
+							address: str(),
+							port: opt(int({ minimum: 1, maximum: 65535 })),
+						},
+						{ open: true },
+					),
+					obj(
+						{
+							status: lit("listening"),
+							address: str(),
+							port: int({ minimum: 1, maximum: 65535 }),
+							bindAddress: opt(str()),
+							mode: opt(union([lit("direct"), lit("wsl-relay")])),
+						},
+						{ open: true },
+					),
 				),
-				disable: rpc(Type.Null(), listenerStateSchema),
-				createPairing: rpc(Type.Null(), Type.Object({ pairingText: Type.String(), expiresAt: Type.Integer() })),
-				cancelPairing: rpc(Type.Null(), Type.Null()),
-				revoke: rpc(Type.Object({ deviceId: Type.String({ minLength: 1 }) }), Type.Object({ revoked: Type.Boolean() })),
-				regenerateCertificate: rpc(Type.Null(), Type.Object({ fingerprint: Type.String(), expiresAt: Type.Integer() })),
+				disable: rpc(nul(), listenerStateSchema),
+				createPairing: rpc(nul(), obj({ pairingText: str(), expiresAt: int() }, { open: true })),
+				cancelPairing: rpc(nul(), nul()),
+				revoke: rpc(obj({ deviceId: str({ minLength: 1 }) }, { open: true }), obj({ revoked: bool() }, { open: true })),
+				regenerateCertificate: rpc(nul(), obj({ fingerprint: str(), expiresAt: int() }, { open: true })),
 			},
 		},
 	},

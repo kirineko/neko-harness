@@ -49,6 +49,8 @@ export type NekoConfig = {
 	/** Codemode mode for new sessions: off (default), on or only. */
 	readonly codemode?: CodemodeSettings;
 	readonly shell?: NekoShellConfig;
+	/** Tool rounds one run may take in new main sessions and their sub-agents; unset means no limit. */
+	readonly maxTurns?: number;
 };
 
 export const DEFAULT_SKILL_MARKET_URL = "https://skill.kirineko.tech";
@@ -151,6 +153,9 @@ export function mergeNekoConfig(base: NekoConfig, overrides: NekoConfig): NekoCo
 		...(base.shell !== undefined || overrides.shell !== undefined
 			? { shell: { ...base.shell, ...overrides.shell } }
 			: {}),
+		...(base.maxTurns !== undefined || overrides.maxTurns !== undefined
+			? { maxTurns: overrides.maxTurns ?? base.maxTurns }
+			: {}),
 	};
 }
 
@@ -206,6 +211,10 @@ function validate(config: Record<string, unknown>, source: string): void {
 	const level = config.thinkingLevel;
 	if (level !== undefined && typeof level !== "string") {
 		throw new Error(`neko config: ${source}: "thinkingLevel" must be a string.`);
+	}
+	const maxTurns = config.maxTurns;
+	if (maxTurns !== undefined && !(Number.isSafeInteger(maxTurns) && (maxTurns as number) >= 1)) {
+		throw new Error(`neko config: ${source}: "maxTurns" must be an integer of 1 or more.`);
 	}
 	const storagePath = config.storagePath;
 	if (storagePath !== undefined && typeof storagePath !== "string") {

@@ -2,8 +2,8 @@ import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import type { WindowsShellResolver, WindowsShellStatus } from "@neko-harness/core";
-import { Value } from "typebox/value";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { ApplicationInfoSchema } from "../src/contract.ts";
@@ -110,9 +110,9 @@ it("still accepts application info without a shell field (older gateways)", () =
 		checkState: "unknown",
 		serverId: "legacy",
 	};
-	expect(Value.Check(ApplicationInfoSchema, legacy)).toBe(true);
-	expect(Value.Check(ApplicationInfoSchema, { ...legacy, shell: { status: "missing", reason: "not_found" } })).toBe(
+	expect(compile(ApplicationInfoSchema).check(legacy)).toBe(true);
+	expect(compile(ApplicationInfoSchema).check({ ...legacy, shell: { status: "missing", reason: "not_found" } })).toBe(
 		true,
 	);
-	expect(Value.Check(ApplicationInfoSchema, { ...legacy, shell: { status: "broken" } })).toBe(false);
+	expect(compile(ApplicationInfoSchema).check({ ...legacy, shell: { status: "broken" } })).toBe(false);
 });

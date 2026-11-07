@@ -293,5 +293,18 @@
   "transcriptViewQuestion": "View question",
   "transcriptImageLabel": "Image {name}",
   "transcriptReloadImage": "Reload image",
-  "markdownImage": "[Image {alt}]"
+  "markdownImage": "[Image {alt}]",
+
+  "runFailureReasonModelError": "Model request failed",
+  "runFailureReasonNoModel": "No model is available",
+  "runFailureReasonAborted": "Stopped",
+  "runFailureReasonReset": "A new context started",
+  "runFailureReasonFaulted": "The run failed",
+  "runFailureReasonOrphaned": "The run could not continue",
+  "runFailureReasonInterrupted": "The run was interrupted",
+  "runFailureReasonRestartLimit": "Stopped after repeated crashes",
+  "runFailureReasonNothingToAnswer": "Nothing to answer",
+  "runFailureReasonTurnLimit": "Turn limit reached",
+  "errorContinueBusy": "CONTINUE_BUSY: The session is running; wait for it to finish",
+  "errorContinueUnavailable": "CONTINUE_UNAVAILABLE: The last run was answered; there is nothing to continue"
 }

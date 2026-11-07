@@ -12,9 +12,9 @@ import {
 	fauxToolCall,
 	type Message,
 	type ToolResultMessage,
-	Type,
 } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type EntryRecord } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { ContextPruner, estimateTokens, PRUNE_ENTRY_KIND, planPrune, toolResultChars } from "../src/context-pruning.ts";
@@ -73,7 +73,7 @@ it("estimates tokens from DeepSeek's per-character ratios", () => {
 const big = defineTool({
 	name: "big",
 	description: "Returns a large output.",
-	parameters: Type.Object({}),
+	parameters: obj({}, { open: true }),
 	execute: async () => ({ output: [{ type: "text", text: "q".repeat(40_000) }] }),
 });
 
@@ -102,7 +102,7 @@ async function run(
 	for (let i = 0; i < 3; i++) await runtime.waitAnswer(await runtime.submit(`turn ${i}`));
 	await Bun.sleep(100);
 	const entries = (await runtime.root.conversation.context(runtime.context)).entries;
-	const chat = projectChatView((await runtime.root.viewState()).value, "faux/m");
+	const chat = projectChatView((await runtime.root.follow()).value, "faux/m");
 	const sessions = await runtime.listConversations();
 	await runtime.close();
 	return { requests, entries, chat, sessions };
@@ -198,9 +198,9 @@ it("reports a failed write, keeps going, and retries on the next trigger", async
 	const reports: unknown[] = [];
 	const pruner = new ContextPruner({
 		harness: {
-			subscribeCommits: (fn: typeof listener) => {
-				listener = fn;
-				return () => {};
+			observeCommits: (observer: { advance: NonNullable<typeof listener> }) => {
+				listener = observer.advance;
+				return { detach: () => {} };
 			},
 			conversation: async () => conversation,
 		} as never,

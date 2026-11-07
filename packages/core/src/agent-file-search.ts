@@ -2,7 +2,7 @@ import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { type ExecutionEnv, getOrThrow } from "@earendil-works/pi-durable/env";
-import { Type } from "typebox";
+import { bool, int, obj, opt, str } from "@earendil-works/pi-schema";
 
 export const SEARCH_LIMITS = {
 	entries: 10_000,
@@ -11,10 +11,8 @@ export const SEARCH_LIMITS = {
 	outputBytes: 32 * 1024,
 	timeoutMs: 10_000,
 };
-const path = Type.Optional(
-	Type.String({ description: "Directory relative to this conversation's cwd, or absolute path." }),
-);
-const limit = Type.Optional(Type.Integer({ minimum: 1, maximum: 500, description: "Maximum results (default 100)." }));
+const path = opt(str({ description: "Directory relative to this conversation's cwd, or absolute path." }));
+const limit = opt(int({ minimum: 1, maximum: 500, description: "Maximum results (default 100)." }));
 const text = (value: string) => ({ type: "text" as const, text: value });
 
 async function search<T>(
@@ -68,7 +66,7 @@ export const FindFiles = defineTool({
 	name: "find_files",
 	description:
 		"Discover files and directories without a shell. query is a literal path/name substring (not a glob). Respects gitignore; returns absolute paths usable by read. A partial result is not a complete absence of matches.",
-	parameters: Type.Object({ path, query: Type.Optional(Type.String()), limit }),
+	parameters: obj({ path, query: opt(str()), limit }, { open: true }),
 	replay: "safe",
 	execute: (args, api, context) =>
 		search(api, context, async (env, ctx) => {
@@ -96,14 +94,17 @@ export const SearchText = defineTool({
 	name: "search_text",
 	description:
 		"Search UTF-8 file contents without a shell. pattern and filePattern are literal substrings, not regex/globs. Returns absolute paths, 1-based line numbers and context for read. Binary/large/unreadable files and exhausted budgets are explicitly reported as partial results.",
-	parameters: Type.Object({
-		pattern: Type.String({ minLength: 1, maxLength: 4096 }),
-		path,
-		filePattern: Type.Optional(Type.String()),
-		caseSensitive: Type.Optional(Type.Boolean()),
-		contextLines: Type.Optional(Type.Integer({ minimum: 0, maximum: 5 })),
-		limit,
-	}),
+	parameters: obj(
+		{
+			pattern: str({ minLength: 1, maxLength: 4096 }),
+			path,
+			filePattern: opt(str()),
+			caseSensitive: opt(bool()),
+			contextLines: opt(int({ minimum: 0, maximum: 5 })),
+			limit,
+		},
+		{ open: true },
+	),
 	replay: "safe",
 	execute: (args, api, context) =>
 		search(api, context, async (env, ctx) => {

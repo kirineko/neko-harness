@@ -2,8 +2,9 @@ import { afterEach, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxText, fauxToolCall, type TranscriptContext, Type } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxText, fauxToolCall, type TranscriptContext } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -60,7 +61,7 @@ async function setup() {
 					defineTool({
 						name: "gate",
 						description: "Hold the run",
-						parameters: Type.Object({}),
+						parameters: obj({}, { open: true }),
 						execute: async () => {
 							started.resolve();
 							await release.promise;
@@ -72,7 +73,7 @@ async function setup() {
 		],
 	});
 	const view = async () => {
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		try {
 			return projectChatView(state.value, "test");
 		} finally {
@@ -250,7 +251,7 @@ it("restores the queued list after a restart", async () => {
 		faux.setResponses([holdUntilAbort]);
 		runtime = await createNekoRuntime(options);
 		await new Promise((resolve) => setTimeout(resolve, 300));
-		const state = await runtime.viewState();
+		const state = await runtime.follow();
 		const view = projectChatView(state.value, "test");
 		state.dispose();
 		expect(view.queued?.map((q) => q.preview)).toEqual(["queued one"]);

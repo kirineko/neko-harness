@@ -331,3 +331,59 @@ it("leaves codemode absent without usable details", () => {
 	]);
 	expect(other?.codemode).toBeUndefined();
 });
+
+function answer(id: number, totalTokens: number) {
+	return {
+		id,
+		kind: "pi.assistant",
+		model: [
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "ok" }],
+				stopReason: "stop",
+				usage: { ...USAGE, totalTokens },
+			},
+		],
+	};
+}
+
+it("counts context tokens after the newest compaction or new context, over the whole transcript", () => {
+	const history = [answer(1, 900), { id: 2, kind: "pi.compaction" }, answer(3, 120)];
+	expect(projectChatView(makeView(history), "test/model").contextUsage?.tokens).toBe(120);
+	// Right after a compaction or a reset nothing answered in the new context yet.
+	expect(
+		projectChatView(makeView([answer(1, 900), { id: 2, kind: "pi.compaction" }]), "m").contextUsage?.tokens,
+	).toBeNull();
+	expect(projectChatView(makeView([answer(1, 900), { id: 2, kind: "pi.reset" }]), "m").contextUsage?.tokens).toBeNull();
+	expect(
+		projectChatView(makeView([...history, { id: 4, kind: "pi.reset" }, answer(5, 40)]), "m").contextUsage?.tokens,
+	).toBe(40);
+});
+
+it("maps Pi's compaction trigger to the reason field frontends read", () => {
+	const docs = {
+		...BASE_DOCS,
+		"pi.live": {
+			compactions: [{ taskId: 7, trigger: "manual", blocking: true, attempt: 1 }],
+			compactionFailure: { taskId: 6, trigger: "overflow", error: "too large" },
+		},
+	};
+	const view = projectChatView(makeView([], docs), "m");
+	expect(view.compaction?.active).toEqual([{ taskId: 7, reason: "manual", blocking: true, attempt: 1 }]);
+	expect(view.compaction?.failure).toEqual({ taskId: 6, reason: "overflow", error: "too large" });
+});
+
+it("shows the newest run failure only while idle, with a bounded plain detail", () => {
+	const failure = { taskId: 3, inputs: [2], reason: "model_error", detail: `bad\u0007 key ${"x".repeat(900)}` };
+	const idle = projectChatView(makeView([], { ...BASE_DOCS, "pi.live": { runFailure: failure } }), "m");
+	expect(idle.continuable).toBe(true);
+	expect(idle.runFailure?.reason).toBe("model_error");
+	expect(idle.runFailure?.detail?.startsWith("bad  key x")).toBe(true);
+	expect(idle.runFailure?.detail?.length).toBe(501);
+	const running = projectChatView(
+		makeView([], { ...BASE_DOCS, "pi.live": { runFailure: failure, run: { taskId: 4, inputs: [], turns: 0 } } }),
+		"m",
+	);
+	expect(running.runFailure).toBeUndefined();
+	expect(projectChatView(makeView([]), "m").runFailure).toBeUndefined();
+});

@@ -1,6 +1,7 @@
 import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { fauxProvider } from "../../../test/faux.ts";
+import { followConversation } from "../src/conversation-follow.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
 import { listDelegations } from "../src/subagents.ts";
@@ -25,6 +26,7 @@ it("delegates in an owned conversation, restricts tools and returns the final re
 		credentials: new InMemoryCredentialStore(),
 		providers: [faux.provider],
 		model: { provider: "faux", modelId: "faux-1" },
+		maxTurns: 7,
 	});
 	try {
 		expect(await runtime.waitAnswer(await runtime.submit("Investigate using explore"))).toEqual({
@@ -37,10 +39,12 @@ it("delegates in an owned conversation, restricts tools and returns the final re
 		expect(records[0]!.report).toBe("Evidence report");
 		const child = await runtime.harness.conversation(records[0]!.childId as never, runtime.context);
 		const agent = await child!.agent(runtime.context);
+		// The configured turn limit reaches sub-agents too.
+		expect(agent.maxTurns).toBe(7);
 		expect(agent.tools.map((tool) => tool.name)).toContain("search_text");
 		for (const name of ["write", "edit", "subagent"]) expect(agent.tools.map((tool) => tool.name)).not.toContain(name);
 		expect(await runtime.listConversations()).toHaveLength(1);
-		const view = await child!.viewState(runtime.context);
+		const view = await followConversation(child!, runtime.context);
 		expect(JSON.stringify(view.value.entries)).not.toContain("Investigate using explore");
 		view.dispose();
 	} finally {
@@ -311,9 +315,11 @@ it("archives by cascading cancellation and retains consumed child usage exactly 
 		const child = totalUsage((await runtime.harness.snapshot(UsageDoc, record.childId as never, runtime.context))!);
 		const main = totalUsage(await runtime.usage());
 		const global = totalUsage(await runtime.globalUsage());
-		expect(child.input).toBeGreaterThan(0);
+		// Pi 1.5's faux provider reports the prompt as cache reads and writes, not as input.
+		expect(child.totalTokens).toBeGreaterThan(0);
 		expect(global.input).toBe(main.input + child.input);
 		expect(global.output).toBe(main.output + child.output);
+		expect(global.cacheRead).toBe(main.cacheRead + child.cacheRead);
 	} finally {
 		await runtime.close();
 	}

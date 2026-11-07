@@ -18,6 +18,9 @@ export function createAppLayout(parts: {
 	approvalVisible?: () => boolean;
 	busy?: Component;
 	busyVisible?: () => boolean;
+	/** Why the last run ended without an answer; one row, only while there is such a failure. */
+	failure?: Component;
+	failureVisible?: () => boolean;
 	/** Queued messages above the editor; only while there are any. */
 	queue?: Component;
 	queueVisible?: () => boolean;
@@ -36,7 +39,9 @@ export function createAppLayout(parts: {
 		const editorRows = Math.min(7, Math.max(3, parts.editor.render(v.width).length));
 		const noticeRows = Math.min(1, parts.notices.render(v.width).length);
 		const busyRows = parts.busyVisible?.() ? Math.min(2, parts.busy?.render(v.width).length ?? 0) : 0;
-		const queueRows = parts.queueVisible?.() ? Math.min(3, parts.queue?.render(v.width).length ?? 0) : 0;
+		const queueRows =
+			(parts.queueVisible?.() ? Math.min(3, parts.queue?.render(v.width).length ?? 0) : 0) +
+			(parts.failureVisible?.() ? Math.min(1, parts.failure?.render(v.width).length ?? 0) : 0);
 		// The question gets what is left after the fixed rows and one transcript row, so footer and editor survive.
 		if (parts.question)
 			parts.question.height = Math.max(
@@ -77,6 +82,12 @@ export function createAppLayout(parts: {
 			maxSize: 2,
 			shrink: 0,
 			visible: (v) => normal(v) && (parts.busyVisible?.() ?? false),
+		},
+		{
+			component: parts.failure ?? new Text("", 0, 0),
+			maxSize: 1,
+			shrink: 0,
+			visible: (v) => normal(v) && (parts.failureVisible?.() ?? false),
 		},
 		{
 			component: parts.queue ?? new Text("", 0, 0),

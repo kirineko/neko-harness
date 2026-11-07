@@ -10,6 +10,7 @@ import { downloadImage, type ImageFile, uploadImage } from "@neko-harness/core/i
 import type { SearchProviderId } from "@neko-harness/core/search-providers";
 import { byMessage, byVisited } from "@neko-harness/core/session-display";
 import {
+	continueClient,
 	createGatewayConnection,
 	jobsClient,
 	type NekoGatewayConnection,
@@ -432,6 +433,11 @@ export class GatewayConnection {
 	): Promise<WirePlanRecord> {
 		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedFeedbackDraft"));
 		return planClient(this.#chat!).respond(input);
+	}
+	/** Run again on the context as it is after a run that ended without an answer. */
+	async continueRun(sessionId: string): Promise<void> {
+		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedOrNotReady"));
+		await continueClient(this.#chat!).continueRun();
 	}
 	/** Workspace browsing is bound to the session the sidebar was opened for; the host makes signals cancel requests. */
 	workspace(sessionId: string) {

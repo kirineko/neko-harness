@@ -1,8 +1,7 @@
 import { ChordError, type Ref } from "@earendil-works/chord";
+import type { Schema } from "@earendil-works/pi-schema";
 import { agentIdFor } from "@neko-harness/core";
 import { byMessage, messageTime } from "@neko-harness/core/session-display";
-import type { TSchema } from "typebox";
-import { Check } from "typebox/value";
 import type { RawData, WebSocket } from "ws";
 import type {
 	NekoAttachment,
@@ -17,6 +16,7 @@ import { MobileChatProjection, ProjectionError, type ProjectionNotice, type Proj
 import {
 	asJsonRpcRequest,
 	buildHelloResult,
+	checkSchema,
 	incompatibleNeeds,
 	isMobileHelloParams,
 	type JsonRpcId,
@@ -282,17 +282,17 @@ export class MobileAdapter {
 	private async handleMethod(id: JsonRpcId, method: string, rawParams: unknown): Promise<void> {
 		// JSON-RPC 允许省略 params；无参方法统一按 null 校验。
 		const params = rawParams === undefined ? null : rawParams;
-		const spec = MOBILE_API_V1_METHODS[method] as { readonly params: TSchema; readonly result: TSchema } | undefined;
+		const spec = MOBILE_API_V1_METHODS[method] as { readonly params: Schema; readonly result: Schema } | undefined;
 		if (spec === undefined || method === "server.hello") {
 			this.sendError(id, -32_601, "method not found", { code: "not_found" });
 			return;
 		}
-		if (!Check(spec.params, params)) {
+		if (!checkSchema(spec.params, params)) {
 			this.sendError(id, -32_602, "invalid params", { code: "invalid_params" });
 			return;
 		}
 		const result = await this.invoke(method, params as never);
-		if (!Check(spec.result, result)) {
+		if (!checkSchema(spec.result, result)) {
 			this.onError?.(new Error(`mobile result for ${method} does not match its schema`));
 			this.sendError(id, -32_603, "internal result mismatch", { code: "internal" });
 			return;

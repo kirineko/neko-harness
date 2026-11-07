@@ -37,6 +37,7 @@ import { useFileMentions } from "./file-mentions";
 import { ModelPicker } from "./model-picker";
 import { Icon } from "./primitives";
 import { QueueBar } from "./queue-bar";
+import { RunFailureBar } from "./run-failure-bar";
 
 type Attachment = { id: string; file: File; error?: PlainKey; processing?: boolean };
 type Draft = { text: string; files: Attachment[]; requestId: string };
@@ -526,6 +527,21 @@ function SessionComposer(props: Props & { sessionId: string }) {
 		const target = waitingQuestions.find((q) => q.id === active) ?? waitingQuestions[0];
 		if (target) questionUi.open(props.sessionId, target);
 	};
+	const [continuing, setContinuing] = useState(false);
+	const runFailure = view?.continuable && !props.busy ? view.runFailure : undefined;
+	const continueRun = async () => {
+		if (continuing) return;
+		setContinuing(true);
+		setError("");
+		setNote("");
+		try {
+			await appActions.continueRun(props.sessionId);
+		} catch (e) {
+			setError(e instanceof Error ? localizeCoreError(e.message) : t("runFailure.continueFailed"));
+		} finally {
+			setContinuing(false);
+		}
+	};
 	const steerQueued = async (item: WireQueuedInput) => {
 		if (withdrawing !== null) return;
 		setWithdrawing(item.id);
@@ -588,6 +604,9 @@ function SessionComposer(props: Props & { sessionId: string }) {
 			}}
 		>
 			<div className="chat-column">
+				{runFailure && (
+					<RunFailureBar failure={runFailure} pending={continuing} onContinue={() => void continueRun()} />
+				)}
 				<QueueBar
 					queued={queued}
 					busy={withdrawing !== null}

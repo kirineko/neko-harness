@@ -128,6 +128,7 @@ export async function startGateway(options: NekoGatewayOptions = {}): Promise<Ne
 		...(searchProvider !== undefined ? { searchProvider } : {}),
 		...(fileConfig.context !== undefined ? { contextSettings: fileConfig.context } : {}),
 		...(fileConfig.codemode !== undefined ? { codemodeSettings: fileConfig.codemode } : {}),
+		...(fileConfig.maxTurns !== undefined ? { maxTurns: fileConfig.maxTurns } : {}),
 		// CLI --model 是本次启动的显式覆盖（source "cli"）；配置文件 defaultModel 只在配置存在时传，
 		// core 以 options.model 是否给出区分来源 "config" 与内置 "default"。
 		...(fileConfig.defaultModel !== undefined ? { model: fileConfig.defaultModel } : {}),
@@ -279,7 +280,7 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 	};
 	void runtime.closed
 		.then(async (result) => {
-			if (result.reason === "failed") {
+			if (result.kind === "failed") {
 				options.onError?.(new Error("Gateway storage failed"));
 				await gateway.close();
 			}

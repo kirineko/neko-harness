@@ -143,6 +143,10 @@ class ChatController extends ChangeNotifier implements TranscriptActions {
   List<PendingSubmission> get pending =>
       _pendingList.where((p) => p.sessionId == _sessionId).toList();
 
+  /// 最近一轮未得到回答的原因；运行中、旧电脑或没有失败时为 null。
+  RunFailure? get runFailure =>
+      transcript.status.busy ? null : transcript.status.runFailure;
+
   /// 电脑上的排队输入；null 表示电脑端不支持（隐藏排队条）。
   List<QueuedInput>? get queued => transcript.status.queued;
 

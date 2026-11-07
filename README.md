@@ -103,6 +103,7 @@ The web UI is available in Chinese (default) and English: switch it in **Setting
 | `/login`, `/model`, `/think` | providers and keys, model, thinking level |
 | `/new`, `/sessions`, `/fork`, `/archive` | sessions |
 | `/compact`, `/context` | compaction, pruning and their settings |
+| `/continue` | run again on the same context after a run that ended without an answer (the web UI shows a **Continue** button) |
 | `/codemode` | codemode mode (off, on, only) for new sessions |
 | `/copy`, `/export` | copy the last answer, export the session |
 | `/agents`, `/jobs`, `/todos`, `/question`, `/plan` | delegated work, background jobs, todos, questions, plan mode |
@@ -175,6 +176,7 @@ CLI flags > config file > built-in defaults. `neko tui --help`, `neko web --help
 | `context.compaction` | `enabled`, `triggerPercent` (1–99), `keepRecentTokens`; unset fields keep the native policy |
 | `context.pruning` | `enabled`, `triggerPercent` (1–99), `keepRecent`, `minChars`, `minSavePercent`; off by default |
 | `codemode.mode` | `off` (default), `on` or `only`; applies to new sessions, a choice saved in the UI wins |
+| `maxTurns` | Tool rounds one run may take in new sessions and their subagents (integer ≥ 1, unset means no limit); a run that reaches it stops and can be continued |
 | `shell.path` | Git Bash `bash.exe` on Windows (a WSL `bash.exe` is rejected) |
 
 ### Data and environment

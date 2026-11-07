@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 import { PLAN_UNSUPPORTED, planClient } from "../src/client-session.ts";
 import {
 	ChatViewSchema,
@@ -24,11 +24,11 @@ it("publishes plan mode as an optional supported field and keeps the schemas val
 	try {
 		const chat = await client.attach(String(target.gateway.runtime.root.id));
 		expect(chat.view.value?.plan).toEqual({ mode: "normal", revision: 0, current: null });
-		expect(Value.Check(ChatViewSchema, chat.view.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(chat.view.value)).toBe(true);
 		expect(planClient(chat).supported).toBe(true);
 		const { plan: _plan, ...old } = chat.view.value!;
-		expect(Value.Check(ChatViewSchema, old)).toBe(true);
-		expect(Value.Check(DirectoryStateSchema, client.directory.state.value)).toBe(true);
+		expect(compile(ChatViewSchema).check(old)).toBe(true);
+		expect(compile(DirectoryStateSchema).check(client.directory.state.value)).toBe(true);
 		expect(client.directory.state.value?.sessions[0]?.awaitingPlan).toBe(false);
 	} finally {
 		await client.close();
@@ -46,7 +46,7 @@ it("shares mode and plan with every client, settles competing decisions once and
 		const chatA = await a.attach(id);
 		const chatB = await b.attach(id);
 		const entered = await planClient(chatA).setMode("plan");
-		expect(Value.Check(PlanViewSchema, entered)).toBe(true);
+		expect(compile(PlanViewSchema).check(entered)).toBe(true);
 		await waitFor(() => chatB.view.value?.plan?.mode === "plan", "plan mode on both clients");
 		await chatA.submit({ content: "add a flag" });
 		await waitFor(
@@ -61,7 +61,7 @@ it("shares mode and plan with every client, settles competing decisions once and
 		const tool = chatA.view.value!.items.find((i) => i.type === "tool" && i.name === "submit_plan");
 		expect(tool).toMatchObject({ interaction: { kind: "submit_plan", version: summary.version, steps: plan.steps } });
 		const record = await chatB.planGet({ version: summary.version });
-		expect(Value.Check(PlanRecordSchema, record)).toBe(true);
+		expect(compile(PlanRecordSchema).check(record)).toBe(true);
 
 		const outcomes = await Promise.all([
 			chatA.planRespond({ version: summary.version, decision: { kind: "approve" } }),

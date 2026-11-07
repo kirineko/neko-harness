@@ -2,8 +2,9 @@ import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxToolCall, Type } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
+import { obj } from "@earendil-works/pi-schema";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -23,7 +24,7 @@ it("reopens an owned child without redispatching input or replaying an unsafe to
 			defineTool({
 				name: "effect",
 				description: "An unsafe side effect",
-				parameters: Type.Object({}),
+				parameters: obj({}, { open: true }),
 				execute: async (_args, _api, ctx) => {
 					effects++;
 					entered();
@@ -181,7 +182,7 @@ it("retains the three-child admission limit across SQLite reopen", async () => {
 			defineTool({
 				name: "find_files",
 				description: "Gated safe discovery",
-				parameters: Type.Object({}),
+				parameters: obj({}, { open: true }),
 				replay: "safe",
 				execute: async (_args, _api, ctx) => {
 					active++;

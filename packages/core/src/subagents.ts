@@ -1,4 +1,5 @@
 import type { Context } from "@earendil-works/chord";
+import { StringEnum } from "@earendil-works/pi-ai";
 import {
 	AssistantEntry,
 	type ConversationId,
@@ -16,11 +17,11 @@ import {
 	UsageDoc,
 	type UsageState,
 } from "@earendil-works/pi-durable";
-import { Type } from "typebox";
-import { Value } from "typebox/value";
+import { arr, compile, int, lit, nul, num, obj, oneOf, opt, str, union } from "@earendil-works/pi-schema";
 import { agentChangeFor, enabledTools } from "./agent-change.ts";
 import { CodemodeDoc } from "./codemode.ts";
 import { CODEMODE_NAME } from "./codemode-mode.ts";
+import { onCommits } from "./commits.ts";
 import { NekoInput } from "./input.ts";
 import { PLAN_CODER_BLOCKED, PlanDoc } from "./plan-doc.ts";
 import type { UsageTotals } from "./projection.ts";
@@ -228,88 +229,67 @@ async function acquireSlot(tx: Tx, round: Delegation, cwd: string) {
 type RoundInput = { parentId: number; childId: number; taskId: number; task: string; cwd: string };
 type RoundState = { phase: "admission" | "deliver" | "settle" };
 type RoundResult = { status: "completed" | "failed" | "cancelled"; report: string };
-const actionParameters = Type.Union([
-	Type.Object(
-		{
-			action: Type.Optional(Type.Literal("create")),
-			type: Type.Enum(["explore", "plan", "coder"]),
-			title: Type.String({ minLength: 1, maxLength: 80 }),
-			task: Type.String({ minLength: 1, maxLength: 32768 }),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Literal("continue"),
-			agentId: Type.String(),
-			title: Type.String({ minLength: 1, maxLength: 80 }),
-			task: Type.String({ minLength: 1, maxLength: 32768 }),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Literal("list"),
-			cursor: Type.Optional(Type.Integer({ minimum: 0 })),
-			limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
-		},
-		{ additionalProperties: false },
-	),
+const actionParameters = union([
+	obj({
+		action: opt(lit("create")),
+		type: oneOf(["explore", "plan", "coder"]),
+		title: str({ minLength: 1, maxLength: 80 }),
+		task: str({ minLength: 1, maxLength: 32768 }),
+	}),
+	obj({
+		action: lit("continue"),
+		agentId: str(),
+		title: str({ minLength: 1, maxLength: 80 }),
+		task: str({ minLength: 1, maxLength: 32768 }),
+	}),
+	obj({
+		action: lit("list"),
+		cursor: opt(int({ minimum: 0 })),
+		limit: opt(int({ minimum: 1, maximum: 100 })),
+	}),
 ]);
+
+const isActionParameters = compile(actionParameters).check;
 
 // Providers require an object at the tool-schema root. Keep action-specific
 // validation local so invalid combinations cannot reach the admission transaction.
-const parameters = Type.Object(
-	{
-		action: Type.Optional(Type.String({ enum: ["create", "continue", "list"], description: "Defaults to create." })),
-		type: Type.Optional(Type.String({ enum: ["explore", "plan", "coder"], description: "Required for create only." })),
-		agentId: Type.Optional(
-			Type.String({ description: "Required for continue only; use an ID returned by create/list." }),
-		),
-		title: Type.Optional(Type.String({ minLength: 1, maxLength: 80, description: "Required for create/continue." })),
-		task: Type.Optional(Type.String({ minLength: 1, maxLength: 32768, description: "Required for create/continue." })),
-		cursor: Type.Optional(Type.Integer({ minimum: 0, description: "List pagination cursor only." })),
-		limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, description: "List page size only." })),
-	},
-	{ additionalProperties: false },
-);
+const parameters = obj({
+	action: opt(StringEnum(["create", "continue", "list"], { description: "Defaults to create." })),
+	type: opt(StringEnum(["explore", "plan", "coder"], { description: "Required for create only." })),
+	agentId: opt(str({ description: "Required for continue only; use an ID returned by create/list." })),
+	title: opt(str({ minLength: 1, maxLength: 80, description: "Required for create/continue." })),
+	task: opt(str({ minLength: 1, maxLength: 32768, description: "Required for create/continue." })),
+	cursor: opt(int({ minimum: 0, description: "List pagination cursor only." })),
+	limit: opt(int({ minimum: 1, maximum: 100, description: "List page size only." })),
+});
 
-const structuredOutputSchema = Type.Union([
-	Type.Object(
-		{
-			agentId: Type.String(),
-			roundId: Type.Integer(),
-			status: Type.Enum(["completed", "failed", "cancelled"]),
-			report: Type.String(),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			items: Type.Array(
-				Type.Object(
-					{
-						agentId: Type.String(),
-						parentId: Type.Integer(),
-						childId: Type.Integer(),
-						role: Type.Enum(["explore", "plan", "coder"]),
-						title: Type.String(),
-						status: Type.Enum(["idle", "queued", "running"]),
-						activeRoundId: Type.Union([Type.Integer(), Type.Null()]),
-						lastRoundId: Type.Integer(),
-						lastReport: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-						roundCount: Type.Integer(),
-						taskTitle: Type.String(),
-						approvalCount: Type.Integer(),
-						createdAt: Type.Number(),
-					},
-					{ additionalProperties: false },
-				),
-			),
-			next: Type.Union([Type.Integer(), Type.Null()]),
-		},
-		{ additionalProperties: false },
-	),
+const structuredOutputSchema = union([
+	obj({
+		agentId: str(),
+		roundId: int(),
+		status: oneOf(["completed", "failed", "cancelled"]),
+		report: str(),
+	}),
+	obj({
+		items: arr(
+			obj({
+				agentId: str(),
+				parentId: int(),
+				childId: int(),
+				role: oneOf(["explore", "plan", "coder"]),
+				title: str(),
+				status: oneOf(["idle", "queued", "running"]),
+				activeRoundId: union([int(), nul()]),
+				lastRoundId: int(),
+				lastReport: opt(union([str(), nul()])),
+				roundCount: int(),
+				taskTitle: str(),
+				approvalCount: int(),
+				createdAt: num(),
+			}),
+		),
+		next: union([int(), nul()]),
+	}),
 ]);
 
 const ADMISSION_POLL_MS = 100;
@@ -487,7 +467,7 @@ export function createSubagentExtension(
 				// Scripts cannot start subagents: a batch of them is hard to follow and to approve.
 				callers: ["model"],
 				execute: async (input, api, context) => {
-					if (!Value.Check(actionParameters, input))
+					if (!isActionParameters(input))
 						throw new Error(
 							"Invalid subagent arguments. create requires type/title/task; continue requires agentId/title/task; list accepts only cursor/limit. Do not mix fields from different actions.",
 						);
@@ -546,6 +526,8 @@ export function createSubagentExtension(
 								model: agent.model,
 								thinkingLevel: agent.thinkingLevel,
 								cwd: agent.cwd,
+								// The parent's turn limit, set from the configuration when it was created.
+								maxTurns: agent.maxTurns ?? null,
 								extensions: agent.extensions.filter(
 									(e) => e.name !== extension.name && !MAIN_ONLY_EXTENSIONS.has(e.name),
 								),
@@ -709,7 +691,7 @@ export async function installSubagentCoordinator(harness: Harness, parents: Conv
 				}, context);
 		}
 	}
-	const stop = harness.subscribeCommits(({ changes }) => {
+	const stop = onCommits(harness, ({ changes }) => {
 		for (const c of changes)
 			if (c.type === "document" && c.record.kind === "app.neko.delegations" && c.conversationId !== undefined)
 				known.add(c.conversationId as ConversationId);

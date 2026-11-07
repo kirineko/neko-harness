@@ -11,7 +11,8 @@ import {
 	opaque,
 } from "@earendil-works/chord";
 import { withAbortSignal } from "@earendil-works/chord/context";
-import { type ConversationId, type EntryRecord, UsageDoc } from "@earendil-works/pi-durable";
+import { type ConversationId, UsageDoc } from "@earendil-works/pi-durable";
+import { obj, str } from "@earendil-works/pi-schema";
 import {
 	type ChatView,
 	type JobSummary,
@@ -19,6 +20,7 @@ import {
 	mergeUsage,
 	type NekoRuntime,
 	type NekoSession,
+	onCommits,
 	prepareImage,
 	projectChatView,
 	SubagentsDoc,
@@ -26,13 +28,12 @@ import {
 	totalUsage,
 } from "@neko-harness/core";
 import { workspaceTarget } from "@neko-harness/core/workspace-files";
-import { Type } from "typebox";
 import { ChatViewSchema, type NekoAttachment, NekoChat } from "./contract.ts";
 import { IMAGE_CHUNK_BYTES, ImageUploads } from "./image-uploads.ts";
 import type { GatewayPrincipal } from "./principal.ts";
 import { installSubagentHost } from "./subagent-host.ts";
 export type AttachmentOwner = { active: NekoAttachment | null };
-const OwnerInput = Type.Object({});
+const OwnerInput = obj({}, { open: true });
 export const Owner: LocalContract<{
 	version: 1;
 	input: typeof OwnerInput;
@@ -44,7 +45,7 @@ export const Owner: LocalContract<{
 });
 const Projection = local("neko.projection", {
 	version: 1,
-	input: Type.Object({ id: Type.String() }),
+	input: obj({ id: str() }, { open: true }),
 	members: {
 		view: ChatViewSchema,
 		reader: opaque<Awaited<ReturnType<typeof openProjection>>>("neko.projection-reader@1"),
@@ -69,19 +70,12 @@ const clipJob = (job: JobSummary): JobSummary =>
 		: job;
 /** The resource has one native view subscription for all attachments, released with its last hold. */
 async function openProjection(runtime: NekoRuntime, session: NekoSession, context: Context) {
-	const view = await session.viewState();
-	const history = new Map<number, EntryRecord>();
-	let cursor: import("@earendil-works/pi-durable").Cursor | undefined;
-	do {
-		const page = await session.conversation.entries({ order: "ascending" }, 100, cursor, context);
-		for (const entry of page.items) history.set(entry.id, entry);
-		cursor = page.next;
-	} while (cursor);
+	const view = await session.follow();
 	let changed: ((event: null) => void) | undefined;
 	const stop = view.subscribe(() => changed?.(null));
 	const stopMetadata = runtime.onDirectoryChange(() => changed?.(null));
 	let childIds = new Set<number>();
-	const stopChildren = runtime.harness.subscribeCommits(({ changes }) => {
+	const stopChildren = onCommits(runtime.harness, ({ changes }) => {
 		if (
 			changes.some(
 				(change) =>
@@ -115,12 +109,10 @@ async function openProjection(runtime: NekoRuntime, session: NekoSession, contex
 			};
 		},
 		async project() {
-			for (const entry of view.value.entries) history.set(entry.id, entry);
 			const [naming, compaction] = await Promise.all([runtime.namingUsage(session.id), session.compactionRecord()]);
 			const projected = projectChatView(
 				{
 					...view.value,
-					entries: [...history.values()].sort((a, b) => a.id - b.id),
 					docs: {
 						...view.value.docs,
 						"pi.usage": mergeUsage(
@@ -133,7 +125,7 @@ async function openProjection(runtime: NekoRuntime, session: NekoSession, contex
 					},
 				},
 				"",
-				{ models: runtime.listModels(), contextEntries: view.value.entries, compaction },
+				{ models: runtime.listModels(), compaction },
 			);
 			const jobs = (await session.jobs()).map(clipJob);
 			const [todos, questions, plan] = await Promise.all([session.todos(), session.questions(), session.plan()]);
@@ -184,15 +176,13 @@ async function openProjection(runtime: NekoRuntime, session: NekoSession, contex
 		},
 		async entry(id: number, ctx: Context) {
 			ctx.abortSignal?.throwIfAborted();
-			for (const entry of view.value.entries) history.set(entry.id, entry);
-			return history.get(id);
+			return view.entry(id);
 		},
 		close() {
 			stop();
 			stopMetadata();
 			stopChildren();
 			view.dispose();
-			history.clear();
 		},
 	};
 }
@@ -385,6 +375,14 @@ export function serveSessions(host: Host<GatewayPrincipal>, runtime: NekoRuntime
 			abort: async () => {
 				await projection.value.session.abort();
 				return null;
+			},
+			continueRun: async () => {
+				try {
+					await projection.value.session.continueRun();
+					return null;
+				} catch (error) {
+					throw new ChordError("invalid", error instanceof Error ? error.message : "Cannot continue");
+				}
 			},
 			withdraw: ({ id }) => projection.value.session.withdraw(id),
 			steer: ({ id }) => projection.value.session.steer(id),
