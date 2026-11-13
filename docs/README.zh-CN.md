@@ -200,7 +200,7 @@ TUI 输入 `/version`，或打开 Web「设置 → 关于与更新」，可查�
 
 ### 从 Bun 安装迁移
 
-neko 过去用 Bun 安装并运行在 Bun 上，现在运行在 Node.js 上，不再支持 Bun 全局安装：没有 Node.js 的机器上无法启动，`neko update` 也会拒绝升级它。迁移步骤：
+0.5.4 及更早版本用 Bun 安装并运行在 Bun 上；从 0.5.5 起运行在 Node.js 上，不再支持 Bun 全局安装：没有 Node.js 的机器上无法启动，`neko update` 也会拒绝升级它。迁移步骤：
 
 1. 退出所有 neko 界面与服务。
 2. 安装 Node.js 22.19 及以上。

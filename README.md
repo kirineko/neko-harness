@@ -200,7 +200,7 @@ Version 0.5.0 raises the application protocol to 9 (project removal). A UI or ga
 
 ### Migrating from a Bun installation
 
-neko used to be installed with Bun and run on Bun. It now runs on Node.js, and a Bun global installation is no longer supported: on a machine without Node.js it does not start, and `neko update` refuses to upgrade it. To move over:
+Up to 0.5.4, neko was installed with Bun and ran on Bun. From 0.5.5 it runs on Node.js, and a Bun global installation is no longer supported: on a machine without Node.js it does not start, and `neko update` refuses to upgrade it. To move over:
 
 1. Quit every neko UI and service.
 2. Install Node.js 22.19 or newer.
