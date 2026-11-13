@@ -1,7 +1,8 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { APPLICATION_PROTOCOL } from "../../core/src/application-version.ts";
@@ -125,7 +126,7 @@ it("rediscovers a changed gateway address and drops incompatible retries", async
 		});
 		await waitFor(() => phase === "error", "incompatible phase");
 		const count = discoveries;
-		await Bun.sleep(80);
+		await sleep(80);
 		expect(discoveries).toBe(count);
 	} finally {
 		await client.dispose();

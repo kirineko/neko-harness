@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { parseFrontmatter, stripFrontmatter } from "../src/prompt/frontmatter.ts";
 
 it("requires standalone delimiters and normalizes BOM and newlines", () => {

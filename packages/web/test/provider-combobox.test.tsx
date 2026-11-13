@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { expect, it } from "vitest";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
 Object.assign(globalThis, {

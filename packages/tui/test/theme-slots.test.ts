@@ -1,5 +1,5 @@
 import "./support/lang-en.ts";
-import { afterEach, expect, it } from "bun:test";
+import { afterEach, expect, it } from "vitest";
 import { SLOT_NAMES } from "../src/theme/palette.ts";
 import { darkTheme, getActiveThemeMode, lightTheme, setActiveTheme, style, theme } from "../src/theme/slots.ts";
 

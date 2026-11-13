@@ -1,7 +1,8 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { installedVersion, UpdateChecker } from "../src/application-updates.ts";
 import {
@@ -75,7 +76,7 @@ it("checks cached registry independently of changed installed files, coalesces a
 			cachePath,
 			fetch: (async () => {
 				calls++;
-				await Bun.sleep(5);
+				await sleep(5);
 				return fail
 					? new Response("offline", { status: 503 })
 					: Response.json({ name: "neko-harness", version: "1.1.0" });

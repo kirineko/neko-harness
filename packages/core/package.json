@@ -96,7 +96,7 @@
 		}
 	},
 	"scripts": {
-		"build": "bun --bun run tsc -p tsconfig.build.json"
+		"build": "tsc -p tsconfig.build.json"
 	},
 	"dependencies": {
 		"@earendil-works/chord": "1.5.0",

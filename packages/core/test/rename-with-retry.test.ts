@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { renameWithRetry } from "../src/rename-with-retry.ts";
 
 const failing = (code: string, times: number) => {

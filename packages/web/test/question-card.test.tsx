@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import type { QuestionRecord } from "@neko-harness/core/interactions";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { chatView, question } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -22,7 +22,7 @@ const responds: [string, Respond][] = [];
 const submits: unknown[][] = [];
 let getImpl: (sessionId: string, id: number) => Promise<QuestionRecord | null>;
 let respondImpl: (sessionId: string, input: Respond) => Promise<QuestionRecord>;
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		submit: async (...args: unknown[]) => void submits.push(args),
 		questionGet: (sessionId: string, id: number) => {

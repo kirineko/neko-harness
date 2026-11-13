@@ -1,6 +1,7 @@
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Conversation, ConversationView, EntryQuery, EntryRecord } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { followConversation } from "../src/conversation-follow.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
@@ -93,7 +94,7 @@ it("keeps a real conversation's transcript complete past Pi's window while entri
 			follower.value.entries.flatMap((entry) => (entry.kind === "test.note" ? [(entry.data as { n: number }).n] : []));
 		expect(notes()).toEqual(range(0, 149));
 		await Promise.all(range(150, 399).map(note));
-		for (let i = 0; i < 100 && notes().length < 400; i++) await Bun.sleep(10);
+		for (let i = 0; i < 100 && notes().length < 400; i++) await sleep(10);
 		expect(notes().sort((a, b) => a - b)).toEqual(range(0, 399));
 		const entryIds = follower.value.entries.map((entry) => entry.id);
 		expect(entryIds).toEqual([...entryIds].sort((a, b) => a - b));

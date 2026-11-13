@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
 	createModels,
 	fauxAssistantMessage,
@@ -10,6 +10,7 @@ import {
 	InMemoryCredentialStore,
 } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { followConversation } from "../src/conversation-follow.ts";
@@ -227,7 +228,7 @@ it("falls back to the first-question title when the provider is disabled before 
 			const doc = await runtime.harness.snapshot(SessionMetadataDoc, runtime.conversation.id, runtime.context);
 			if (doc?.naming === "fallback") return;
 			expect(doc?.naming).not.toBe("ready");
-			await Bun.sleep(20);
+			await sleep(20);
 		}
 		throw new Error("naming did not fall back");
 	} finally {

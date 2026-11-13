@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
@@ -6,6 +5,7 @@ import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rm } from "../../../../test/temp-dir.ts";
 import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { MobileGateway } from "../../src/mobile/listener.ts";
@@ -256,7 +256,7 @@ describe("mobile adapter connections", () => {
 
 	it("client close releases the connection without disturbing the runtime or other clients", async () => {
 		const errors: string[] = [];
-		const errorSpy = spyOn(console, "error");
+		const errorSpy = vi.spyOn(console, "error");
 		const { gateway, port } = await startEnabledGateway(dir, (error) => errors.push(error.message));
 		try {
 			const first = await pairDevice(gateway, port);

@@ -1,9 +1,10 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { compactInstructions } from "@neko-harness/core/image-transfer";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { imagePaths, readImageFile } from "../src/image-input.ts";
 
@@ -117,7 +118,7 @@ it("renders PNG/JPEG/WebP through Pi Kitty protocol only when visible and falls 
 			expect(calls).toBe(0);
 			preview.setVisible(true);
 			preview.render(60);
-			for (let n = 0; n < 100 && !loaded; n++) await Bun.sleep(5);
+			for (let n = 0; n < 100 && !loaded; n++) await sleep(5);
 			expect(preview.render(60).join("\n")).toContain("\x1b_G");
 			expect(preview.render(60).length).toBeLessThanOrEqual(8);
 			preview.setVisible(false);

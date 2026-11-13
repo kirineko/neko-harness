@@ -14,7 +14,7 @@ import {
 
 /**
  * 确保一个 neko gateway 在运行：POSIX 先探活 Unix socket，再验证浏览器所需的 WS 地址与身份，
- * Unix 不通则 spawn gateway 子进程（Bun 源码或构建产物入口）并轮询两种传输直到就绪；
+ * Unix 不通则 spawn gateway 子进程（源码或构建产物入口）并轮询两种传输直到就绪；
  * socket 文件存在但无响应时直接 spawn——网关的 Unix listener 会识别并接管
  * stale socket。Windows 无 Unix socket：经端口文件（<storageDir>/<serverId>.port）
  * 发现 ws 地址并探活，失败则 spawn ws-only 网关。

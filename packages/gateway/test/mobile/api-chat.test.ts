@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from "bun:test";
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { downloadImage, uploadImage } from "@neko-harness/core/image-transfer";
 import sharp from "sharp";
+import { afterEach, describe, expect, it } from "vitest";
 import type { WebSocket } from "ws";
 import { MobileAdapter } from "../../src/mobile/adapter.ts";
 import { checkSchema, MOBILE_API_V1_METHODS, MOBILE_API_V1_NOTIFICATIONS } from "../../src/mobile/protocol.ts";

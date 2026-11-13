@@ -130,5 +130,5 @@
 
 1. 修改 `packages/gateway/src/mobile/protocol.ts` 的 schemas（additive：新方法/新可选字段）。
 2. 更新 `packages/gateway/test/fixtures/mobile-api-v1/` 对应示例。
-3. `bun test --conditions=neko-source packages/gateway/test/mobile/protocol-fixtures.test.ts` 对拍通过。
+3. `pnpm test packages/gateway/test/mobile/protocol-fixtures.test.ts` 对拍通过。
 4. 同步更新本文件与 App 侧解析（fixtures 为双方共用锚点）。

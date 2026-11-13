@@ -1,13 +1,13 @@
 // 技能显式调用（spec: 会话技能列表服务 + 技能命令展开）：
 // chat.skills() 返回两级合并列表；/skill: 提交经 gateway 后在 core 展开。
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../src/index.ts";

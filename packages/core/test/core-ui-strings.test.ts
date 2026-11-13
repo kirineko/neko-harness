@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import type { ConversationView } from "@earendil-works/pi-durable";
+import { describe, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/index.ts";

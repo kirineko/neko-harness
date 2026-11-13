@@ -1,8 +1,9 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { ChatView, ToolApproval } from "@neko-harness/core";
 import type { NekoGatewayConnection } from "@neko-harness/gateway/client-session";
+import { expect, it } from "vitest";
 import { ApprovalDetail, approvalText } from "../src/approval-ui.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
 
@@ -89,7 +90,7 @@ it("mouse approval acts only on the visible action row", async () => {
 	const lines = detail.lines(58, 10);
 	expect(detail.handleMouse({ type: "click", button: "left", x: 20, y: 0 } as never)).toBe(false);
 	expect(detail.handleMouse({ type: "click", button: "left", x: 20, y: lines.length - 1 } as never)).toBe(true);
-	await Bun.sleep(0);
+	await sleep(0);
 	expect(decision).toBe("denied");
 	detail.close();
 });

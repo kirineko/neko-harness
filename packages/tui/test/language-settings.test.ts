@@ -1,8 +1,8 @@
 import "./support/lang-en.ts";
-import { afterEach, beforeEach, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { parseArgs } from "../src/cli-options.ts";
 import {

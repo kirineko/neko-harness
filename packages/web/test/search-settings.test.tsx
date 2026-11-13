@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it } from "vitest";
 import type { NekoCredentialState, NekoSearchSettingsState } from "../src/client/lib/contract.ts";
 import { searchOptions, searchWarning } from "../src/client/lib/search-settings.ts";
 import { getState, storeActions } from "../src/client/lib/store.ts";

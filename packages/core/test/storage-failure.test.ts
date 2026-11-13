@@ -1,5 +1,6 @@
-import { expect, it, spyOn } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { MemoryStorage, SessionFailed, StorageRequestError } from "@earendil-works/pi-durable";
+import { expect, it, vi } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
 
@@ -15,7 +16,7 @@ for (const method of ["commit", "scanEntries"] as const) {
 		});
 		const watch = await runtime.watch();
 		const error = new Error("injected disk failure");
-		const spy = spyOn(MemoryStorage.prototype, method).mockImplementation(async () => {
+		const spy = vi.spyOn(MemoryStorage.prototype, method).mockImplementation(async () => {
 			throw error;
 		});
 		try {
@@ -39,7 +40,7 @@ it("keeps an invalid independent read non-fatal but fails an invalid storage com
 		model: { provider: "faux", modelId: "faux-1" },
 	});
 	const error = new StorageRequestError("invalid request");
-	const read = spyOn(MemoryStorage.prototype, "scanEntries").mockImplementation(async () => {
+	const read = vi.spyOn(MemoryStorage.prototype, "scanEntries").mockImplementation(async () => {
 		throw error;
 	});
 	try {
@@ -48,7 +49,7 @@ it("keeps an invalid independent read non-fatal but fails an invalid storage com
 		read.mockRestore();
 	}
 	expect(await runtime.listConversations()).toHaveLength(1);
-	const commit = spyOn(MemoryStorage.prototype, "commit").mockImplementation(async () => {
+	const commit = vi.spyOn(MemoryStorage.prototype, "commit").mockImplementation(async () => {
 		throw error;
 	});
 	try {
@@ -81,9 +82,9 @@ it("rejects an already pending submission wait and cleans up idempotently", asyn
 	});
 	const submission = await runtime.submit("pending");
 	const pending = submission.wait(runtime.context).catch((error) => error);
-	for (let n = 0; n < 100 && !started; n++) await Bun.sleep(1);
+	for (let n = 0; n < 100 && !started; n++) await sleep(1);
 	expect(started).toBe(true);
-	const spy = spyOn(MemoryStorage.prototype, "scanEntries").mockImplementation(async () => {
+	const spy = vi.spyOn(MemoryStorage.prototype, "scanEntries").mockImplementation(async () => {
 		throw new Error("disk failure while waiting");
 	});
 	try {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { writeClipboard } from "../src/client/lib/clipboard.ts";
 
 type Calls = { focused: number; removed: number; execCommand: number; selected: number; restored: number };

@@ -1,7 +1,7 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoCredentialState, NekoSearchSettingsState } from "@neko-harness/gateway";
+import { expect, it } from "vitest";
 import { PickerPanel } from "../src/components/picker.ts";
 import { commands } from "../src/labels.ts";
 import { openSearchPanel, searchItems } from "../src/search-ui.ts";

@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { ChatView, Delegation, ToolApproval } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import { ApprovalQueue } from "../src/approval-queue.ts";
 import type { SubagentClient } from "../src/subagent-client.ts";
 

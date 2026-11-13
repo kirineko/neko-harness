@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../src/index.ts";
 import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";

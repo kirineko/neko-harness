@@ -1,4 +1,3 @@
-import { expect, it } from "bun:test";
 import { randomBytes } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,6 +5,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import { downloadImage, uploadImage } from "@neko-harness/core/image-transfer";
 import sharp from "sharp";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { DEFAULT_IMAGE_PROMPT } from "../../core/src/image-prompt.ts";
@@ -95,9 +95,10 @@ async function transfersImages() {
 	}
 }
 
-// Bun's in-process WS client occasionally corrupts the stream while a socket closes (1002 "unsupported control frame")
+// Written for Bun, whose in-process WS client occasionally corrupted the stream while a socket closes (1002 "unsupported control frame")
 // under CPU load. The failure is in teardown, not in image transfer, so a retry is enough.
-it("transfers images across Unix/WS without embedding bytes in replicated views", transfersImages, {
-	timeout: 15000,
-	retry: 2,
-});
+it(
+	"transfers images across Unix/WS without embedding bytes in replicated views",
+	{ timeout: 15000, retry: 2 },
+	transfersImages,
+);

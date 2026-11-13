@@ -1,10 +1,10 @@
 // 单实例约束（design Risks）：地址被活跃网关占用时拒绝启动并给出可操作的提示。
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../src/index.ts";
 import { cleanup, IS_WINDOWS, makeGateway, type TestGateway } from "./helpers.ts";

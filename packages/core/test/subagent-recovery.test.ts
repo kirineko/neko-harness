@@ -1,10 +1,11 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
 import { obj } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -238,7 +239,7 @@ it("retains the three-child admission limit across SQLite reopen", async () => {
 		const until = Date.now() + 5000;
 		while (!predicate()) {
 			if (Date.now() > until) throw new Error("admission timeout");
-			await Bun.sleep(10);
+			await sleep(10);
 		}
 	};
 	try {

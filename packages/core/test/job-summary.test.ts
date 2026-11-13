@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { type JobLike, JobTail, splitJobReport, summarizeJobs } from "../src/job-summary.ts";
 
 const job = (jobId: string, extra: Partial<JobLike> = {}): JobLike => ({

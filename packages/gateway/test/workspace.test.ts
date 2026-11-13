@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
+import { expect, it } from "vitest";
 import { cleanup, connectTestClient, connectTestWsClient, makeGateway, waitFor } from "./helpers.ts";
 
 it("shares workspace metadata over Unix/WS and touches only distinct activations and inputs", async () => {

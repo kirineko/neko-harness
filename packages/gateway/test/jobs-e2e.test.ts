@@ -1,10 +1,10 @@
-import { expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { startGateway } from "../src/index.ts";
 import { connectTestClient, IS_WINDOWS, testSocketPath, waitFor } from "./helpers.ts";

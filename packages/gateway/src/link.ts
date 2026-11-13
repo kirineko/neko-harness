@@ -50,7 +50,7 @@ export function boundedWebSocketLink(
 					}
 					(handler as (event: { data: unknown }) => void)({ data });
 				};
-				// `ws` reports text frames as Buffers through addEventListener under Bun; its `on` event carries the real frame type.
+				// `ws`'s `on` event carries the real frame type on every runtime; through addEventListener, Bun reported text frames as Buffers.
 				if (socket.on)
 					socket.on("message", (data, isBinary) =>
 						deliver(isBinary ? asBytes(data) : new TextDecoder().decode(asBytes(data))),

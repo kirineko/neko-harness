@@ -1,6 +1,6 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import type { TerminalColors, TUI } from "@earendil-works/pi-tui";
+import { expect, it } from "vitest";
 import { followTerminalTheme, modeFromColors } from "../src/detect-theme.ts";
 
 it("invalidates pending replies, late replies and notifications across manual choice, restart and exit", async () => {

@@ -1,9 +1,9 @@
-import { expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { compile } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { removeDirSync, trySymlink } from "../../../test/temp-dir.ts";
 import { WORKSPACE_UNSUPPORTED, workspaceClient } from "../src/client-session.ts";
 import {

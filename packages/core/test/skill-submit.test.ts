@@ -1,4 +1,3 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +10,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { ConversationBusy, defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
 import { obj } from "@earendil-works/pi-schema";
+import { afterEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";

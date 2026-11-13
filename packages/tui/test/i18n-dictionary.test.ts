@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { findProtectedTerms } from "@neko-harness/core/protected-terms";
+import { expect, it } from "vitest";
 import { en } from "../src/i18n/en.ts";
 import { zh } from "../src/i18n/zh.ts";
 

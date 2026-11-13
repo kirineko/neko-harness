@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { createNekoRuntime } from "../src/runtime.ts";
 
 it("uses published DeepSeek capabilities directly", async () => {

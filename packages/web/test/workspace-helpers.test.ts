@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { clampSidePanelWidth, SIDE_PANEL_WIDTH } from "../src/client/lib/layout.ts";
 import {
 	agentLabel,

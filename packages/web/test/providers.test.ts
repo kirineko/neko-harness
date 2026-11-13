@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { NekoSelectableModel } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import type { NekoCredentialState } from "../src/client/lib/contract.ts";
 import {
 	describeModel,

@@ -1,9 +1,10 @@
 import { fauxProvider } from "../../../test/faux.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
+
 // spec: model-providers「会话级切换模型」——某会话切换模型后其下一次请求用新模型，其他会话不受影响。
 
-import { describe, expect, it } from "bun:test";
 import { type FauxResponseFactory, fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { describe, expect, it } from "vitest";
 import { createNekoRuntime } from "../src/index.ts";
 
 describe("per-conversation model switching", () => {

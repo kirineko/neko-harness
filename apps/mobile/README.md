@@ -112,7 +112,7 @@ keystore 与密码请离线备份：丢失后无法以同一签名覆盖安装�
 `scripts/mobile-e2e-gateway.ts` 启动隔离数据目录与脚本化 faux 模型的 gateway（不访问外部模型）：
 
 ```bash
-bun --conditions=neko-source scripts/mobile-e2e-gateway.ts --address <电脑局域网 IPv4> --port 8324 --serve-pairing 8325
+node --conditions=neko-source scripts/mobile-e2e-gateway.ts --address <电脑局域网 IPv4> --port 8324 --serve-pairing 8325
 adb reverse tcp:8325 tcp:8325
 cd apps/mobile && flutter test integration_test/mobile_e2e_test.dart -d <设备>
 ```
@@ -133,4 +133,4 @@ cd apps/mobile && flutter test integration_test/mobile_e2e_test.dart -d <设备>
 - App 退到后台 5 分钟后返回前台，连接恢复为 ready。
 - 本机 admin 服务撤销设备后服务端删除授权；App 显示“设备授权已被电脑撤销”，停止重试并仅提供重新扫码入口。
 
-自动化检查：`flutter analyze`、`flutter test`、`flutter build apk --release --split-per-abi`，以及仓库侧 `bun run check`、`bun run build` 与 `bun run test`。
+自动化检查：`flutter analyze`、`flutter test`、`flutter build apk --release --split-per-abi`，以及仓库侧 `pnpm check`、`pnpm build` 与 `pnpm test`。

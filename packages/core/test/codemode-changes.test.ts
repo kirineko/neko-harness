@@ -1,8 +1,8 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { afterEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { ConversationChanges, MAIN_AGENT } from "../src/file-changes.ts";

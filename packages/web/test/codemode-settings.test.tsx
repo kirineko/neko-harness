@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { expect, it } from "vitest";
 import type { NekoCodemodeSettingsState } from "../src/client/lib/contract.ts";
 import { getState, storeActions } from "../src/client/lib/store.ts";
 

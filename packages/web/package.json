@@ -15,9 +15,9 @@
 		}
 	},
 	"scripts": {
-		"build": "bun --bun run tsc -p tsconfig.client.json --noEmit && bun --bun run tsc -p tsconfig.build.json && bun --bun run vite build",
-		"check:client": "bun --bun run tsc -p tsconfig.client.json --noEmit && bun --bun run tsc -p tsconfig.test.json --noEmit",
-		"dev": "bun --bun run vite"
+		"build": "tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.build.json && vite build",
+		"check:client": "tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+		"dev": "vite"
 	},
 	"dependencies": {
 		"@earendil-works/chord": "1.5.0",
@@ -43,6 +43,7 @@
 		"marked": "18.1.0",
 		"react": "19.3.0",
 		"react-dom": "19.3.0",
+		"rolldown": "1.2.19",
 		"tailwindcss": "4.3.3",
 		"vite": "8.3.4"
 	}

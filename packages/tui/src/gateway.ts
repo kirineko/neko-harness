@@ -128,7 +128,7 @@ async function spawnAndConnect(plan: SpawnPlan): Promise<NekoTuiGateway> {
 		stdio: [plan.platform === "win32" ? "pipe" : "ignore", "pipe", "pipe"],
 	});
 	const outputTail = captureOutput(child);
-	// spawn 本身的失败（Bun/入口缺失等）以 error 事件报告，不进入 exit 流程。
+	// spawn 本身的失败（运行时或入口缺失等）以 error 事件报告，不进入 exit 流程。
 	let spawnError: Error | undefined;
 	child.on("error", (error: Error) => {
 		spawnError = error;

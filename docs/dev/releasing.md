@@ -1,6 +1,6 @@
 # 发布维护
 
-对外只发布 `neko-harness`，内部 workspace 均保持 private。发布产物运行在 Node.js（≥ 22.19）上，用户用 npm 全局安装；构建与测试暂时仍使用 Bun 1.4.x。安装冒烟（`bun run test:package`）用 npm 把 tarball 装进临时前缀，并在不含 Bun 的 `PATH` 下用 Node 启动；npm 同时负责向 registry 上传产物及 OIDC 认证。
+对外只发布 `neko-harness`，内部 workspace 均保持 private。发布产物运行在 Node.js（≥ 22.19）上，用户用 npm 全局安装；构建与测试使用 pnpm 与 Node（vitest、rolldown），不依赖 Bun。安装冒烟（`pnpm test:package`）用 `pnpm pack` 打出 tarball，用 npm 装进临时前缀，再用 Node 启动；npm 同时负责向 registry 上传产物及 OIDC 认证。
 
 ## 一次性配置
 
@@ -8,14 +8,14 @@
 
 ## 发布步骤
 
-`release.yml` 是唯一的 workflow，推送 `vX.Y.Z` tag 即发版；仓库没有 push / PR 检查，日常以本机 `bun run check`、`bun run test` 为准。
+`release.yml` 是唯一的 workflow，推送 `vX.Y.Z` tag 即发版；仓库没有 push / PR 检查，日常以本机 `pnpm check`、`pnpm test` 为准。
 
 1. 更新根 `package.json` 的版本（稳定版 `X.Y.Z`），并同步 `packages/gateway/test/fixtures/mobile-api-v1/hello-result.json` 的 `gatewayVersion`。
 2. 编写 `docs/releases/vX.Y.Z.md`（Release 正文，写法见 [docs/releases](../releases/README.md)）。
 3. 提交到 `main`，然后 `git tag vX.Y.Z && git push origin main vX.Y.Z`。
 4. 流水线自动执行：
    - `preflight`：tag 等于 `v<package.json 版本>`、版本是稳定版、tag 提交在 `origin/main` 上、发布说明文件存在且非空。任何一条不满足，后续 job 都不运行。
-   - `verify`（Linux / macOS / Windows）：构建、`bun run test`、安装冒烟（npm 安装，Node 24.x 运行；Linux 另用声明的下限 Node 22.19.0 再跑一次）；`bun run check` 只在 Linux 跑。`android-check`（格式、分析、测试）与 `android-build`（三个 ABI 的 release APK）同时运行。
+   - `verify`（Linux / macOS / Windows）：`pnpm install --frozen-lockfile`、`pnpm build:release`、`pnpm test`、安装冒烟（npm 安装，Node 24.x 运行；Linux 另用声明的下限 Node 22.19.0 再跑一次）；`pnpm check` 只在 Linux 跑。`android-check`（格式、分析、测试）与 `android-build`（三个 ABI 的 release APK）同时运行。
    - 以上全部通过后 `publish` 才上传 Linux 上验证过的同一份 tarball 到 npm `latest`（附 provenance）；版本已在 npm 上则跳过。
    - `github-release` 用发布说明创建 GitHub Release（标题 `neko-harness X.Y.Z`），附 `NekoAI-vX.Y.Z-<abi>.apk`；Release 已存在则更新说明并覆盖同名 APK。
 

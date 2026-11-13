@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { UserMessage } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { addDefaultImagePrompt, DEFAULT_IMAGE_PROMPT, savedDefaultImagePrompt } from "../src/image-prompt.ts";
 
 const image = { type: "image" as const, data: "", mimeType: "image/png" };

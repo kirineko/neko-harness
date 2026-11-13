@@ -1,7 +1,8 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../src/index.ts";
 import { connectTestClient, connectTestWsClient, testSocketPath, waitFor as wait } from "./helpers.ts";
@@ -72,7 +73,7 @@ it("rejects invalid patches and does not publish when persistence fails", async 
 		} finally {
 			runtime.setContextSettings = original;
 		}
-		await Bun.sleep(50);
+		await sleep(50);
 		expect(client.contextSettings.state.value!.revision).toBe(revision);
 		expect(client.contextSettings.state.value!.effective.pruning.enabled).toBe(false);
 	} finally {

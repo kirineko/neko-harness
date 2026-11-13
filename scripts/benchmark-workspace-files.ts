@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { FILE_CACHE_LIMITS, WorkspaceFiles } from "../packages/core/src/workspace-files.ts";
 
 const temp = await realpath(await mkdtemp(join(tmpdir(), "neko-index-bench-")));
@@ -37,7 +38,7 @@ try {
 	const refreshStart = performance.now();
 	let refreshed = await timed(temp, "z/new");
 	for (let i = 0; i < 50 && !refreshed.candidates; i++) {
-		await Bun.sleep(100);
+		await sleep(100);
 		refreshed = await timed(temp, "z/new");
 	}
 	const refreshWaitMs = Number((performance.now() - refreshStart).toFixed(2));
@@ -48,7 +49,7 @@ try {
 	try {
 		for (const name of ["d0", "d1", "d2"]) await bounded.search(small, `${name}/`, signal);
 		lru = bounded.stats;
-		await Bun.sleep(400);
+		await sleep(400);
 		idle = bounded.stats;
 	} finally {
 		await bounded.close();

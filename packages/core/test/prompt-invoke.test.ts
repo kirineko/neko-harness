@@ -1,8 +1,8 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { expandSkillCommand } from "../src/prompt/invoke.ts";
 import { createResourceLoader } from "../src/prompt/resources.ts";
@@ -33,10 +33,10 @@ it("expands a known skill into a skill block with args appended", async () => {
 	expect(expanded).toContain(join(dir, "pdf"));
 	expect(expanded).toContain("Do the PDF thing.");
 	expect(expanded).not.toContain("description: Read PDFs");
-	expect(expanded).toEndWith("</skill>\n\nsummarize this");
+	expect(expanded.endsWith("</skill>\n\nsummarize this")).toBe(true);
 	const bare = await expandSkillCommand("/skill:pdf", skills, read);
 	expect(bare).toContain("Do the PDF thing.");
-	expect(bare).toEndWith("</skill>");
+	expect(bare.endsWith("</skill>")).toBe(true);
 });
 
 it("passes through non-commands, unknown skills, and unreadable files", async () => {
@@ -65,7 +65,7 @@ it("escapes skill metadata in XML attributes", async () => {
 	];
 	const output = await expandSkillCommand('/skill:a"b args', skills, async () => "body");
 	expect(output).toContain('name="a&quot;b" location="/a&amp;b/&quot;test&quot;/SKILL.md"');
-	expect(output).toEndWith("</skill>\n\nargs");
+	expect(output.endsWith("</skill>\n\nargs")).toBe(true);
 });
 
 it("reports unreadable known skills but passes unknown commands through silently", async () => {
@@ -109,7 +109,7 @@ it("keeps scanned metadata and invocation body together when the file changes be
 	expect(expanded).toContain("Original instructions.");
 	expect(expanded).not.toContain("Revised instructions.");
 	expect(expanded).not.toContain("description:");
-	expect(expanded).toEndWith("</skill>\n\nsummarize");
+	expect(expanded.endsWith("</skill>\n\nsummarize")).toBe(true);
 
 	const refreshed = await load(workspace, "pdf");
 	const nextExpanded = await expandSkillCommand(

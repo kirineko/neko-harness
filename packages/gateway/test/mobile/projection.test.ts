@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import type { ChatView } from "@neko-harness/core";
+import { describe, expect, it } from "vitest";
 import {
 	MobileChatProjection,
 	mapStatus,

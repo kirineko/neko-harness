@@ -211,24 +211,24 @@ neko 过去用 Bun 安装并运行在 Bun 上，现在运行在 Node.js 上，�
 
 ## 开发
 
-发布包运行在 Node.js 上。源码开发的安装、测试与打包暂时仍使用 Bun 1.4.4（见 `.bun-version`，任意 1.4.x 可用），安装冒烟另需 Node.js 22.19 及以上；Windows 还需要 Git for Windows。
+源码开发使用 Node.js 22.19 及以上（推荐 24，见 `.node-version`）与 pnpm（版本固定在 `packageManager`，`corepack enable` 即可获得）；Windows 还需要 Git for Windows。
 
 ```bash
-bun install --frozen-lockfile
-bun run neko tui        # 从源码启动 TUI（自动拉起网关）
-bun run neko web        # 从源码启动 Web UI
-bun run neko serve      # 仅启动网关
+pnpm install --frozen-lockfile
+pnpm neko tui        # 从源码启动 TUI（自动拉起网关）
+pnpm neko web        # 从源码启动 Web UI
+pnpm neko serve      # 仅启动网关
 ```
 
 | 命令 | 说明 |
 | --- | --- |
-| `bun run build` | tsc 构建全部 workspace 包（web 另含 vite build） |
-| `bun run test` | Bun test（`--conditions=neko-source --parallel`）：完整套件在笔记本上约 12 秒 |
-| `bun run test:serial` | 同样的测试逐个顺序执行（`--isolate`），用来区分真实失败与时序问题 |
-| `bun run check` | biome check + 根/Web 客户端类型检查 |
-| `bun run check:write` | biome 修复 + 根/Web 客户端类型检查 |
-| `bun run build:release` | 以发布标记构建 `dist/` 可执行包 |
-| `bun run test:package` | 打包到 `artifacts/`，用 npm 安装到临时目录并在 Node.js 上冒烟验证 |
+| `pnpm build` | tsc 构建全部 workspace 包（web 另含 vite build） |
+| `pnpm test` | 在 Node.js 上运行 vitest，测试文件间并行：完整套件在笔记本上约 15 秒；`pnpm test packages/core` 只跑一个包 |
+| `pnpm test:serial` | 同样的测试文件逐个顺序执行（约 2 分钟），用来区分真实失败与时序问题 |
+| `pnpm check` | biome check + 根/Web 客户端类型检查 |
+| `pnpm check:write` | biome 修复 + 根/Web 客户端类型检查 |
+| `pnpm build:release` | 以发布标记构建 `dist/` 可执行包 |
+| `pnpm test:package` | 打包到 `artifacts/`，用 npm 安装到临时目录并在 Node.js 上冒烟验证 |
 
 目录结构：
 
@@ -238,7 +238,7 @@ bun run neko serve      # 仅启动网关
 - `apps/mobile`：Flutter 手机端（测试版）
 - `openspec/` 变更与规格、`docs/` 协议文档、`scripts/` 构建与发布脚本
 
-约定：Biome（tab 缩进、双引号、120 列）；相对导入带 `.ts` 扩展名；TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`。`reference/` 只读；`dist/`、`artifacts/` 不提交；行为改动走 `openspec/` 变更。提交前运行 `bun run check` 与 `bun run test`。发版通过推送 `vX.Y.Z` tag 触发（见 [docs/dev/releasing.md](dev/releasing.md)），普通 push 不跑 CI。
+约定：Biome（tab 缩进、双引号、120 列）；相对导入带 `.ts` 扩展名；TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`。`reference/` 只读；`dist/`、`artifacts/` 不提交；行为改动走 `openspec/` 变更。提交前运行 `pnpm check` 与 `pnpm test`。发版通过推送 `vX.Y.Z` tag 触发（见 [docs/dev/releasing.md](dev/releasing.md)），普通 push 不跑 CI。
 
 ## 更多文档
 

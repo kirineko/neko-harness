@@ -1,10 +1,10 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { planClient } from "@neko-harness/gateway/client-session";
+import { expect, it } from "vitest";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { PlanDock } from "../src/plan-dock.ts";
 import { setActiveTheme } from "../src/theme/index.ts";

@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxText, fauxToolCall, type Provider } from "@earendil-works/pi-ai";
 import {
 	type ClientIdentity,
@@ -6,6 +6,7 @@ import {
 	getAttributionHeaders,
 	PI_ATTRIBUTION,
 } from "@earendil-works/pi-ai/utils/identity";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
@@ -34,7 +35,7 @@ function recordingProvider() {
 async function until(test: () => boolean) {
 	for (let i = 0; i < 300; i++) {
 		if (test()) return;
-		await Bun.sleep(20);
+		await sleep(20);
 	}
 	throw new Error("identity timeout");
 }

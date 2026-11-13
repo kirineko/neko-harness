@@ -22,7 +22,7 @@
 
 #### Scenario: 两种运行形态一致
 
-- **WHEN** 分别以 Bun 源码模式与 tsc 构建产物启动
+- **WHEN** 分别以 Node 源码模式与 tsc 构建产物启动
 - **THEN** 两种形态发现的内置技能集合相同
 
 ### Requirement: 内置技能清单

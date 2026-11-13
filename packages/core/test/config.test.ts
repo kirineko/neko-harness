@@ -1,11 +1,12 @@
 // 2.4 配置层：查找（向上递归 + ~/.neko 兜底）、$ENV/${ENV} 插值、校验、
 // 优先级合并（CLI > 配置文件 > 默认值）。
 
-import { afterEach, describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import {
 	DEFAULT_NEKO_CONFIG,
@@ -40,12 +41,12 @@ describe("neko.config.json (2.4)", () => {
 
 	it("falls back to ~/.neko/neko.config.json and returns {} when nothing is found", async () => {
 		const root = await makeDir();
-		// Bun isolates process.env per test file; os.homedir reads the process-level HOME.
+		// os.homedir reads the process-level HOME.
 		// A fresh process verifies the real startup environment without changing the parent.
 		const readConfig = () => {
-			const child = Bun.spawnSync(
+			const child = spawnSync(
+				process.execPath,
 				[
-					process.execPath,
 					"--eval",
 					`
 				import { findNekoConfigFile, loadNekoConfig } from ${JSON.stringify(fileURLToPath(new URL("../src/config.ts", import.meta.url)))};
@@ -55,7 +56,7 @@ describe("neko.config.json (2.4)", () => {
 				// Windows 上 os.homedir 读 USERPROFILE 而非 HOME，两个都指到临时目录。
 				{ env: { ...process.env, HOME: root, USERPROFILE: root } },
 			);
-			expect(child.exitCode).toBe(0);
+			expect(child.status).toBe(0);
 			return JSON.parse(child.stdout.toString());
 		};
 		expect(readConfig()).toEqual({ config: {} });

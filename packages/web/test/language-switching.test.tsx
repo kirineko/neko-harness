@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import type { PlanRecord, QuestionRecord } from "@neko-harness/core/interactions";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { chatView, plan, question } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html lang='zh-CN'><body></body></html>", { url: "http://localhost/" });
@@ -24,7 +24,7 @@ dom.window.matchMedia ??= (() => ({
 
 const none = async () => {};
 let questionRecord: QuestionRecord = question();
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		submit: none,
 		withdraw: async () => ({ result: "unknown" }),

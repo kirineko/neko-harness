@@ -1,8 +1,8 @@
 import "./support/lang-en.ts";
-import { afterEach, expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { JobsClient } from "@neko-harness/gateway/client-session";
 import type { WireJobOutput, WireJobSummary } from "@neko-harness/gateway/contract";
+import { afterEach, expect, it } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { JobReportNotice } from "../src/components/job-report.ts";
 import { PickerPanel } from "../src/components/picker.ts";

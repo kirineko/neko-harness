@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
+import { expect, it } from "vitest";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { GatewayConnection, type GatewayEvents } from "../src/client/lib/gateway.ts";
 

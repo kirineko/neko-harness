@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
+import { expect, it } from "vitest";
 
 // DOMPurify 在导入时绑定全局 window，因此先安装 happy-dom 再动态导入被测模块。
 const dom = new JSDOM("<!doctype html><html><body></body></html>");

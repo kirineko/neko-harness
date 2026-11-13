@@ -2,37 +2,40 @@
 
 ## 项目
 
-neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui / pi-schema 1.5.0，全部精确锁版本）的 agent harness monorepo。发布包运行在 Node.js（≥ 22.19，下限取自根 `package.json` 的 `engines.node`）上，用 npm 全局安装；开发工具链（安装、测试、打包）暂时仍是 Bun，推荐 1.4.4（任意 1.4.x 可用），迁移到 pnpm 见 `openspec/changes/migrate-toolchain-to-pnpm`。设计决策见 `openspec/changes/archive/2026-10-11-bootstrap-neko-harness/design.md`。
+neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui / pi-schema 1.5.0，全部精确锁版本）的 agent harness monorepo。发布包运行在 Node.js（≥ 22.19，下限取自根 `package.json` 的 `engines.node`）上，用 npm 全局安装；开发工具链是 pnpm（版本固定在 `packageManager`）加 Node（开发推荐 24，见 `.node-version`）：vitest 跑测试、rolldown 打发布包、Node 直接运行 `.ts` 源码与脚本（类型擦除），仓库不依赖 Bun。设计决策见 `openspec/changes/archive/2026-10-11-bootstrap-neko-harness/design.md`。
 
 ## 常用命令
 
 ```bash
-bun install --frozen-lockfile # 安装（按 bun.lock 安装）
-bun run build              # tsc 构建全部 workspace 包（web 含 vite build）
-bun run test               # Bun test（源码条件 + 多 worker 并行，隐含文件隔离）
-bun run test:serial        # 原顺序执行（--isolate）；怀疑并行引入的失败或时序问题时先用它复现
+pnpm install --frozen-lockfile # 安装（按 pnpm-lock.yaml 安装；pnpm 版本取自 package.json 的 packageManager）
+pnpm build                 # tsc 构建全部 workspace 包（web 含 vite build）
+pnpm test                  # vitest（Node 上运行；源码条件、文件间并行、每个文件独立进程）
+pnpm test:serial           # 文件逐个顺序执行（--no-file-parallelism，约 2 分钟）；怀疑并行引入的失败或时序问题时先用它复现
                            # 不要在同一台机器上同时跑两套完整测试：部分用例用 ps 按固定标记判断进程，会互相干扰
-bun run check              # biome check + 根/Web 客户端类型检查
-bun run check:write        # biome 修复 + 根/Web 客户端类型检查
+pnpm test packages/core    # 只跑某个包或某个文件
+pnpm check                 # biome check + 根/Web 客户端类型检查（Web 客户端的检查读取各包构建出的类型，干净检出先 pnpm build）
+pnpm check:write           # biome 修复 + 根/Web 客户端类型检查
 
-bun run neko tui        # 启动终端 UI（自动拉起 gateway；需 DEEPSEEK_API_KEY）
-bun run neko web        # 启动 Web UI（静态 8322，自动拉起 gateway WS 8321）
-bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
+pnpm neko tui           # 启动终端 UI（自动拉起 gateway；需 DEEPSEEK_API_KEY）
+pnpm neko web           # 启动 Web UI（静态 8322，自动拉起 gateway WS 8321）
+pnpm neko serve         # 仅启动 gateway（Unix socket + WebSocket）
 # 或构建后：node packages/cli/dist/main.js tui|web|serve（bin 名 neko）
-# 发布产物：bun run build:release 生成 dist/（neko.js / gateway.js 是无依赖的启动器：检查 Node 版本、过滤 Node 22 的
-#           node:sqlite 实验性警告，再加载 cli.js / gateway-main.js）；
-#           bun run test:package 用 npm 安装 tarball 并在 Node 上冒烟（PATH 里需要 node 与 npm）
+# 发布产物：pnpm build:release 用 rolldown 生成 dist/（neko.js / gateway.js 是无依赖的启动器：检查 Node 版本、
+#           过滤 Node 22 的 node:sqlite 实验性警告，再加载 cli.js / gateway-main.js）；
+#           pnpm test:package 用 npm 安装 tarball 并在 Node 上冒烟
 ```
 
 发版：推送 `vX.Y.Z` tag 触发唯一的 `.github/workflows/release.yml`（没有 push / PR CI），流程与发布说明（`docs/releases/vX.Y.Z.md`）见 `docs/dev/releasing.md`。
 
-单个示例（需要 `DEEPSEEK_API_KEY`）：`bun --conditions=neko-source packages/core/examples/chat.ts`
+单个示例（需要 `DEEPSEEK_API_KEY`）：`node --conditions=neko-source packages/core/examples/chat.ts`
 
 ## 约定
 
 - TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`（`tsconfig.base.json`，风格参照 `reference/pi`）。
-- 相对导入带 `.ts` 扩展名（`rewriteRelativeImportExtensions` 在构建时改写成 `.js`）；开发时 TS 由 Bun 直接运行，构建用 tsc；发布产物只能含 Node 可运行的代码（`build-release.ts` 会拒绝含 `Bun.` / `import.meta.require` 的产物），运行时代码不要调用 `Bun.*`。
-- Node 不能监听超过系统上限的 Unix socket 路径（macOS 103 字节、Linux 107 字节，Bun 可以）：gateway 的 socket 在数据目录下，超长时启动报「Unix socket 路径过长」（`toStartupError`）。需要在 Node 上启动 gateway 的脚本与冒烟，临时目录在 POSIX 上用 `/tmp`，不要用 macOS 的系统临时目录。
+- 相对导入带 `.ts` 扩展名（`rewriteRelativeImportExtensions` 在构建时改写成 `.js`）；开发时 TS 由 Node 直接运行（`node --conditions=neko-source <入口>.ts`，依赖 `erasableSyntaxOnly`；`.tsx` 只在 Web 客户端与其测试里，由 vite / vitest 转译），构建用 tsc；源码、测试与脚本都不要调用 `Bun.*`（`build-release.ts` 会拒绝含 `Bun.` / `import.meta.require` 的产物）。
+- Node 不能监听超过系统上限的 Unix socket 路径（macOS 103 字节、Linux 107 字节，Bun 可以）：gateway 的 socket 在数据目录下，超长时启动报「Unix socket 路径过长」（`toStartupError`）。测试经 `vitest.config.ts` 把 POSIX 上的 `TMPDIR` 设为 `/tmp`（macOS 的系统临时目录本身约 50 字节），启动 gateway 的脚本与冒烟同样用 `/tmp`。
+- pnpm 用默认的严格 `node_modules` 布局：每个包只能导入自己 `package.json` 声明的依赖，根目录脚本用相对路径引用 workspace 源码（根包是对外发布的包，不声明 `workspace:` 依赖）。脚本读根 `package.json` 走 `scripts/manifest.ts`（`module: Node16` 不接受 JSON 的 import attributes）。
+- 测试用 vitest：从 `vitest` 显式导入 `expect` / `it` / `vi` 等；模块替换用 `vi.doMock` 加其后的动态 `import()`（不提升，Web 测试的惯用写法），需要替换 ES 模块命名导出（如 `node:child_process` 的 `spawn`）时用 `vi.mock` 把它换成默认走原实现的 `vi.fn`。拉起子进程用 `test/process.ts` 的 `spawnProcess`；`test/setup.ts` 让 `navigator` 等浏览器全局可被 jsdom 覆盖。
 - Biome：tab 缩进、双引号、lineWidth 120（`biome.json`）。
 - 上游 pi 依赖为实验性包：只升版本不裹代码，升级走显式 OpenSpec 变更；core/gateway 做薄封装隔离上游类型。
 - 文档放置规则见 `docs/README.md`：入口文档在根目录与 `docs/`（`dev/`、`mobile/`、`releases/`），包内文档跟随包；英文文档不含中文，开发者内部文档只有中文。改文档路径要同步引用（含源码注释）。

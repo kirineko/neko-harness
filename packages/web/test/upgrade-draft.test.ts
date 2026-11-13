@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { readUpgradeDraft, saveUpgradeDraft } from "../src/client/lib/upgrade-draft.ts";
 
 it("validates scoped text-only recovery and fails when storage cannot save", () => {

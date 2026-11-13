@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { IMAGE_CHUNK_BYTES, ImageUploads } from "../src/image-uploads.ts";
 
 it("bounds staging, rejects partial and out-of-order chunks, expires and releases ownership", () => {

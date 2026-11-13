@@ -1,9 +1,9 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import type { ToolRegistration } from "@earendil-works/pi-durable";
+import { afterEach, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";

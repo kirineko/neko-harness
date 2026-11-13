@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
+import { expect, it } from "vitest";
 import { listSources, scanDirectory, scanLiterals } from "./support/literal-scan.ts";
 
 const ROOT = fileURLToPath(new URL("../src", import.meta.url));

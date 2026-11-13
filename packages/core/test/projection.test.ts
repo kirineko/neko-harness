@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { ConversationView } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { type ChatItem, projectChatView } from "../src/projection.ts";
 
 type ToolChatItem = Extract<ChatItem, { type: "tool" }>;

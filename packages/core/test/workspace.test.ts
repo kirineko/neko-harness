@@ -1,8 +1,8 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { afterEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync, trySymlink } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import type { ChatImage, ChatItem } from "@neko-harness/core";
+import { describe, expect, it } from "vitest";
 import { buildSessionExport, ExportCancelledError, exportNotice } from "../src/client/lib/session-export.ts";
 
 const image: ChatImage = {

@@ -1,7 +1,7 @@
 // 移动端真机回归用的隔离 gateway（开发工具，不进入发布产物）。
 // 使用脚本化 faux provider（不访问外部模型），在独立数据目录中开启移动入口，
 // 登记一个工作区，并把有效配对文本持续写入 <数据目录>/pairing.txt（每 90 s 刷新）。
-// 用法：bun --conditions=neko-source scripts/mobile-e2e-gateway.ts --address <局域网 IPv4> [--port 8324] [--dir <目录>]
+// 用法：node --conditions=neko-source scripts/mobile-e2e-gateway.ts --address <局域网 IPv4> [--port 8324] [--dir <目录>]
 //       [--serve-pairing 8325]：仅在 127.0.0.1 提供 GET /pairing（每次生成新配对码），配合
 //       `adb reverse tcp:8325 tcp:8325` 供 integration_test 读取；不监听局域网。
 //
@@ -39,7 +39,7 @@ function textOf(message: Message | undefined): string {
 
 const address = arg("--address");
 if (address === undefined) {
-	console.error("用法：bun --conditions=neko-source scripts/mobile-e2e-gateway.ts --address <局域网 IPv4>");
+	console.error("用法：node --conditions=neko-source scripts/mobile-e2e-gateway.ts --address <局域网 IPv4>");
 	process.exit(2);
 }
 const port = Number(arg("--port") ?? 8324);

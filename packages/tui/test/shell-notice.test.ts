@@ -1,5 +1,5 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { createShellNotifier, shellNoticeText } from "../src/shell-notice.ts";
 
 const missing = { status: "missing", reason: "not_found" } as const;

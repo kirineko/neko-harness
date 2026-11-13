@@ -1,5 +1,5 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import type { NekoTuiGateway } from "../src/gateway.ts";
 import { initialSessionId } from "../src/tui.ts";
 import { workspaceSessions } from "../src/workspace.ts";

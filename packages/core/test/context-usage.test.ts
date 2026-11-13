@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { ConversationView } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { contextTokens } from "../src/projection.ts";
 
 function answer(id: number, totalTokens: number, stopReason = "stop") {

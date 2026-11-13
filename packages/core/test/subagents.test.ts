@@ -1,5 +1,6 @@
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { followConversation } from "../src/conversation-follow.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -58,7 +59,7 @@ async function until<T>(read: () => Promise<T>, done: (value: T) => boolean): Pr
 		const value = await read();
 		if (done(value)) return value;
 		if (Date.now() > end) throw new Error("Subagent state timed out");
-		await Bun.sleep(10);
+		await sleep(10);
 	}
 }
 

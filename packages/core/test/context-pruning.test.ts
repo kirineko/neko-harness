@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
 	type AssistantMessage,
@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type EntryRecord } from "@earendil-works/pi-durable";
 import { obj } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { ContextPruner, estimateTokens, PRUNE_ENTRY_KIND, planPrune, toolResultChars } from "../src/context-pruning.ts";
@@ -100,7 +101,7 @@ async function run(
 	});
 	if (saved) await runtime.setContextSettings({ pruning: { enabled: true } });
 	for (let i = 0; i < 3; i++) await runtime.waitAnswer(await runtime.submit(`turn ${i}`));
-	await Bun.sleep(100);
+	await sleep(100);
 	const entries = (await runtime.root.conversation.context(runtime.context)).entries;
 	const chat = projectChatView((await runtime.root.follow()).value, "faux/m");
 	const sessions = await runtime.listConversations();
@@ -256,7 +257,7 @@ it("keeps the pruned context and writes nothing twice after a restart", async ()
 		};
 		const first = await open();
 		for (let i = 0; i < 3; i++) await first.waitAnswer(await first.submit(`turn ${i}`));
-		await Bun.sleep(100);
+		await sleep(100);
 		const before = (await first.root.conversation.context(first.context)).entries.filter(
 			(entry) => entry.kind === PRUNE_ENTRY_KIND,
 		);

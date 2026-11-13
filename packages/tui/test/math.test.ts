@@ -1,6 +1,6 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import { expect, it } from "vitest";
 import { AssistantMessageComponent } from "../src/components/assistant-message.ts";
 import { UserMessageComponent } from "../src/components/user-message.ts";
 

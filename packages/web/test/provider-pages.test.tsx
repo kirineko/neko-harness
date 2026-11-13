@@ -1,7 +1,7 @@
-import { beforeEach, expect, it, mock } from "bun:test";
 import type { NekoSelectableModel } from "@neko-harness/core";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { NekoCredentialState } from "../src/client/lib/contract.ts";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -26,7 +26,7 @@ const configured: unknown[][] = [];
 const savedCredentials: unknown[][] = [];
 const enabledCalls: unknown[][] = [];
 const defaultCalls: { set: unknown[]; clear: number } = { set: [], clear: 0 };
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		configure: async (...args: unknown[]) => void configured.push(args),
 		setProviderEnabled: async (...args: unknown[]) => void enabledCalls.push(args),
@@ -37,7 +37,7 @@ mock.module("../src/client/lib/bootstrap", () => ({
 		setSearchProvider: async () => {},
 	},
 }));
-mock.module("@tanstack/react-router", () => ({
+vi.doMock("@tanstack/react-router", () => ({
 	Link: ({
 		to,
 		hash,

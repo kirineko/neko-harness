@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { expect, it } from "vitest";
 import { COLUMN_TIERS, MESSAGE_COLUMN_REM, MOBILE_BREAKPOINT } from "../src/client/lib/layout.ts";
 
 const css = readFileSync(new URL("../src/client/styles.css", import.meta.url), "utf8");

@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import type { QuestionRecord } from "@neko-harness/core/interactions";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { chatView, plan, question } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html><head><title>neko.harness</title></head><body></body></html>", {
@@ -59,7 +59,7 @@ const approval = {
 	createdAt: 1,
 	decidedAt: null,
 };
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		submit: async (...args: unknown[]) => void submits.push(args),
 		questionGet: async (_session: string, id: number) => records.get(id) ?? null,
@@ -86,7 +86,7 @@ mock.module("../src/client/lib/bootstrap", () => ({
 	},
 	reportError: () => {},
 }));
-mock.module("@tanstack/react-router", () => ({
+vi.doMock("@tanstack/react-router", () => ({
 	Link: (props: { to: string; className?: string; children?: React.ReactNode; onClick?: () => void }) =>
 		React.createElement("a", { href: props.to, className: props.className, onClick: props.onClick }, props.children),
 }));

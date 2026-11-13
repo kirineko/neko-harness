@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { createHash, randomUUID, X509Certificate } from "node:crypto";
 import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import forge from "node-forge";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rm } from "../../../../test/temp-dir.ts";
 import { MobileCertificate, minimalPositiveIntegerHex } from "../../src/mobile/certificate.ts";
 import { MobileStore } from "../../src/mobile/store.ts";
@@ -276,10 +276,10 @@ describe("mobile certificate", () => {
 
 	it("never prints or logs the private key", async () => {
 		const serverId = randomUUID();
-		const logSpy = spyOn(console, "log");
-		const infoSpy = spyOn(console, "info");
-		const warnSpy = spyOn(console, "warn");
-		const errorSpy = spyOn(console, "error");
+		const logSpy = vi.spyOn(console, "log");
+		const infoSpy = vi.spyOn(console, "info");
+		const warnSpy = vi.spyOn(console, "warn");
+		const errorSpy = vi.spyOn(console, "error");
 		let keyPem = "";
 		try {
 			const cert = await load(serverId);

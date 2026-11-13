@@ -12,7 +12,10 @@ export function fauxProvider(options?: Parameters<typeof createFaux>[0]): Return
 			...chat.provider,
 			streamSimple(model, context, opts) {
 				const title = context.messages.some(
-					(m) => m.role === "system" && typeof m.content === "string" && m.content.startsWith("Summarize the first question"),
+					(m) =>
+						m.role === "system" &&
+						typeof m.content === "string" &&
+						m.content.startsWith("Summarize the first question"),
 				);
 				return title ? naming.provider.streamSimple(model, context, opts) : original(model, context, opts);
 			},

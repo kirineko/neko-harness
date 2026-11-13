@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import { spawn } from "node:child_process";
+import { describe, expect, it } from "vitest";
 import { installShutdown, type ShutdownProcess, stopGatewayProcess } from "../src/index.ts";
 import { IS_WINDOWS } from "./helpers.ts";
 

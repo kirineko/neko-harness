@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { pathCrumbs } from "../src/client/lib/path-crumbs.ts";
 
 describe("pathCrumbs", () => {

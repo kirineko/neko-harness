@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
+import { expect, it } from "vitest";
 import { listSources, scanDirectory } from "./support/cjk-scan.ts";
 
 const ROOT = fileURLToPath(new URL("../src/client", import.meta.url));

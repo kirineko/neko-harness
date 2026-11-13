@@ -1,10 +1,10 @@
-import { afterEach } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memoryLinkPair } from "@earendil-works/chord";
 import { type FauxProviderHandle, fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { afterEach } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDir } from "../../../test/temp-dir.ts";
 import {
@@ -57,7 +57,7 @@ function gatewayOf(target: GatewayTarget): NekoGateway {
 }
 
 /**
- * 连接进程内网关。Windows 上 Bun 在同一进程内同时作为 WebSocket 服务端与客户端会丢帧或乱序，
+ * 连接进程内网关。Windows 上（在 Bun 下观察到）同一进程内同时作为 WebSocket 服务端与客户端会丢帧或乱序，
  * 故 Windows 用 chord 内存链路直接接入（WS 传输由跨进程启动测试覆盖）；POSIX 仍走 Unix socket。
  */
 export async function connectTestClient(target: GatewayTarget): Promise<NekoGatewayClient> {
@@ -107,7 +107,7 @@ async function boundedClose(close: () => Promise<unknown>): Promise<void> {
 	}
 }
 
-// Bun 的测试超时不取消测试体，但会运行 afterEach；这里释放仍未关闭的客户端与网关，避免残留 WS 服务使进程挂死。
+// 测试超时不取消测试体，但会运行 afterEach；这里释放仍未关闭的客户端与网关，避免残留 WS 服务使进程挂死。
 afterEach(async () => {
 	const clients = [...openClients];
 	const gateways = [...openGateways];

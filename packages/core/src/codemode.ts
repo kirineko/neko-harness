@@ -35,7 +35,7 @@ export const SANDBOX_BUSY = "Codemode sandbox is busy: too many scripts are runn
 /**
  * Caps the scripts running at the same time in the process. A call first waits for a free slot (FIFO, abortable,
  * bounded); the slot then becomes a reservation that the sandbox's `acquireWorker` turns into a running worker, which
- * stays counted until the worker really exits (on Bun a worker can outlive its result).
+ * stays counted until the worker really exits (a worker can outlive its result; seen on Bun).
  */
 export class WorkerLimiter {
 	readonly #max: number;

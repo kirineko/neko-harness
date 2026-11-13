@@ -1,8 +1,9 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../src/index.ts";
@@ -42,7 +43,7 @@ it("synchronizes the codemode mode across clients, restores the default and reje
 
 		const revision = web.codemodeSettings.state.value!.revision;
 		await expect(web.codemodeSettings.set({ mode: "bogus" as never })).rejects.toThrow();
-		await Bun.sleep(50);
+		await sleep(50);
 		expect(web.codemodeSettings.state.value!.revision).toBe(revision);
 
 		await web.codemodeSettings.reset({});

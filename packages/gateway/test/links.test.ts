@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { EventEmitter } from "node:events";
 import type { Socket } from "node:net";
 import type { Frame, WebSocketLike } from "@earendil-works/chord";
+import { expect, it } from "vitest";
 import { boundedWebSocketLink, MAX_LINK_BYTES } from "../src/link.ts";
 import { UnixLink } from "../src/unix-link.ts";
 

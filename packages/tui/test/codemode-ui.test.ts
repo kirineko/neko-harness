@@ -1,7 +1,7 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoCodemodeSettingsState } from "@neko-harness/gateway";
+import { expect, it } from "vitest";
 import { codemodeItems, openCodemodePanel } from "../src/codemode-ui.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { commands } from "../src/labels.ts";

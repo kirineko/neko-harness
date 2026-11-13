@@ -1,8 +1,8 @@
 import { fauxProvider } from "../../../test/faux.ts";
+
 // spec: model-providers「会话级切换模型」——经网关契约 configure 切换某会话模型后，
 // 该会话下一次请求用新模型（faux 记录实际收到的 modelId），投影即时反映新值，其他会话不受影响。
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,6 +15,7 @@ import {
 	fauxText,
 } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { type NekoGateway, startGateway } from "../src/index.ts";
 import { connectTestClient, testSocketPath, waitFor } from "./helpers.ts";

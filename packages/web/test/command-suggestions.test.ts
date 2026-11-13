@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { commandSuggestions, isCommandQuery } from "../src/client/lib/command-suggestions.ts";
 
 const skills = [

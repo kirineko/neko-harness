@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { obj } from "@earendil-works/pi-schema";
 import { totalUsage } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";
 
 it("publishes child history through a read-only service and rejects stale attachment", async () => {

@@ -1,9 +1,9 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences, Text } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import type { ChatView, Delegation, ToolApproval } from "@neko-harness/core";
 import type { NekoGatewayConnection } from "@neko-harness/gateway/client-session";
+import { expect, it } from "vitest";
 import { ApprovalDock } from "../src/approval-dock.ts";
 import { createAppLayout } from "../src/layout.ts";
 

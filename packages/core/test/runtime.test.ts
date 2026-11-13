@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { describe, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/index.ts";

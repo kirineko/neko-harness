@@ -1,9 +1,9 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ConversationView, PromptInput } from "@earendil-works/pi-durable";
+import { afterEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { exportConversation } from "../src/conversation-export.ts";
 import { NekoInput } from "../src/input.ts";

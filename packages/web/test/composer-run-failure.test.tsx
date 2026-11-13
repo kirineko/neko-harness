@@ -1,6 +1,6 @@
-import { beforeEach, expect, it, mock } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { beforeEach, expect, it, vi } from "vitest";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
 Object.assign(globalThis, {
@@ -16,7 +16,7 @@ Object.assign(globalThis, {
 
 const continues: string[] = [];
 let continueError: Error | undefined;
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		continueRun: async (sessionId: string) => {
 			continues.push(sessionId);

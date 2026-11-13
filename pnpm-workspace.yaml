@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+
+# Neither build script is needed at runtime or in tests; listing them keeps installs free of warnings.
+ignoredBuiltDependencies:
+  - "@google/genai"
+  - protobufjs

@@ -4,7 +4,9 @@
 		"packages/*/src/**/*.ts",
 		"packages/*/test/**/*.ts",
 		"packages/*/examples/**/*.ts",
-		"scripts/**/*.ts"
+		"scripts/**/*.ts",
+		"test/**/*.ts",
+		"vitest.config.ts"
 	],
 	"exclude": [
 		"packages/web/src/client"
@@ -14,8 +16,7 @@
 			"neko-source"
 		],
 		"types": [
-			"node",
-			"bun"
+			"node"
 		]
 	}
 }

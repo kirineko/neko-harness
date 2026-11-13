@@ -1,6 +1,6 @@
 /**
  * 主题预览:在真实终端中并排验收明暗主题(design D1 人工验收辅助)。
- * 运行:bun --conditions=neko-source packages/tui/examples/theme-preview.ts [dark|light]
+ * 运行:node --conditions=neko-source packages/tui/examples/theme-preview.ts [dark|light]
  */
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { AssistantMessageComponent } from "../src/components/assistant-message.ts";

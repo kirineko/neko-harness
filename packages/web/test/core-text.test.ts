@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { expect, it } from "vitest";
 import { localizeCoreError, localizeCoreText } from "../src/client/lib/i18n/core-text.ts";
 import { DICTIONARIES, translator } from "../src/client/lib/i18n/index.ts";
 

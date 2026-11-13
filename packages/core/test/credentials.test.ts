@@ -1,8 +1,10 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdtemp, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { afterEach, expect, it } from "vitest";
+import { spawnProcess } from "../../../test/process.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { FileCredentialStore, InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
@@ -89,29 +91,26 @@ it("resolves saved, rotated and environment keys on actual Pi requests without n
 		old = process.env.DEEPSEEK_API_KEY;
 	process.env.DEEPSEEK_API_KEY = "test-environment";
 	const requests: { auth: string | null; body: Record<string, unknown> }[] = [];
-	globalThis.fetch = Object.assign(
-		async (_input: unknown, init?: RequestInit) => {
-			requests.push({ auth: new Headers(init?.headers).get("authorization"), body: JSON.parse(String(init?.body)) });
-			const chunk = {
-				id: "test",
-				object: "chat.completion.chunk",
-				created: 1,
-				model: "deepseek-flash",
-				choices: [{ index: 0, delta: { role: "assistant", content: "Test answer" }, finish_reason: null }],
-			};
-			const end = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] };
-			return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(end)}\n\ndata: [DONE]\n\n`, {
-				headers: { "content-type": "text/event-stream" },
-			});
-		},
-		{ preconnect: originalFetch.preconnect },
-	) as typeof fetch;
+	globalThis.fetch = Object.assign(async (_input: unknown, init?: RequestInit) => {
+		requests.push({ auth: new Headers(init?.headers).get("authorization"), body: JSON.parse(String(init?.body)) });
+		const chunk = {
+			id: "test",
+			object: "chat.completion.chunk",
+			created: 1,
+			model: "deepseek-flash",
+			choices: [{ index: 0, delta: { role: "assistant", content: "Test answer" }, finish_reason: null }],
+		};
+		const end = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] };
+		return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(end)}\n\ndata: [DONE]\n\n`, {
+			headers: { "content-type": "text/event-stream" },
+		});
+	}) as typeof fetch;
 	const runtime = await createNekoRuntime({ storage: "memory" });
 	try {
 		await runtime.saveCredential("deepseek", "test-saved");
 		const first = await runtime.submit("first", { requestId: "first" });
 		await runtime.waitAnswer(first);
-		for (let i = 0; i < 100 && !(await runtime.listConversations())[0]?.title; i++) await Bun.sleep(10);
+		for (let i = 0; i < 100 && !(await runtime.listConversations())[0]?.title; i++) await sleep(10);
 		expect(requests[0]!.auth).toBe("Bearer test-saved");
 		expect(requests[0]!.body.reasoning_effort).toBe("high");
 		expect(requests[1]!.body.thinking).toEqual({ type: "disabled" });
@@ -188,9 +187,9 @@ it("locks read-modify-write across processes and preserves callback rejections",
 	const store = new FileCredentialStore(path);
 	await store.modify("counter", async () => ({ type: "api_key", key: "0" }));
 	const modulePath = fileURLToPath(new URL("../src/credentials.ts", import.meta.url));
-	const code = `import { FileCredentialStore } from ${JSON.stringify(modulePath)}; const store = new FileCredentialStore(process.argv[1]); for(let i=0;i<3;i++) await store.modify("counter", async(value)=> { await Bun.sleep(10); return {type:"api_key", key:String(Number(value.key)+1)}; });`;
-	const a = Bun.spawn([process.execPath, "-e", code, path], { stdout: "pipe", stderr: "pipe" });
-	const b = Bun.spawn([process.execPath, "-e", code, path], { stdout: "pipe", stderr: "pipe" });
+	const code = `import { FileCredentialStore } from ${JSON.stringify(modulePath)}; const store = new FileCredentialStore(process.argv[1]); for(let i=0;i<3;i++) await store.modify("counter", async(value)=> { await new Promise((done) => setTimeout(done, 10)); return {type:"api_key", key:String(Number(value.key)+1)}; });`;
+	const a = spawnProcess([process.execPath, "-e", code, path]);
+	const b = spawnProcess([process.execPath, "-e", code, path]);
 	expect(await a.exited).toBe(0);
 	expect(await b.exited).toBe(0);
 	expect((await store.read("counter"))?.type).toBe("api_key");

@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
@@ -8,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rm } from "../../../../test/temp-dir.ts";
 import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { AUTH_FAILURE_LIMIT, MobileAuth, type MobileAuthStore } from "../../src/mobile/auth.ts";
@@ -464,10 +464,10 @@ describe("mobile auth upgrade", () => {
 
 	it("keeps credentials, codes, and key material out of logs, errors, and responses", async () => {
 		const logged: string[] = [];
-		const logSpy = spyOn(console, "log");
-		const infoSpy = spyOn(console, "info");
-		const warnSpy = spyOn(console, "warn");
-		const errorSpy = spyOn(console, "error");
+		const logSpy = vi.spyOn(console, "log");
+		const infoSpy = vi.spyOn(console, "info");
+		const warnSpy = vi.spyOn(console, "warn");
+		const errorSpy = vi.spyOn(console, "error");
 		const { gateway, port } = await startEnabledGateway(dir, (error) => logged.push(error.message));
 		let secrets: string[] = [];
 		try {

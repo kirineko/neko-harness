@@ -1,8 +1,11 @@
-import { expect, it, spyOn } from "bun:test";
 import { mkdir, mkdtemp, realpath, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 import { Connection } from "@earendil-works/pi-env";
+import { expect, it, vi } from "vitest";
+import { spawnProcess } from "../../../test/process.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { FILE_CACHE_LIMITS, WorkspaceFiles } from "../src/workspace-files.ts";
 
@@ -20,7 +23,7 @@ it("restarts a lost helper, invalidates other cached directories and keeps share
 	const files = new WorkspaceFiles();
 	const info = Connection.prototype.info;
 	const pids: number[] = [];
-	const observed = spyOn(Connection.prototype, "info").mockImplementation(async function (this: Connection) {
+	const observed = vi.spyOn(Connection.prototype, "info").mockImplementation(async function (this: Connection) {
 		const value = await info.call(this);
 		pids.push(value.pid);
 		return value;
@@ -37,8 +40,8 @@ it("restarts a lost helper, invalidates other cached directories and keeps share
 		expect(new Set(pids).size).toBe(1);
 		process.kill(pids[0]!, "SIGTERM");
 		// Windows terminates the helper asynchronously; a request sent before the exit is seen fails once with "connection lost".
-		for (let n = 0; n < 100 && isAlive(pids[0]!); n++) await Bun.sleep(20);
-		await Bun.sleep(20);
+		for (let n = 0; n < 100 && isAlive(pids[0]!); n++) await sleep(20);
+		await sleep(20);
 		await writeFile(join(root, "a/after.ts"), "");
 		await files.search(root, "b/", signal);
 		expect(pids.at(-1)).not.toBe(pids[0]);
@@ -74,7 +77,7 @@ it("discovers files without fd, shares scans, refreshes and exposes incomplete t
 		expect((await files.search(root, "missing", new AbortController().signal)).incomplete).toBe(true);
 		expect((await files.search(root, "z/target", new AbortController().signal)).entries[0]?.path).toBe("z/target.ts");
 		await writeFile(join(root, "z/new.ts"), "new");
-		await Bun.sleep(50);
+		await sleep(50);
 		// The watcher can report the write while this refresh scan runs, which asks the caller to retry.
 		const fresh = async () => {
 			for (let n = 0; ; n++) {
@@ -107,7 +110,7 @@ it("uses Git ignores only in work trees, includes hidden files, and ignores fd-s
 			} catch (error) {
 				if (!(error instanceof Error) || !error.message.includes("changed")) throw error;
 			}
-			await Bun.sleep(20);
+			await sleep(20);
 		}
 		throw new Error(`Watch did not refresh ${query}`);
 	};
@@ -165,31 +168,28 @@ it("refreshes external Git global excludes through the TTL fallback", async () =
 		await writeFile(join(root, "global.txt"), "");
 		await writeFile(global, "global.txt\n");
 		// The native walker reads the user's global Git config, so isolate only this child process's home.
-		const child = Bun.spawn(
+		const child = spawnProcess(
 			[
 				process.execPath,
 				"--conditions=neko-source",
 				"-e",
 				`
-			import {WorkspaceFiles, FILE_CACHE_LIMITS} from "@neko-harness/core/workspace-files";
+			import {writeFile} from "node:fs/promises";
+			import {WorkspaceFiles, FILE_CACHE_LIMITS} from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, "../src/workspace-files.ts")).href)};
 			const files = new WorkspaceFiles({...FILE_CACHE_LIMITS, ttlMs:60});
 			const root = ${JSON.stringify(root)}, global = ${JSON.stringify(global)};
 			const signal = new AbortController().signal;
 			try {
 				const before = await files.search(root,"global",signal);
-				await Bun.write(global, ""); await Bun.sleep(80);
+				await writeFile(global, ""); await new Promise((done) => setTimeout(done, 80));
 				const after = await files.search(root,"global",signal);
 				console.log(JSON.stringify([before.entries.length, after.entries.length]));
 			} finally { await files.close(); }
 		`,
 			],
-			{ env: { ...process.env, HOME: home, USERPROFILE: home }, stdout: "pipe", stderr: "pipe" },
+			{ env: { ...process.env, HOME: home, USERPROFILE: home } },
 		);
-		const [output, error, code] = await Promise.all([
-			new Response(child.stdout).text(),
-			new Response(child.stderr).text(),
-			child.exited,
-		]);
+		const [output, error, code] = await Promise.all([child.stdout, child.stderr, child.exited]);
 		expect(error).toBe("");
 		expect(code).toBe(0);
 		expect(JSON.parse(output)).toEqual([0, 1]);

@@ -1,9 +1,10 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { type ConversationId, UsageDoc } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { onCommits } from "../src/commits.ts";
@@ -24,7 +25,7 @@ async function waitFor<T>(read: () => Promise<T>, test: (v: T) => boolean): Prom
 	for (let i = 0; i < 1000; i++) {
 		const v = await read();
 		if (test(v)) return v;
-		await Bun.sleep(5);
+		await sleep(5);
 	}
 	throw new Error("Continuation timed out");
 }

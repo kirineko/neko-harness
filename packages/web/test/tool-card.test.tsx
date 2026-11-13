@@ -1,9 +1,15 @@
-import { expect, it, mock, spyOn } from "bun:test";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/core";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it, vi } from "vitest";
 import { ToolCard, type ToolCardProps } from "../src/client/components/tool-card.tsx";
+
+// An ES module namespace cannot be spied on in place, so swap `useState` for a mock that defaults to the real hook.
+vi.mock("react", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("react")>();
+	return { ...actual, useState: vi.fn(actual.useState) };
+});
 
 const base: ToolCardProps = {
 	name: "write",
@@ -16,10 +22,10 @@ const base: ToolCardProps = {
 };
 
 function withCardRenderer(expanded: boolean, check: (render: (props: ToolCardProps) => string) => void): void {
-	const state = spyOn(React, "useState").mockReturnValue([expanded, () => {}]);
+	const state = vi.mocked(React.useState).mockReturnValue([expanded, () => {}] as never);
 	const descriptor = Object.getOwnPropertyDescriptor(DOMPurify, "sanitize");
 	// SSR 没有 DOM；这里只验证消毒调用是否延迟，消毒算法仍由浏览器中的 DOMPurify 负责。
-	const sanitize = mock((html: string) => html);
+	const sanitize = vi.fn((html: string) => html);
 	Object.defineProperty(DOMPurify, "sanitize", { value: sanitize, configurable: true });
 	try {
 		check((props) => renderToStaticMarkup(React.createElement(ToolCard, props)));
@@ -33,7 +39,7 @@ function withCardRenderer(expanded: boolean, check: (render: (props: ToolCardPro
 }
 
 it("keeps diff-only collapsed cards expandable without highlighting or sanitizing streamed updates", () => {
-	const highlight = spyOn(hljs, "highlight");
+	const highlight = vi.spyOn(hljs, "highlight");
 	try {
 		withCardRenderer(false, (render) => {
 			for (const lines of [1, 100, 2000]) {

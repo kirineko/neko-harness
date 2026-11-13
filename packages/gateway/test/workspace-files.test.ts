@@ -1,9 +1,9 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { downloadImage } from "@neko-harness/core/image-transfer";
 import sharp from "sharp";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../src/index.ts";

@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { unsupportedNode } from "../src/node-version.ts";
 
 it("accepts the minimum and anything newer, ignoring prerelease and build suffixes", () => {

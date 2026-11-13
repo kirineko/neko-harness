@@ -1,8 +1,8 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
 	fauxAssistantMessage,
 	fauxToolCall,
@@ -10,6 +10,7 @@ import {
 	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { configure } from "@earendil-works/pi-durable";
+import { afterEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync, rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
@@ -178,7 +179,7 @@ it("keeps the active resource snapshot while a question is pending and refreshes
 		let pending: { id: number; version: string } | undefined;
 		for (let i = 0; i < 500 && !pending; i++) {
 			pending = (await runtime.root.questions()).pending[0];
-			if (!pending) await Bun.sleep(10);
+			if (!pending) await sleep(10);
 		}
 		writeFileSync(agents, "project rules v2");
 		await runtime.root.respondQuestion(pending!.id, pending!.version, { kind: "answer", text: "anything" });

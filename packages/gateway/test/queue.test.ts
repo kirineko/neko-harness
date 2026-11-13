@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import { compile } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { QUEUE_UNSUPPORTED, queueClient } from "../src/client-session.ts";
 import { ChatViewSchema, type NekoChat } from "../src/contract.ts";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "./helpers.ts";

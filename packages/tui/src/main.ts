@@ -1,4 +1,4 @@
-// neko TUI 入口：bun --conditions=neko-source packages/tui/src/main.ts [选项]
+// neko TUI 入口：node --conditions=neko-source packages/tui/src/main.ts [选项]
 import { parseArgs, usage } from "./cli-options.ts";
 import { runTui } from "./tui.ts";
 

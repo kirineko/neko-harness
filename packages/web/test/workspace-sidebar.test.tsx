@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import type {
 	WireChangeDetail,
 	WireChangeList,
@@ -7,6 +6,7 @@ import type {
 } from "@neko-harness/gateway/contract";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { chatView } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html><head><title>neko.harness</title></head><body></body></html>", {
@@ -91,7 +91,7 @@ const subagent = {
 	approvalCount: 0,
 	createdAt: 1,
 };
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		submit: async () => {},
 		questionGet: async () => null,
@@ -119,7 +119,7 @@ mock.module("../src/client/lib/bootstrap", () => ({
 	},
 	reportError: () => {},
 }));
-mock.module("@tanstack/react-router", () => ({
+vi.doMock("@tanstack/react-router", () => ({
 	Link: (props: { to: string; className?: string; children?: React.ReactNode }) =>
 		React.createElement("a", { href: props.to, className: props.className }, props.children),
 }));

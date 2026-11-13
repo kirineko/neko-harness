@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createHash, randomUUID, X509Certificate } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
@@ -9,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fauxProvider } from "../../../../test/faux.ts";
 import { rm } from "../../../../test/temp-dir.ts";
 import { startGateway } from "../../src/index.ts";

@@ -211,24 +211,24 @@ Sessions, settings and keys stay in `~/.neko/` and are used as they are.
 
 ## Development
 
-The published package runs on Node.js. Source development still uses Bun 1.4.4 for installing, testing and bundling (see `.bun-version`; any 1.4.x works), plus Node.js 22.19 or newer for the package smoke test and, on Windows, Git for Windows.
+Source development uses Node.js 22.19 or newer (24 recommended, see `.node-version`) and pnpm (the version is pinned in `packageManager`; `corepack enable` provides it). Windows also needs Git for Windows.
 
 ```bash
-bun install --frozen-lockfile
-bun run neko tui        # TUI from source (starts a gateway)
-bun run neko web        # Web UI from source
-bun run neko serve      # gateway only
+pnpm install --frozen-lockfile
+pnpm neko tui        # TUI from source (starts a gateway)
+pnpm neko web        # Web UI from source
+pnpm neko serve      # gateway only
 ```
 
 | Command | What it does |
 | --- | --- |
-| `bun run build` | tsc build of every workspace package (the web package also runs vite) |
-| `bun run test` | Bun test (`--conditions=neko-source --parallel`): the full suite takes about 12 s on a laptop |
-| `bun run test:serial` | the same tests one after another (`--isolate`); use it to tell a real failure from a timing problem |
-| `bun run check` | biome check plus type checks for the root and the web client |
-| `bun run check:write` | biome fixes plus the same type checks |
-| `bun run build:release` | build the `dist/` release bundle |
-| `bun run test:package` | pack into `artifacts/`, install with npm in a temp directory and smoke test on Node.js |
+| `pnpm build` | tsc build of every workspace package (the web package also runs vite) |
+| `pnpm test` | vitest on Node.js, test files in parallel: the full suite takes about 15 s on a laptop; `pnpm test packages/core` runs one package |
+| `pnpm test:serial` | the same test files one after another (about 2 min); use it to tell a real failure from a timing problem |
+| `pnpm check` | biome check plus type checks for the root and the web client |
+| `pnpm check:write` | biome fixes plus the same type checks |
+| `pnpm build:release` | build the `dist/` release bundle |
+| `pnpm test:package` | pack into `artifacts/`, install with npm in a temp directory and smoke test on Node.js |
 
 Layout:
 
@@ -238,7 +238,7 @@ Layout:
 - `apps/mobile` — Flutter app (beta)
 - `openspec/` changes and specs, `docs/` documentation, `scripts/` build and release scripts
 
-Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `bun run check` and `bun run test` before handing work over. Releases are published by pushing a `vX.Y.Z` tag (see [docs/dev/releasing.md](docs/dev/releasing.md)); there is no CI on ordinary pushes.
+Conventions: Biome (tabs, double quotes, 120 columns); relative imports carry the `.ts` extension; TypeScript strict with `noUncheckedIndexedAccess`, `erasableSyntaxOnly` and `verbatimModuleSyntax`. `reference/` is read-only, `dist/` and `artifacts/` are not committed, and behaviour changes go through an `openspec/` change. Run `pnpm check` and `pnpm test` before handing work over. Releases are published by pushing a `vX.Y.Z` tag (see [docs/dev/releasing.md](docs/dev/releasing.md)); there is no CI on ordinary pushes.
 
 ## Documentation
 

@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Schema } from "@earendil-works/pi-schema";
+import { describe, expect, it } from "vitest";
 import {
 	asJsonRpcRequest,
 	checkSchema,
@@ -9,7 +9,7 @@ import {
 	MOBILE_API_V1_NOTIFICATIONS,
 } from "../../src/mobile/protocol.ts";
 
-const FIXTURE_DIR = join(import.meta.dir, "../fixtures/mobile-api-v1");
+const FIXTURE_DIR = join(import.meta.dirname, "../fixtures/mobile-api-v1");
 
 type Fixture = {
 	readonly description: string;

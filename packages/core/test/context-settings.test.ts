@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { DEFAULT_COMPACTION_POLICY } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import {
 	applyContextPatch,
 	compactionPolicy,

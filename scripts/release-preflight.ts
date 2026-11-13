@@ -1,5 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, statSync } from "node:fs";
-import manifest from "../package.json";
+import { manifest } from "./manifest.ts";
 
 // Release preflight. A tag push is a real release and must satisfy every rule;
 // a manual dispatch is a rehearsal and only needs a stable package version.
@@ -17,8 +18,8 @@ if (isRelease) {
 
 	const sha = process.env.GITHUB_SHA ?? "HEAD";
 	const mainRef = process.env.RELEASE_MAIN_REF ?? "origin/main";
-	const ancestor = Bun.spawnSync(["git", "merge-base", "--is-ancestor", sha, mainRef], { stderr: "pipe" });
-	if (ancestor.exitCode !== 0) errors.push(`commit ${sha} is not on ${mainRef}; release only commits that are on main`);
+	const ancestor = spawnSync("git", ["merge-base", "--is-ancestor", sha, mainRef], { stdio: "ignore" });
+	if (ancestor.status !== 0) errors.push(`commit ${sha} is not on ${mainRef}; release only commits that are on main`);
 
 	if (!existsSync(notes) || statSync(notes).size === 0) errors.push(`release notes ${notes} are missing or empty`);
 }

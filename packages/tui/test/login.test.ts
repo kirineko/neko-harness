@@ -1,9 +1,10 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { Container, CURSOR_MARKER, stripTerminalSequences, Text, visibleWidth } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import { MODEL_PROVIDERS } from "@neko-harness/core";
 import type { NekoCredentialState } from "@neko-harness/gateway";
+import { expect, it } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { LoginPanel } from "../src/components/login.ts";
 import { createAppLayout } from "../src/layout.ts";
@@ -113,7 +114,7 @@ it("enables a model provider with Space and follows the published state", async 
 	panel.handleInput("openrouter");
 	panel.handleInput(" ");
 	expect(calls).toEqual([["openrouter", true]]);
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).toContain("OpenRouter enabled. Press Enter to add a key.");
 	publish(stateWith({ openrouter: { enabled: true } }, 2));
 	expect(text(panel)).toMatch(/❯ \[x\] OpenRouter/);
@@ -122,7 +123,7 @@ it("enables a model provider with Space and follows the published state", async 
 		["openrouter", true],
 		["openrouter", false],
 	]);
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).toContain("OpenRouter disabled.");
 });
 
@@ -156,7 +157,7 @@ it("shows a toggle failure and ignores a late toggle result after close", async 
 	panel.show(emptyState(), () => () => {});
 	panel.handleInput("openrouter");
 	panel.handleInput(" ");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).toContain("Could not save provider settings.");
 	fail = false;
 	panel.handleInput(" ");
@@ -165,7 +166,7 @@ it("shows a toggle failure and ignores a late toggle result after close", async 
 	panel.close();
 	panel.show(emptyState(), () => () => {});
 	release();
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).not.toContain("enabled");
 	expect(text(panel)).not.toContain("Enabling...");
 	panel.handleInput(" ");
@@ -205,7 +206,7 @@ it("masks pasted secrets, discards undo history on close and ignores late comple
 	show();
 	openKey(panel);
 	release();
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel, 60)).toContain("(paste key)");
 	expect(text(panel, 60)).not.toContain("Saved. Used");
 	panel.handleInput("\x1f");
@@ -281,7 +282,7 @@ it("requires a second Ctrl+R to remove a saved key", async () => {
 	panel.handleInput("\x12");
 	panel.handleInput("\x12");
 	expect(removed).toEqual(["deepseek"]);
-	await Bun.sleep(20);
+	await sleep(20);
 	expect(panel.open).toBe(false);
 });
 
@@ -299,7 +300,7 @@ it("trims surrounding whitespace and tolerates embedded newlines in pasted conte
 	openKey(panel);
 	panel.handleInput("\x1b[200~  sk-trimmed \n\x1b[201~");
 	panel.handleInput("\r");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(saved).toEqual(["sk-trimmed"]);
 	// The input component strips pasted control characters, so a copied key
 	// with an embedded newline saves cleanly instead of being rejected.
@@ -307,7 +308,7 @@ it("trims surrounding whitespace and tolerates embedded newlines in pasted conte
 	openKey(panel);
 	panel.handleInput("\x1b[200~sk-broken\nkey\x1b[201~");
 	panel.handleInput("\r");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(saved).toEqual(["sk-trimmed", "sk-brokenkey"]);
 });
 
@@ -318,7 +319,7 @@ it("saves to the selected non-DeepSeek provider", async () => {
 	openKey(panel, "openrouter");
 	panel.handleInput("sk-or-1");
 	panel.handleInput("\r");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(saved).toEqual([["openrouter", "sk-or-1"]]);
 });
 
@@ -340,16 +341,16 @@ it("surfaces the server error message and auto-closes after a successful save", 
 	openKey(panel);
 	panel.handleInput("\x1b[200~sk-anything\x1b[201~");
 	panel.handleInput("\r");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).toContain("Enter a valid API key.");
 	expect(panel.open).toBe(true);
 	fail = false;
 	panel.handleInput("\x1b[200~sk-anything\x1b[201~");
 	panel.handleInput("\r");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).toContain("Saved. Used");
 	expect(panel.open).toBe(true);
-	await Bun.sleep(20);
+	await sleep(20);
 	expect(panel.open).toBe(false);
 	expect(closed).toBe(1);
 });
@@ -368,15 +369,15 @@ it("does not auto-close when Escape wins the race", async () => {
 	openKey(panel);
 	panel.handleInput("\x1b[200~sk-anything\x1b[201~");
 	panel.handleInput("\r");
-	await Bun.sleep(1);
+	await sleep(1);
 	expect(text(panel)).toContain("Saved. Used");
 	panel.handleInput("\x1b");
 	expect(closed).toBe(1);
-	await Bun.sleep(60);
+	await sleep(60);
 	expect(closed).toBe(1);
 	panel.show(emptyState(), () => () => {});
 	expect(panel.open).toBe(true);
-	await Bun.sleep(60);
+	await sleep(60);
 	expect(panel.open).toBe(true);
 });
 

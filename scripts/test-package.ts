@@ -1,18 +1,35 @@
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import manifest from "../package.json";
+import { delimiter, join, resolve } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { connectNekoGateway } from "../packages/gateway/src/client.ts";
 import { removeDir } from "../test/temp-dir.ts";
+import { manifest } from "./manifest.ts";
 
-async function run(cmd: string[], cwd: string, env = process.env) {
-	const child = Bun.spawn(cmd, { cwd, env, stdout: "pipe", stderr: "pipe" });
-	const [stdout, stderr, code] = await Promise.all([
-		new Response(child.stdout).text(),
-		new Response(child.stderr).text(),
-		child.exited,
-	]);
+/** Starts `cmd` with piped output that accumulates in `out`; `exited` resolves to the exit code (-1 when signalled). */
+function start(cmd: string[], cwd: string, env: NodeJS.ProcessEnv = process.env) {
+	const child = spawn(cmd[0]!, cmd.slice(1), { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+	const out = { stdout: "", stderr: "" };
+	child.stdout.setEncoding("utf8").on("data", (chunk) => {
+		out.stdout += chunk;
+	});
+	child.stderr.setEncoding("utf8").on("data", (chunk) => {
+		out.stderr += chunk;
+	});
+	const exited = new Promise<number>((done, reject) => {
+		child.once("error", reject);
+		child.once("close", (code) => done(code ?? -1));
+	});
+	return { child, out, exited };
+}
+
+async function run(cmd: string[], cwd: string, env: NodeJS.ProcessEnv = process.env) {
+	const started = start(cmd, cwd, env);
+	const code = await started.exited;
+	const { stdout, stderr } = started.out;
 	if (code !== 0) throw new Error(`${cmd[0]} failed (${code})\n${stdout}\n${stderr}`);
 	// Node prints runtime warnings as "(node:<pid>) <Kind>Warning: ..."; the published CLI must start without any.
 	if (/\(node:\d+\) \w*Warning/.test(stderr)) throw new Error(`${cmd.join(" ")} printed a runtime warning\n${stderr}`);
@@ -25,12 +42,14 @@ const viaShell = (cmd: string[]) =>
 
 /** Windows has no graceful signal; kill the whole tree so the gateway child does not keep the temp dir locked. */
 function killWindowsTree(pid: number): void {
-	Bun.spawnSync(["taskkill", "/T", "/F", "/PID", String(pid)], { stdout: "ignore", stderr: "ignore" });
+	spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore" });
 }
 
-const root = resolve(import.meta.dir, "..");
+const root = resolve(import.meta.dirname, "..");
 await mkdir(join(root, "artifacts"), { recursive: true });
-await run([process.execPath, "pm", "pack", "--destination", "artifacts"], root);
+// pnpm exposes its own entry point to scripts; going through it avoids a shell and the `.cmd` shim on Windows.
+const pnpm = process.env.npm_execpath;
+await run([...(pnpm ? [process.execPath, pnpm] : ["pnpm"]), "pack", "--pack-destination", "artifacts"], root);
 const archive = join(root, "artifacts", `neko-harness-${manifest.version}.tgz`);
 // GNU tar (Git for Windows) reads "D:\..." as host:path; pass a relative name and run inside artifacts/ instead.
 const tarCwd = join(root, "artifacts");
@@ -64,26 +83,17 @@ if (packed.private || packed.name !== "neko-harness" || packed.version !== manif
 if (Object.keys(packed.dependencies).some((name) => name.startsWith("@neko-harness/"))) {
 	throw new Error("Internal workspace dependency escaped into published package");
 }
-// The published package runs on Node and is installed with npm; Bun only drives this script.
-const node = Bun.which("node");
-const npm = Bun.which("npm");
-if (!node || !npm) throw new Error("The package smoke test needs node and npm on PATH");
+// The published package is installed with npm and runs on the Node that runs this script.
+const node = process.execPath;
 // Node cannot listen on a Unix socket path longer than the OS limit (104 bytes on macOS, 108 on Linux), and the
 // gateway socket lives under the storage directory. macOS's per-user tmpdir alone is ~50 bytes, so stay under /tmp.
 const temp = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "neko-package-"));
-let web: ReturnType<typeof Bun.spawn> | undefined;
+let web: ReturnType<typeof start> | undefined;
 try {
 	const prefix = join(temp, "prefix");
-	const installed = Bun.spawn(viaShell([npm, "install", "-g", "--prefix", prefix, archive]), {
-		cwd: temp,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const [installOut, installErr, installCode] = await Promise.all([
-		new Response(installed.stdout).text(),
-		new Response(installed.stderr).text(),
-		installed.exited,
-	]);
+	const installed = start(viaShell(["npm", "install", "-g", "--prefix", prefix, archive]), temp);
+	const installCode = await installed.exited;
+	const { stdout: installOut, stderr: installErr } = installed.out;
 	if (installCode !== 0) throw new Error(`npm install failed (${installCode})\n${installOut}\n${installErr}`);
 	if (/ERESOLVE/.test(installOut + installErr)) throw new Error(`npm reported a peer conflict\n${installErr}`);
 	const windows = process.platform === "win32";
@@ -92,7 +102,7 @@ try {
 		: join(prefix, "lib", "node_modules", "neko-harness");
 	if (!(await readFile(join(packageRoot, "dist", "neko.js"), "utf8")).startsWith("#!/usr/bin/env node\n"))
 		throw new Error("Installed entry must start with the node shebang");
-	// The children see Node but neither Bun nor npm, so nothing can silently fall back to Bun.
+	// The children get this Node first on PATH and no Bun, so nothing can fall back to another runtime.
 	const bin = join(temp, "bin");
 	await mkdir(bin);
 	if (windows) await cp(node, join(bin, "node.exe"));
@@ -109,7 +119,10 @@ try {
 		TAVILY_API_KEY: "",
 		PATH: `${bin}${windows ? ";" : ":"}${systemPath}`,
 	};
-	if (Bun.which("bun", { PATH: env.PATH })) throw new Error("Bun must not be reachable from the smoke test PATH");
+	for (const directory of env.PATH.split(delimiter)) {
+		if (["bun", "bun.exe"].some((name) => existsSync(join(directory, name))))
+			throw new Error(`Bun must not be reachable from the smoke test PATH, but ${directory} has it`);
+	}
 	await mkdir(env.HOME, { recursive: true });
 	if ((await run([...cli, "--version"], temp, env)).trim() !== manifest.version) throw new Error("Version mismatch");
 	for (const command of ["tui", "web", "serve", "update"]) {
@@ -140,7 +153,7 @@ try {
 			server.close(() => resolvePort(address.port));
 		});
 	});
-	web = Bun.spawn(
+	web = start(
 		[
 			...cli,
 			"web",
@@ -152,24 +165,18 @@ try {
 			"--storage",
 			join(temp, "data", "neko.sqlite"),
 		],
-		{ cwd: temp, env, stdout: "pipe", stderr: "pipe" },
+		temp,
+		env,
 	);
-	let logs = "";
-	const collect = async (stream: ReadableStream<Uint8Array>) => {
-		for await (const chunk of stream) logs += new TextDecoder().decode(chunk);
-	};
-	const readers = Promise.all([
-		collect(web.stdout as ReadableStream<Uint8Array>),
-		collect(web.stderr as ReadableStream<Uint8Array>),
-	]);
+	const logs = () => `${web?.out.stdout}${web?.out.stderr}`;
 	let url: string | undefined;
 	for (let i = 0; i < 150; i++) {
-		url = logs.match(/neko web 已启动: (http:\/\/[^\s]+)/)?.[1];
+		url = logs().match(/neko web 已启动: (http:\/\/[^\s]+)/)?.[1];
 		if (url) break;
-		if (web.exitCode !== null) throw new Error(`Web exited early: ${logs}`);
-		await Bun.sleep(200);
+		if (web.child.exitCode !== null) throw new Error(`Web exited early: ${logs()}`);
+		await sleep(200);
 	}
-	if (!url) throw new Error(`Web startup timed out: ${logs}`);
+	if (!url) throw new Error(`Web startup timed out: ${logs()}`);
 	const response = await fetch(url);
 	const html = await response.text();
 	if (!response.ok || !html.includes('id="root"')) throw new Error("Web HTML unavailable");
@@ -204,12 +211,9 @@ try {
 		if (asset[1]!.endsWith(".js") && !(await assetResponse.text()).includes(manifest.version))
 			throw new Error("Page version missing");
 	}
-	const updateResult = Bun.spawn([...cli, "update"], { cwd: temp, env, stdout: "pipe", stderr: "pipe" });
-	const [updateOut, updateError, updateCode] = await Promise.all([
-		new Response(updateResult.stdout as ReadableStream).text(),
-		new Response(updateResult.stderr as ReadableStream).text(),
-		updateResult.exited,
-	]);
+	const updateResult = start([...cli, "update"], temp, env);
+	const updateCode = await updateResult.exited;
+	const { stdout: updateOut, stderr: updateError } = updateResult.out;
 	if (process.platform === "win32") {
 		if (updateCode !== 0 || !updateOut.includes("npm install -g neko-harness@latest"))
 			throw new Error("Windows update should print manual upgrade instructions");
@@ -217,25 +221,26 @@ try {
 		throw new Error("Local install update should refuse");
 	}
 	if (process.platform === "win32") {
-		killWindowsTree(web.pid);
+		killWindowsTree(web.child.pid!);
 		await web.exited;
 	} else {
-		web.kill("SIGTERM");
+		web.child.kill("SIGTERM");
+		const timeout = new AbortController();
 		const exit = await Promise.race([
 			web.exited,
-			Bun.sleep(10_000).then(() => {
+			sleep(10_000, undefined, { signal: timeout.signal }).then(() => {
 				throw new Error("Web shutdown timed out");
 			}),
 		]);
-		await readers;
-		if (exit !== 0) throw new Error(`Web failed to shut down: ${logs}`);
+		timeout.abort();
+		if (exit !== 0) throw new Error(`Web failed to shut down: ${logs()}`);
 	}
-	if (/\(node:\d+\) \w*Warning/.test(logs)) throw new Error(`neko web printed a runtime warning\n${logs}`);
+	if (/\(node:\d+\) \w*Warning/.test(logs())) throw new Error(`neko web printed a runtime warning\n${logs()}`);
 	console.log(`Package smoke test passed: ${archive} (${files.length} files)`);
 } finally {
-	if (web && web.exitCode === null) {
-		if (process.platform === "win32") killWindowsTree(web.pid);
-		else web.kill("SIGKILL");
+	if (web && web.child.exitCode === null && web.child.signalCode === null) {
+		if (process.platform === "win32") killWindowsTree(web.child.pid!);
+		else web.child.kill("SIGKILL");
 		await web.exited;
 	}
 	await removeDir(temp);

@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxToolCall, type Provider } from "@earendil-works/pi-ai";
 import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";

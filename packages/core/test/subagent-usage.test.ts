@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { UsageState } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { subagentUsageTotals, subtractSubagentUsage } from "../src/subagent-usage.ts";
 
 it("subtracts native model and tool buckets including optional counters and partial failures", () => {

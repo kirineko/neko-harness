@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { findProtectedTerms, PROTECTED_TERMS } from "../src/i18n/protected-terms.ts";
 
 describe("protected terms", () => {

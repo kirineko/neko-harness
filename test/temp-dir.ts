@@ -1,8 +1,11 @@
 import { rmSync, symlinkSync } from "node:fs";
 import { rm as remove } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 
 const RETRYABLE = new Set(["EBUSY", "EPERM", "ENOTEMPTY", "EACCES"]);
 const ATTEMPTS = 20;
+// Dropping unreferenced SQLite handles is what frees the path on Windows; `gc` exists because vitest.config.ts passes --expose-gc.
+const collectGarbage = () => (globalThis as { gc?: () => void }).gc?.();
 const isRetryable = (error: unknown) => RETRYABLE.has((error as { code?: string }).code ?? "");
 
 /** Drop-in `rm` for test cleanup. On Windows, SQLite handles and exiting children keep a path busy briefly. */
@@ -12,8 +15,8 @@ export async function rm(path: string, options?: Parameters<typeof remove>[1]): 
 			return await remove(path, options);
 		} catch (error) {
 			if (attempt >= ATTEMPTS || !isRetryable(error)) throw error;
-			Bun.gc(true);
-			await Bun.sleep(50);
+			collectGarbage();
+			await sleep(50);
 		}
 	}
 }
@@ -24,11 +27,12 @@ export const removeDir = (path: string) => rm(path, { recursive: true, force: tr
 export function removeDirSync(path: string): void {
 	for (let attempt = 1; ; attempt++) {
 		try {
-			return rmSync(path, { recursive: true, force: true });
+			rmSync(path, { recursive: true, force: true });
+			return;
 		} catch (error) {
 			if (attempt >= ATTEMPTS || !isRetryable(error)) throw error;
-			Bun.gc(true);
-			Bun.sleepSync(50);
+			collectGarbage();
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
 		}
 	}
 }

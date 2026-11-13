@@ -1,9 +1,10 @@
 import "./support/lang-en.ts";
-import { afterAll, afterEach, beforeAll, expect, it } from "bun:test";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { type Terminal, TuiAltScreen } from "@earendil-works/pi-tui";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import type { FileCandidates } from "../../core/src/file-mentions.ts";
 import { WorkspaceFiles } from "../../core/src/workspace-files.ts";
 import { BoundedEditor } from "../src/components/editor.ts";
@@ -29,7 +30,7 @@ afterAll(async () => {
 import { fileCompletion } from "../src/file-completion.ts";
 
 async function waitForAutocomplete(editor: BoundedEditor) {
-	for (let attempt = 0; attempt < 400 && !editor.isShowingAutocomplete(); attempt++) await Bun.sleep(10);
+	for (let attempt = 0; attempt < 400 && !editor.isShowingAutocomplete(); attempt++) await sleep(10);
 	expect(editor.isShowingAutocomplete()).toBe(true);
 }
 
@@ -113,7 +114,7 @@ for (const cancel of ["escape", "switch draft"]) {
 		editor.handleInput("@");
 		await waitForAutocomplete(editor);
 		editor.handleInput("\r");
-		for (let attempt = 0; attempt < 100 && !childSignal; attempt++) await Bun.sleep(10);
+		for (let attempt = 0; attempt < 100 && !childSignal; attempt++) await sleep(10);
 		expect(childSignal).toBeDefined();
 		if (cancel === "escape") editor.handleInput("\x1b");
 		else editor.setText("another session");
@@ -126,7 +127,7 @@ for (const cancel of ["escape", "switch draft"]) {
 			limited: false,
 			incomplete: false,
 		});
-		await Bun.sleep(30);
+		await sleep(30);
 		expect(editor.isShowingAutocomplete()).toBe(false);
 		expect(editor.getText()).toBe(cancel === "escape" ? "@src/" : "another session");
 	});
@@ -150,7 +151,7 @@ it("cancels scheduled directory continuation before it starts", async () => {
 	await waitForAutocomplete(editor);
 	editor.handleInput("\t");
 	editor.handleInput("\x1b");
-	await Bun.sleep(30);
+	await sleep(30);
 	expect(queries).toEqual([""]);
 	expect(editor.isShowingAutocomplete()).toBe(false);
 	expect(editor.getText()).toBe("@src/");
@@ -192,7 +193,7 @@ it("closes Pi candidates before starting the double-Escape clear sequence", asyn
 		);
 		editor.render(width);
 		editor.handleInput("@");
-		for (let attempt = 0; attempt < 400 && !editor.isShowingAutocomplete(); attempt++) await Bun.sleep(25);
+		for (let attempt = 0; attempt < 400 && !editor.isShowingAutocomplete(); attempt++) await sleep(25);
 		expect(editor.isShowingAutocomplete()).toBe(true);
 		expect(editor.render(width).every((line) => visibleWidth(line) <= width)).toBe(true);
 		editor.handleInput("\x1b");

@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { expect, it } from "vitest";
 import { rm, trySymlink } from "../../../test/temp-dir.ts";
 import { mentionAt, replaceMention } from "../src/file-mentions.ts";
 import { WorkspaceFiles, workspaceTarget } from "../src/workspace-files.ts";

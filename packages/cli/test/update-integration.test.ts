@@ -1,9 +1,9 @@
-import { expect, it } from "bun:test";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { UpdateChecker } from "../../core/src/application-updates.ts";

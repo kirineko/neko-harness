@@ -3,6 +3,8 @@
 	"files": {
 		"includes": [
 			"scripts/**/*.ts",
+			"test/**/*.ts",
+			"vitest.config.ts",
 			"packages/*/src/**/*.ts",
 			"packages/*/src/**/*.tsx",
 			"packages/*/test/**/*.ts",

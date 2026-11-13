@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { sessionStatusText } from "../src/client/lib/interactions.ts";
 import {
 	attentionTitle,

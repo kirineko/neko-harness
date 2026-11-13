@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
@@ -8,7 +7,9 @@ import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls";
 import { ChordError, type Link, memoryLinkPair } from "@earendil-works/chord";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderPairingQr } from "../../../../scripts/mobile-dev-pair.ts";
+import { spawnProcess } from "../../../../test/process.ts";
 import { rm } from "../../../../test/temp-dir.ts";
 import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { createClientHost } from "../../src/link.ts";
@@ -140,7 +141,7 @@ function tlsFingerprint(port: number): Promise<string> {
 }
 
 async function connectAdmin(gateway: NekoGateway, token: string) {
-	// Bun on Windows drops frames when a WebSocket server and client share a process, so the admin link is in-memory there.
+	// Seen with Bun on Windows: frames are dropped when a WebSocket server and client share a process, so the admin link is in-memory there.
 	let link: Link;
 	if (IS_WINDOWS) {
 		const [clientEnd, serverEnd] = memoryLinkPair();
@@ -777,20 +778,13 @@ describe("mobile admin full surface (4.1)", () => {
 async function runScript(
 	args: readonly string[],
 ): Promise<{ readonly exitCode: number; readonly stdout: string; readonly stderr: string }> {
-	const root = join(import.meta.dir, "../../../..");
-	const proc = Bun.spawn({
-		cmd: [process.execPath, "--conditions=neko-source", "scripts/mobile-dev-pair.ts", ...args],
+	const root = join(import.meta.dirname, "../../../..");
+	const proc = spawnProcess([process.execPath, "--conditions=neko-source", "scripts/mobile-dev-pair.ts", ...args], {
 		cwd: root,
-		stdout: "pipe",
-		stderr: "pipe",
 	});
 	const timeout = setTimeout(() => proc.kill(), 30_000);
 	try {
-		const [stdout, stderr, exitCode] = await Promise.all([
-			new Response(proc.stdout).text(),
-			new Response(proc.stderr).text(),
-			proc.exited,
-		]);
+		const [stdout, stderr, exitCode] = await Promise.all([proc.stdout, proc.stderr, proc.exited]);
 		return { exitCode, stdout, stderr };
 	} finally {
 		clearTimeout(timeout);

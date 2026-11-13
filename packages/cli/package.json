@@ -11,7 +11,7 @@
 		}
 	},
 	"scripts": {
-		"build": "bun --bun run tsc -p tsconfig.build.json"
+		"build": "tsc -p tsconfig.build.json"
 	},
 	"dependencies": {
 		"@neko-harness/core": "workspace:*",

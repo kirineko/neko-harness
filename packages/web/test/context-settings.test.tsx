@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { expect, it } from "vitest";
 import { CONTEXT_ROWS, chipsFor, markers, readSetting } from "../src/client/lib/context-settings.ts";
 import type { NekoContextSettingsPatch, NekoContextSettingsState } from "../src/client/lib/contract.ts";
 import { getState, storeActions } from "../src/client/lib/store.ts";

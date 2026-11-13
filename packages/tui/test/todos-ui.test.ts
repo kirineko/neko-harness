@@ -1,8 +1,8 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { TODOS_UNSUPPORTED } from "@neko-harness/gateway/client-session";
 import type { WireTodoList } from "@neko-harness/gateway/contract";
+import { expect, it } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { helpLines } from "../src/help-ui.ts";

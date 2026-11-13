@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { spawnProcess } from "../../../test/process.ts";
 import { parseArgs, usage } from "../src/cli-options.ts";
 
 const MAIN = fileURLToPath(new URL("../src/main.ts", import.meta.url));
@@ -18,16 +19,10 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 /** Runs the TUI entry with a private data directory so the user's saved language cannot leak in. */
 async function run(args: string[], env: Record<string, string> = {}) {
 	const { NEKO_LANG: _lang, ...inherited } = process.env;
-	const child = Bun.spawn([process.execPath, "--conditions=neko-source", MAIN, "--storage", storage, ...args], {
-		stdout: "pipe",
-		stderr: "pipe",
+	const child = spawnProcess([process.execPath, "--conditions=neko-source", MAIN, "--storage", storage, ...args], {
 		env: { ...inherited, ...env },
 	});
-	const [out, err, code] = await Promise.all([
-		new Response(child.stdout).text(),
-		new Response(child.stderr).text(),
-		child.exited,
-	]);
+	const [out, err, code] = await Promise.all([child.stdout, child.stderr, child.exited]);
 	return { out, err, code };
 }
 

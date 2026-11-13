@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from "bun:test";
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { gatewayCommand, gatewayPortFilePath, stopGatewayProcess } from "../src/index.ts";
 
 const SERVER_ID = "stdin-test";

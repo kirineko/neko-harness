@@ -1,5 +1,4 @@
 import "./support/lang-en.ts";
-import { afterEach, expect, it } from "bun:test";
 import {
 	backgroundAnsi,
 	foregroundAnsi,
@@ -8,6 +7,7 @@ import {
 	setCapabilityOverrides,
 	stripTerminalSequences,
 } from "@earendil-works/pi-tui";
+import { afterEach, expect, it } from "vitest";
 import { AssistantMessageComponent } from "../src/components/assistant-message.ts";
 import { formatNotice } from "../src/components/notice.ts";
 import { PickerPanel } from "../src/components/picker.ts";

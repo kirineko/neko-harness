@@ -1,11 +1,12 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { type FauxResponseFactory, fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { LiveDoc, type Report, type TaskId } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { commitWrites } from "@earendil-works/pi-durable/testing";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { projectChatView } from "../src/projection.ts";
@@ -15,7 +16,7 @@ import { SessionMetadataDoc } from "../src/session-metadata.ts";
 async function until(test: () => Promise<boolean>) {
 	for (let i = 0; i < 300; i++) {
 		if (await test()) return;
-		await Bun.sleep(20);
+		await sleep(20);
 	}
 	throw new Error("crash loop timeout");
 }
@@ -77,7 +78,7 @@ it("ends a task a crash cut off five times, reports it once and keeps other sess
 	});
 	try {
 		await until(async () => reports.length > 0);
-		await Bun.sleep(300);
+		await sleep(300);
 		expect(reports).toHaveLength(1);
 		expect(reports[0]).toMatchObject({ kind: "task_faulted", reason: "restart_limit" });
 		const task = await runtime.harness.getTask(taskId, runtime.context);

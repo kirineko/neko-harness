@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { silenceSqliteWarning } from "../src/runtime-warnings.ts";
 
 it("drops only the experimental SQLite warning and forwards every other warning unchanged", () => {

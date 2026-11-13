@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
 import sharp from "sharp";
+import { expect, it } from "vitest";
 import { imagePrompt, prepareImage } from "../src/images.ts";
 
 const models = createModels();

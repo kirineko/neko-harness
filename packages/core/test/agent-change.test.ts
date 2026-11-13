@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import type { Agent, Extension, ToolRegistration } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { agentChangeFor, agentSyncChange, enabledTools, onlyModeTools } from "../src/agent-change.ts";
 import { CODEMODE_MODES } from "../src/codemode-mode.ts";
 import { PLAN_INSTRUCTIONS } from "../src/plan-doc.ts";

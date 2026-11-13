@@ -92,7 +92,7 @@ pnpm 不能导入 `bun.lock`，首次 `pnpm install` 会重新解析传递依赖
 
 ### D8 脚本由 Node 直接执行
 
-`scripts/*.ts` 用 `node` 运行（Node 22.19 起类型擦除默认开启）：`Bun.spawn` / `Bun.spawnSync` 改 `node:child_process`，`Bun.write` 改 `writeFile`，`Bun.sleep` 改 `node:timers/promises`，`Bun.resolveSync` 改 `createRequire().resolve` 或 `import.meta.resolve`，`import.meta.dir` 改 `import.meta.dirname`，JSON 导入加 `with { type: "json" }`。打包命令由 `bun pm pack` 改为 `pnpm pack --pack-destination artifacts`，产物清单检查（只含 `dist/`、`package.json`、README、LICENSE，`dependencies` 里没有 `@neko-harness/*`）保持不变。
+`scripts/*.ts` 用 `node` 运行（Node 22.19 起类型擦除默认开启）：`Bun.spawn` / `Bun.spawnSync` 改 `node:child_process`，`Bun.write` 改 `writeFile`，`Bun.sleep` 改 `node:timers/promises`，`Bun.resolveSync` 改 `createRequire().resolve` 或 `import.meta.resolve`，`import.meta.dir` 改 `import.meta.dirname`。根 `package.json` 改为经 `scripts/manifest.ts` 从磁盘读取：Node 要求 JSON 模块带 import attributes，而仓库的 `module: Node16` 不接受这种写法（实施时确认，`tsc` 报 TS2823），不为此改动全仓库的编译设置。打包命令由 `bun pm pack` 改为 `pnpm pack --pack-destination artifacts`，产物清单检查（只含 `dist/`、`package.json`、README、LICENSE，`dependencies` 里没有 `@neko-harness/*`）保持不变。
 
 ### D9 类型检查配置
 

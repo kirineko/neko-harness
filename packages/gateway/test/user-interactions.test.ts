@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { compile } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { QUESTIONS_UNSUPPORTED, questionsClient, TODOS_UNSUPPORTED, todosClient } from "../src/client-session.ts";
 import {
 	ChatViewSchema,

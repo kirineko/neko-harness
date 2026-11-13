@@ -1,6 +1,6 @@
-import { afterEach, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { compile } from "@earendil-works/pi-schema";
+import { afterEach, expect, it } from "vitest";
 import { PLAN_UNSUPPORTED, planClient } from "../src/client-session.ts";
 import {
 	ChatViewSchema,

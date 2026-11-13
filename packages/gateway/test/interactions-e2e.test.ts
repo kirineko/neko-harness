@@ -1,5 +1,6 @@
-import { afterEach, expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { afterEach, expect, it } from "vitest";
 import { questionsClient, todosClient } from "../src/client-session.ts";
 import type { NekoChat } from "../src/contract.ts";
 import { eventually, type MobileHarness, startMobileHarness } from "./mobile/harness.ts";
@@ -79,7 +80,7 @@ it("runs a todo and a multi-choice question across desktop and phone, restart, c
 		mode: "steer",
 	});
 	await eventually(() => chat.view.value?.queued?.length === 1, "steer queued");
-	await Bun.sleep(150);
+	await sleep(150);
 	expect(userTexts(chat)).toEqual(["decide storage"]);
 	const before = questionsClient(chat).pending()[0]!;
 
@@ -159,7 +160,7 @@ it("continues after a skip and fails a late answer after stop without starting a
 	await eventually(() => chat.view.value?.busy === false && questionsClient(chat).pending().length === 0, "stopped");
 	const late = await questionsClient(chat).respond({ id: open.id, version: open.version, response: { kind: "skip" } });
 	expect(late.status).toBe("cancelled");
-	await Bun.sleep(150);
+	await sleep(150);
 	expect(chat.view.value?.busy).toBe(false);
 	expect(userTexts(chat)).toEqual(["first", "second"]);
 	await eventually(
@@ -189,7 +190,7 @@ it("keeps a background job running while a question waits and reports it only af
 		"job exited",
 	);
 	// The job ended while the user had not answered; its report waits behind the question like any queued input.
-	await Bun.sleep(150);
+	await sleep(150);
 	expect(chat.view.value?.busy).toBe(true);
 	expect(assistantTexts(chat)).toEqual([]);
 	const open = questionsClient(chat).pending()[0]!;

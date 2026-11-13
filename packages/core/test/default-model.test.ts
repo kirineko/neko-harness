@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { MODEL_PROVIDERS } from "../src/credential-providers.ts";
 import { createNekoRuntime, DEFAULT_MODEL, type NekoModelRef } from "../src/runtime.ts";

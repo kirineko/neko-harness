@@ -1,6 +1,6 @@
 // 真实 DeepSeek API 验证 1：简单问答。
 // 运行（需要 DEEPSEEK_API_KEY）:
-//   bun --conditions=neko-source packages/core/examples/chat.ts
+//   node --conditions=neko-source packages/core/examples/chat.ts
 import { createNekoRuntime } from "../src/index.ts";
 
 const question = "1+1等于几？";

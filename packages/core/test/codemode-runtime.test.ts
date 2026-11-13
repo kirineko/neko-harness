@@ -1,8 +1,10 @@
-import { afterEach, expect, it } from "bun:test";
-import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { afterEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { CodemodeDoc } from "../src/codemode.ts";
@@ -292,7 +294,7 @@ it("keeps codemode when an on-mode session leaves plan mode, and a plan-mode scr
 		await runtime.waitAnswer(await runtime.submit("go"));
 		const [result] = await toolResults(runtime);
 		expect(resultText(result as never)).toContain("edit:rejected,bash:rejected,safe:safe");
-		expect(await Bun.file(target).text()).toBe("original");
+		expect(await readFile(target, "utf8")).toBe("original");
 		await runtime.root.setPlanMode("normal");
 		expect(await toolNames(runtime)).toContain("codemode");
 		expect(await toolNames(runtime)).not.toContain("submit_plan");
@@ -322,10 +324,10 @@ it("gives subagents the parent's mode and gates an explore script's bash behind 
 		let approval: ToolApproval | undefined;
 		for (let i = 0; i < 500 && !approval; i++) {
 			approval = (await runtime.approvals.list(runtime.root.id, runtime.context)).find((a) => a.status === "pending");
-			if (!approval) await Bun.sleep(10);
+			if (!approval) await sleep(10);
 		}
 		expect(approval).toBeDefined();
-		expect(await Bun.file(join(cwd, "result.txt")).exists()).toBe(false);
+		expect(existsSync(join(cwd, "result.txt"))).toBe(false);
 		await runtime.approvals.decide(
 			runtime.root.id,
 			approval!.delegationTaskId,
@@ -335,7 +337,7 @@ it("gives subagents the parent's mode and gates an explore script's bash behind 
 			runtime.context,
 		);
 		await runtime.waitAnswer(job);
-		expect(await Bun.file(join(cwd, "result.txt")).exists()).toBe(false);
+		expect(existsSync(join(cwd, "result.txt"))).toBe(false);
 		const [round] = await listDelegations(runtime.harness, runtime.conversation.id, runtime.context);
 		expect(await modeOf(runtime, round!.childId)).toBe("only");
 		expect(await toolNames(runtime, round!.childId)).toEqual(["codemode"]);
@@ -390,7 +392,7 @@ it("stops a script when the runtime closes while it is running, and closes promp
 	const runtime = await open(faux, "on");
 	faux.setResponses([call("codemode", { code: `await tools.bash({ command: "sleep 30" });\nreturn "never";` })]);
 	const job = await runtime.submit("go");
-	await Bun.sleep(300);
+	await sleep(300);
 	const started = Date.now();
 	await runtime.close();
 	expect(Date.now() - started).toBeLessThan(10_000);

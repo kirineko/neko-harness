@@ -1,4 +1,4 @@
-// neko web 入口：bun --conditions=neko-source packages/web/src/main.ts [选项]
+// neko web 入口：node --conditions=neko-source packages/web/src/main.ts [选项]
 // 静态 HTTP（默认 8322）+ 确保 neko gateway 运行（不在则 spawn，默认 WS 8321）。
 
 import type { NekoModelRef } from "@neko-harness/core";

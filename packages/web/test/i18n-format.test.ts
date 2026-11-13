@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "bun:test";
+import { afterEach, expect, it } from "vitest";
 import { formatDate, formatDateTime, formatRelative, LOCALES } from "../src/client/lib/i18n/format.ts";
 import { languageStore } from "../src/client/lib/language.ts";
 

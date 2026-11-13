@@ -1,5 +1,4 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import {
 	Container,
 	CURSOR_MARKER,
@@ -14,6 +13,7 @@ import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import { PLAN_LIMITS } from "@neko-harness/core/interactions";
 import type { PlanClient } from "@neko-harness/gateway/client-session";
 import type { WirePlanDecision, WirePlanRecord, WirePlanView, WireQueuedInput } from "@neko-harness/gateway/contract";
+import { expect, it } from "vitest";
 import { BoundedEditor } from "../src/components/editor.ts";
 import { StatusFooter } from "../src/components/footer.ts";
 import { PickerPanel } from "../src/components/picker.ts";

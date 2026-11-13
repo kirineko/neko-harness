@@ -127,7 +127,7 @@ function toMessage(error: unknown): string {
 	return String(error);
 }
 
-/** Bun on Windows reports an IPv4 listener as an IPv4-mapped IPv6 address. */
+/** Some runtimes (seen with Bun on Windows) report an IPv4 listener as an IPv4-mapped IPv6 address. */
 function normalizeLocalAddress(address: string | undefined): string | undefined {
 	const mapped = address?.startsWith("::ffff:") ? address.slice("::ffff:".length) : undefined;
 	return mapped !== undefined && isIpv4Literal(mapped) ? mapped : address;

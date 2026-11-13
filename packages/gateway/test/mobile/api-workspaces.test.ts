@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, realpath } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
@@ -6,6 +5,7 @@ import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../../test/temp-dir.ts";
 import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { connectTestClient, testSocketPath, waitFor } from "../helpers.ts";

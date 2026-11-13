@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { byteLength, JOB_LIMITS, OutputBuffer, tailOf } from "../src/jobs.ts";
 
 it("keeps appended output within the byte and line caps and reports truncation", () => {

@@ -1,9 +1,9 @@
 import "./support/lang-en.ts";
-import { afterEach, expect, it } from "bun:test";
 import { stripTerminalSequences, Text } from "@earendil-works/pi-tui";
 import type { ChatView, Delegation, ToolApproval } from "@neko-harness/core";
 import type { NekoGatewayConnection } from "@neko-harness/gateway/client-session";
 import type { WireQuestionRecord, WireQueuedInput } from "@neko-harness/gateway/contract";
+import { afterEach, expect, it } from "vitest";
 import { ApprovalDock } from "../src/approval-dock.ts";
 import { BoundedEditor } from "../src/components/editor.ts";
 import { StatusFooter } from "../src/components/footer.ts";
@@ -32,10 +32,10 @@ it("marks the current language in the panel and never translates the language na
 		setLanguage(language);
 		const items = languageItems();
 		expect(items.map((item) => item.value)).toEqual(["zh", "en"]);
-		expect(items.find((item) => item.value === language)?.label).toEndWith(
-			language === "zh" ? "（当前）" : "(Current)",
-		);
-		expect(items.find((item) => item.value !== language)?.label).toBeOneOf(["中文", "English"]);
+		expect(
+			items.find((item) => item.value === language)?.label.endsWith(language === "zh" ? "（当前）" : "(Current)"),
+		).toBe(true);
+		expect(["中文", "English"]).toContain(items.find((item) => item.value !== language)?.label);
 	}
 	expect(languageItems("en").map((item) => item.label)).toEqual(["中文", "English (Current)"]);
 });

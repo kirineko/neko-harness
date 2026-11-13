@@ -1,6 +1,6 @@
-import { beforeEach, expect, it, mock } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { beforeEach, expect, it, vi } from "vitest";
 import { chatView } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -22,7 +22,7 @@ Object.assign(globalThis, {
 const submits: unknown[][] = [];
 const modes: unknown[][] = [];
 let modeImpl: (sessionId: string, mode: string) => Promise<unknown> = async () => ({});
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		submit: async (...args: unknown[]) => void submits.push(args),
 		planMode: (...args: [string, string]) => {

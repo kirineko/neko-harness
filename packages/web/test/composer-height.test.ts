@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { COMPOSER_MAX_HEIGHT, fitHeight } from "../src/client/lib/composer-height.ts";
 
 function textarea(initial: string) {

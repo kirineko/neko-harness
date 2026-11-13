@@ -1,10 +1,11 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { obj } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
@@ -14,7 +15,7 @@ import { boundedText, cleanTitle, SessionMetadataDoc } from "../src/session-meta
 async function until(test: () => Promise<boolean>) {
 	for (let i = 0; i < 300; i++) {
 		if (await test()) return;
-		await Bun.sleep(20);
+		await sleep(20);
 	}
 	throw new Error("metadata timeout");
 }
@@ -30,7 +31,7 @@ it("names the first answered question off-thread, persists usage and keeps indep
 	let captured = "";
 	faux.setResponses([
 		async () => {
-			await Bun.sleep(30);
+			await sleep(30);
 			return fauxAssistantMessage([fauxText("完整答案")]);
 		},
 		(context, options) => {
@@ -167,7 +168,7 @@ it("restores an interrupted naming attempt and ignores results after archive", a
 		await until(async () => faux.state.callCount === 5);
 		await runtime.archiveConversation(child.id);
 		releaseChild(fauxAssistantMessage([fauxText("must not save")]));
-		await Bun.sleep(30);
+		await sleep(30);
 		expect((await runtime.harness.snapshot(SessionMetadataDoc, child.id, runtime.context))?.title).toBe("");
 		expect((await runtime.listConversations()).some((x) => x.id === child.id)).toBe(false);
 	} finally {
@@ -230,7 +231,7 @@ it("does not retry a failed first answer using a later question", async () => {
 	try {
 		await runtime.waitAnswer(await runtime.submit("first", { requestId: "__proto__" }));
 		await runtime.waitAnswer(await runtime.submit("second"));
-		await Bun.sleep(150);
+		await sleep(150);
 		const info = (await runtime.listConversations())[0]!;
 		expect(info.firstPromptPreview).toBe("first");
 		expect(info.title).toBe("");
@@ -344,29 +345,26 @@ it("sends DeepSeek titles with thinking disabled while preserving conversation t
 	const key = process.env.DEEPSEEK_API_KEY;
 	process.env.DEEPSEEK_API_KEY = "test-key";
 	const bodies: Array<Record<string, unknown>> = [];
-	globalThis.fetch = Object.assign(
-		async (_input: unknown, init?: RequestInit) => {
-			const body = JSON.parse(String(init?.body));
-			bodies.push(body);
-			const content = bodies.length === 1 ? "First answer" : "DeepSeek title";
-			const chunk = {
-				id: "test",
-				object: "chat.completion.chunk",
-				created: 1,
-				model: "deepseek-flash",
-				choices: [{ index: 0, delta: { role: "assistant", content }, finish_reason: null }],
-			};
-			const final = {
-				...chunk,
-				choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-				usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-			};
-			return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(final)}\n\ndata: [DONE]\n\n`, {
-				headers: { "content-type": "text/event-stream" },
-			});
-		},
-		{ preconnect: originalFetch.preconnect },
-	) as typeof fetch;
+	globalThis.fetch = Object.assign(async (_input: unknown, init?: RequestInit) => {
+		const body = JSON.parse(String(init?.body));
+		bodies.push(body);
+		const content = bodies.length === 1 ? "First answer" : "DeepSeek title";
+		const chunk = {
+			id: "test",
+			object: "chat.completion.chunk",
+			created: 1,
+			model: "deepseek-flash",
+			choices: [{ index: 0, delta: { role: "assistant", content }, finish_reason: null }],
+		};
+		const final = {
+			...chunk,
+			choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+			usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+		};
+		return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(final)}\n\ndata: [DONE]\n\n`, {
+			headers: { "content-type": "text/event-stream" },
+		});
+	}) as typeof fetch;
 	let runtime: Awaited<ReturnType<typeof createNekoRuntime>> | undefined;
 	try {
 		runtime = await createNekoRuntime({
@@ -457,7 +455,7 @@ it("does not advance message time or name an aborted first answer", async () => 
 		const input = await runtime.submit("cancel this answer");
 		await until(async () => faux.state.callCount === 1);
 		const sent = (await runtime.listConversations())[0]!.lastMessageAt;
-		await Bun.sleep(80);
+		await sleep(80);
 		await runtime.abort();
 		await runtime.waitAnswer(input);
 		const metadata = await runtime.harness.snapshot(SessionMetadataDoc, runtime.root.id, runtime.context);

@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { expect, it } from "vitest";
 import { DEFAULT_APPEARANCE, FONTS, LEADINGS, SIZES, WEIGHTS } from "../src/client/lib/appearance.ts";
 
 const css = readFileSync(new URL("../src/client/styles.css", import.meta.url), "utf8");

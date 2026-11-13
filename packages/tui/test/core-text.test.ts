@@ -1,4 +1,3 @@
-import { afterEach, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
 	JOBS_UNSUPPORTED,
@@ -7,6 +6,7 @@ import {
 	QUEUE_UNSUPPORTED,
 	TODOS_UNSUPPORTED,
 } from "@neko-harness/gateway/client-session";
+import { afterEach, expect, it } from "vitest";
 import { localizeCoreText, localizeError, localizeStatus } from "../src/i18n/core-text.ts";
 import { hasMessage, setLanguage, t } from "../src/i18n/index.ts";
 import { runFailureReason } from "../src/run-failure-ui.ts";

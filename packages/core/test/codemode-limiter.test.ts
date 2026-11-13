@@ -1,4 +1,5 @@
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
+import { expect, it } from "vitest";
 import { SANDBOX_BUSY, WorkerLimiter } from "../src/codemode.ts";
 
 const gate = () => {
@@ -20,7 +21,7 @@ it("lets a call that starts a worker keep its slot until the worker exits, not u
 	const waiting = limiter.run(undefined, async () => {
 		second = true;
 	});
-	await Bun.sleep(20);
+	await sleep(20);
 	expect(second).toBe(false);
 	expect(limiter.waiting).toBe(1);
 	release();
@@ -55,10 +56,10 @@ it("serves waiters first-in first-out and never exceeds the cap", async () => {
 			release();
 		}),
 	);
-	await Bun.sleep(20);
+	await sleep(20);
 	expect(order).toEqual([0, 1]);
 	gates[0]!.open();
-	await Bun.sleep(20);
+	await sleep(20);
 	expect(order).toEqual([0, 1, 2]);
 	for (const g of gates) g.open();
 	await Promise.all(runs);
@@ -90,7 +91,7 @@ it("stops waiting when the call is aborted", async () => {
 	});
 	const controller = new AbortController();
 	const waiting = limiter.run(controller.signal, async () => {});
-	await Bun.sleep(10);
+	await sleep(10);
 	controller.abort(new Error("stopped"));
 	await expect(waiting).rejects.toThrow("stopped");
 	expect(limiter.waiting).toBe(0);

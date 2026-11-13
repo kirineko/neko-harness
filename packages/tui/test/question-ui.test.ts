@@ -1,5 +1,4 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import {
 	Container,
 	CURSOR_MARKER,
@@ -20,6 +19,7 @@ import type {
 	WireQuestionSummary,
 	WireQueuedInput,
 } from "@neko-harness/gateway/contract";
+import { expect, it } from "vitest";
 import { BoundedEditor } from "../src/components/editor.ts";
 import { StatusFooter } from "../src/components/footer.ts";
 import { PickerPanel } from "../src/components/picker.ts";

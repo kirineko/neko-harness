@@ -1,6 +1,7 @@
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createHost, type Frame, type Link, memoryLinkPair } from "@earendil-works/chord";
 import { createNekoRuntime } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { createGatewayConnection, GatewayIdentityError } from "../src/client-session.ts";
 import { GATEWAY_HOST } from "../src/contract.ts";
@@ -64,7 +65,7 @@ it("waits for delayed initial state and returns native handles through async bou
 		const pending = client.ready().then(() => {
 			ready = true;
 		});
-		await Bun.sleep(10);
+		await sleep(10);
 		expect(ready).toBe(false);
 		expect(client.application.status).toBe("loading");
 		expect(() => client.directory).toThrow("Gateway protocol not checked");
@@ -80,7 +81,7 @@ it("waits for delayed initial state and returns native handles through async bou
 		link.hold = true;
 		const controller = new AbortController();
 		const cancelled = client.host.root((ctx) => client.attach("1", ctx), { signal: controller.signal });
-		await Bun.sleep(10);
+		await sleep(10);
 		controller.abort();
 		await expect(cancelled).rejects.toThrow();
 		link.flush();

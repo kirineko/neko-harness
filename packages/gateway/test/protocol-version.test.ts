@@ -1,9 +1,10 @@
 // A peer on another Chord link protocol version is refused with a recognizable reason and never disturbs other peers.
 
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createHost, memoryLinkPair } from "@earendil-works/chord";
 import { createNekoRuntime } from "@neko-harness/core";
 import { ApplicationProtocolError } from "@neko-harness/core/application-version";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { createGatewayConnection } from "../src/client-session.ts";
 import { GATEWAY_HOST } from "../src/contract.ts";
@@ -55,7 +56,7 @@ it("closes a client on another protocol version with a recognizable reason while
 		const reasons: string[] = [];
 		staleLink.onClose((reason) => reasons.push(reason));
 		staleLink.send({ t: "hello", name: "stale", kind: "client", codeVersion: 0, protocol: 1 });
-		await Bun.sleep(20);
+		await sleep(20);
 		expect(gateway.mismatches).toEqual([1]);
 		expect(reasons.some((reason) => reason.startsWith("protocol-version "))).toBe(true);
 		expect(stalePeer.closed).toBe(true);

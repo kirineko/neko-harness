@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { toStartupError } from "../src/gateway.ts";
 
 const info = (socketPath: string | null) => ({ socketPath, port: 8321, host: "127.0.0.1", serverId: "id" });

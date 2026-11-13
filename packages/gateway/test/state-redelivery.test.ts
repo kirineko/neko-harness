@@ -1,6 +1,7 @@
 // Chord 1.3 gives every new or re-holding subscriber the current value; server listeners must reconcile, not republish.
 
-import { afterEach, beforeEach, expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { cleanup, connectTestClient, makeGateway, type TestGateway } from "./helpers.ts";
 
 let target: TestGateway;
@@ -34,7 +35,7 @@ it("delivers the current server state to reconnecting clients without bumping re
 			expect(other.credentials.state.value.revision).toBe(initial.credentials);
 			await other.close();
 		}
-		await Bun.sleep(50);
+		await sleep(50);
 		expect(seen).toEqual({
 			directory: [initial.directory],
 			workspaces: [initial.workspaces],

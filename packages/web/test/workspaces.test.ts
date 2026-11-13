@@ -1,6 +1,6 @@
-import { expect, it, spyOn } from "bun:test";
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
+import { expect, it, vi } from "vitest";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { GatewayConnection, type GatewayEvents, workspaceSessions } from "../src/client/lib/gateway.ts";
 import { startWebServer } from "../src/server.ts";
@@ -13,7 +13,7 @@ it("waits for the first chat snapshot and ignores a late operation after connect
 	const gate = new Promise<void>((resolve) => {
 		release = resolve;
 	});
-	const delayed = spyOn(runtime, "getConversation").mockImplementation(async (id) => {
+	const delayed = vi.spyOn(runtime, "getConversation").mockImplementation(async (id) => {
 		await gate;
 		return get(id);
 	});
@@ -36,7 +36,7 @@ it("waits for the first chat snapshot and ignores a late operation after connect
 			onView() {},
 		},
 	});
-	let creating: ReturnType<typeof spyOn> | undefined;
+	let creating: ReturnType<typeof vi.spyOn> | undefined;
 	try {
 		const start = web.start();
 		await waitFor(() => delayed.mock.calls.length > 0, "delayed chat acquisition");
@@ -50,7 +50,7 @@ it("waits for the first chat snapshot and ignores a late operation after connect
 		const pendingGate = new Promise<void>((resolve) => {
 			release = resolve;
 		});
-		creating = spyOn(runtime, "createConversation").mockImplementation(async (options) => {
+		creating = vi.spyOn(runtime, "createConversation").mockImplementation(async (options) => {
 			await pendingGate;
 			return create(options);
 		});

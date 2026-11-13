@@ -1,18 +1,15 @@
-import { expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
+import { expect, it } from "vitest";
+import { spawnProcess } from "../../../test/process.ts";
 
 /** NEKO_LANG is cleared unless given, and the TUI help always gets an explicit `--lang`, so the saved language never leaks in. */
 async function help(entry: string, args: string[], env: Record<string, string> = {}): Promise<string> {
 	const { NEKO_LANG: _lang, ...inherited } = process.env;
-	const child = Bun.spawn(
+	const child = spawnProcess(
 		[process.execPath, "--conditions=neko-source", fileURLToPath(new URL(entry, import.meta.url)), ...args],
-		{
-			stdout: "pipe",
-			stderr: "pipe",
-			env: { ...inherited, ...env },
-		},
+		{ env: { ...inherited, ...env } },
 	);
-	const [out, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+	const [out, code] = await Promise.all([child.stdout, child.exited]);
 	expect(code).toBe(0);
 	return out;
 }
@@ -67,5 +64,5 @@ it("forwards the TUI language to `neko tui --help` and leaves the other commands
 		expect(output).not.toContain("Usage: neko tui");
 	}
 	expect(await help("../src/main.ts", ["web", "--help"], { NEKO_LANG: "en" })).toContain("模型服务");
-	// Spawns a dozen Bun processes in sequence, which exceeds the 5s default on a busy parallel run.
+	// Spawns a dozen processes in sequence, which exceeds the 5s default on a busy parallel run.
 }, 30_000);

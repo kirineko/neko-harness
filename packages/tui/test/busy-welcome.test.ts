@@ -1,7 +1,7 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { Container, ScrollView, stripTerminalSequences, Text } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
+import { expect, it } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { WelcomeScreen } from "../src/components/welcome.ts";

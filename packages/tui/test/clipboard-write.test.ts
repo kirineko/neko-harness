@@ -1,5 +1,5 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { copyToClipboard, OSC52_MAX_BASE64_LENGTH } from "../src/clipboard-write.ts";
 
 type Call = { command: string; args: readonly string[]; input: string };

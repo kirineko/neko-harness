@@ -1,10 +1,10 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, wrapTool } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { TODO_LIMITS } from "../src/interactions.ts";

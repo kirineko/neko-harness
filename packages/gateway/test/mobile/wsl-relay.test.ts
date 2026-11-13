@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { get as httpsGet } from "node:https";
 import { createServer as createNetServer } from "node:net";
 import type { NetworkInterfaceInfo } from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../../test/temp-dir.ts";
 import { MobileGateway, type MobileNetworkHooks } from "../../src/mobile/listener.ts";
 import { RelayError, type RelayHandle, type RelayOptions } from "../../src/mobile/relay.ts";

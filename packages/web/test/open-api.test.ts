@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { handleOpenRequest } from "../src/open-api.ts";
 import { OpenError, type OpenService, type OpenTargetId } from "../src/open-target.ts";
@@ -135,7 +135,8 @@ describe("open api", () => {
 	it("opens an existing directory, resolving symlinks, and passes special characters through", async () => {
 		const leaf = process.platform === "win32" ? "a b 'c' & $d" : 'a b "c" & $d';
 		const special = join(dir, leaf);
-		await Bun.write(join(special, ".keep"), "");
+		await mkdir(special, { recursive: true });
+		await writeFile(join(special, ".keep"), "");
 		const link = join(dir, "link");
 		await symlink(special, link, process.platform === "win32" ? "junction" : "dir");
 		const opened: Array<{ target: OpenTargetId; dir: string }> = [];

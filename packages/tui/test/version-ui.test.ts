@@ -1,6 +1,7 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { expect, it } from "vitest";
 import { APPLICATION_PROTOCOL, type UpdateState } from "../../core/src/application-version.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { openVersion, versionNotice, versionOverview } from "../src/version-ui.ts";
@@ -86,7 +87,7 @@ it("separates details, preserves failed-check feedback, and returns through the 
 		const text = () => stripTerminalSequences(panel.render(width).join("\n"));
 		const enter = async () => {
 			panel.handleInput("\r");
-			await Bun.sleep(0);
+			await sleep(0);
 		};
 		await enter();
 		expect(text()).toContain("Up to date");
@@ -126,7 +127,7 @@ it("uses the returned check result and makes the Windows command accessible in a
 	);
 	panel.handleInput("\x1b[B");
 	panel.handleInput("\r");
-	await Bun.sleep(0);
+	await sleep(0);
 	let output = "";
 	for (let n = 0; n < 12; n++) {
 		const lines = panel.render(60);

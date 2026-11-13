@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { type HistoryBrowse, type HistoryKeyEvent, stepHistory } from "../src/client/lib/input-history.ts";
 
 const key = (name: string, extra: Partial<HistoryKeyEvent> = {}): HistoryKeyEvent => ({

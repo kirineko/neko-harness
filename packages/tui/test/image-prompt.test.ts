@@ -1,6 +1,6 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { MouseRegion, stripTerminalSequences } from "@earendil-works/pi-tui";
+import { expect, it } from "vitest";
 import { UserMessageComponent } from "../src/components/user-message.ts";
 
 const prompt = { version: 3, text: `${"Saved image prompt.\n".repeat(40)}END OF SAVED PROMPT` };

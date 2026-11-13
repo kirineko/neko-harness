@@ -1,5 +1,6 @@
-import { expect, it } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { type FauxResponseFactory, fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { onCommits } from "../src/commits.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
@@ -16,7 +17,7 @@ it("uses native compaction, distinguishes no-op and applied, preserves recency",
 		for (let i = 0; i < 200; i++) {
 			const latest = await runtime.root.compactionRecord();
 			if (latest?.phase === phase) return latest;
-			await Bun.sleep(10);
+			await sleep(10);
 		}
 		throw new Error(`No ${phase} result`);
 	};
@@ -53,7 +54,7 @@ it("keeps the system baseline ahead of the conversation after compaction without
 		await runtime.waitAnswer(await runtime.submit(`second ${"b".repeat(90000)}`));
 		const before = (await runtime.listConversations())[0]!;
 		await runtime.root.compact("Keep the task");
-		for (let i = 0; i < 200 && (await runtime.root.compactionRecord())?.phase !== "applied"; i++) await Bun.sleep(10);
+		for (let i = 0; i < 200 && (await runtime.root.compactionRecord())?.phase !== "applied"; i++) await sleep(10);
 		expect((await runtime.root.compactionRecord())?.phase).toBe("applied");
 		expect((await runtime.listConversations())[0]!.lastMessageAt).toBe(before.lastMessageAt);
 		await runtime.waitAnswer(await runtime.submit("third"));
@@ -100,7 +101,7 @@ for (const [label, extra, expectedBlocking] of [
 async function untilPhase(runtime: Awaited<ReturnType<typeof createNekoRuntime>>, phase: string) {
 	for (let n = 0; n < 600; n++) {
 		if ((await runtime.root.compactionRecord())?.phase === phase) return;
-		await Bun.sleep(10);
+		await sleep(10);
 	}
 	throw new Error(`Missing phase ${phase}`);
 }
@@ -139,7 +140,7 @@ for (const mode of ["failure", "cancel", "retry", "overflow"] as const) {
 					},
 				]);
 				await runtime.compact();
-				await Bun.sleep(30);
+				await sleep(30);
 				await runtime.abort();
 				await untilPhase(runtime, "cancelled");
 			} else if (mode === "retry") {
@@ -196,7 +197,7 @@ it("waits for the native write boundary and restores terminal state after reopen
 			fauxAssistantMessage([fauxText("summary")]),
 		]);
 		const running = await runtime.submit("continue");
-		await Bun.sleep(20);
+		await sleep(20);
 		await runtime.compact();
 		await untilPhase(runtime, "waiting-to-apply");
 		const waiting = (await runtime.root.compactionRecord())!;
@@ -245,7 +246,7 @@ it("resumes an interrupted native summary after runtime restart", async () => {
 			},
 		]);
 		await runtime.compact();
-		for (let n = 0; n < 100 && !started; n++) await Bun.sleep(10);
+		for (let n = 0; n < 100 && !started; n++) await sleep(10);
 		expect(started).toBe(true);
 		await runtime.close();
 		faux.setResponses([fauxAssistantMessage([fauxText("recovered summary")])]);
@@ -282,7 +283,7 @@ it("reports a native stale summary as skipped instead of applied", async () => {
 			},
 		]);
 		await runtime.compact();
-		for (let n = 0; n < 100 && !started; n++) await Bun.sleep(10);
+		for (let n = 0; n < 100 && !started; n++) await sleep(10);
 		await runtime.root.conversation.reset("new context", runtime.context);
 		release();
 		await untilPhase(runtime, "skipped");

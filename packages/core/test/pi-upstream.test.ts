@@ -1,10 +1,10 @@
 // Upstream Pi behavior changes neko relies on and must not regress or patch around.
 
-import { expect, it } from "bun:test";
 import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { createNekoRuntime, projectChatView } from "../src/index.ts";

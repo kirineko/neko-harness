@@ -1,6 +1,6 @@
-import { beforeEach, expect, it, mock } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { WireSteerResult, WireWithdrawResult } from "../src/client/lib/contract.ts";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -19,7 +19,7 @@ const submits: unknown[][] = [];
 let withdrawResult: WireWithdrawResult = { result: "withdrawn", text: "full original text" };
 let steerResult: WireSteerResult = { result: "steered", id: 99 };
 const steers: unknown[][] = [];
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		submit: async (...args: unknown[]) => void submits.push(args),
 		withdraw: async () => withdrawResult,

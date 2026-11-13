@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { BACKGROUND_CONTEXT as context, withAbortSignal } from "@earendil-works/chord/context";
 import type { ToolRegistration } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { createWebSearchTools, type WebFetch } from "../src/web-search/index.ts";
 import { createTavilyProvider } from "../src/web-search/tavily.ts";
 

@@ -3,12 +3,12 @@
 //   whenBusy:"followUp" 排队到当前 run 结束（最终边界），二者经由 ChatView 的条目顺序可区分。
 // - fork 从会话当前状态分叉：新会话带父会话历史、可独立继续；空会话 fork 退化为新建。
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import type { ChatItem, ChatView } from "@neko-harness/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import type { NekoGatewayClient } from "../src/index.ts";
 import { cleanup, connectTestClient, makeGateway, type TestGateway, waitFor } from "./helpers.ts";

@@ -1,9 +1,9 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
 import type { WindowsShellResolver, WindowsShellStatus } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { ApplicationInfoSchema } from "../src/contract.ts";

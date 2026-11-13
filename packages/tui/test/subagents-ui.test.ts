@@ -1,8 +1,8 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { ChatView, Delegation } from "@neko-harness/core";
 import type { NekoGatewayConnection } from "@neko-harness/gateway/client-session";
+import { expect, it } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { SubagentDetail, subagentItems } from "../src/subagents-ui.ts";

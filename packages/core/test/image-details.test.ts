@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { HookApi, ToolHooks } from "@earendil-works/pi-durable";
 import sharp from "sharp";
+import { expect, it } from "vitest";
 import { ImageDetails } from "../src/image-metadata.ts";
 
 it("adds actual output metadata while preserving all upstream result channels", async () => {

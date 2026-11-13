@@ -1,7 +1,7 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { NekoGatewayClient } from "@neko-harness/gateway";
+import { expect, it } from "vitest";
 import { PickerPanel } from "../src/components/picker.ts";
 import { shortcutHints } from "../src/components/shortcut-hints.ts";
 import { HelpDetail, helpLines } from "../src/help-ui.ts";

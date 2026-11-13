@@ -1,6 +1,6 @@
-import { afterEach, expect, it } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { afterEach, expect, it } from "vitest";
 import { setLanguage } from "../src/i18n/index.ts";
 import { continueCommand, RunFailureRow } from "../src/run-failure-ui.ts";
 import "./support/lang-en.ts";

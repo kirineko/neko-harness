@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
+import { expect, it } from "vitest";
 import {
 	APPEARANCE_KEY,
 	type Appearance,

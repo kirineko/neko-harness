@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { chatView } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });

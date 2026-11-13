@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connectNekoGateway } from "@neko-harness/gateway";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { connectToGateway } from "../../tui/src/gateway.ts";
 import { ensureNekoGateway } from "../../web/src/gateway-spawn.ts";
@@ -37,7 +37,7 @@ async function freePort(): Promise<number> {
 	return address.port;
 }
 
-describe("Bun gateway startup", () => {
+describe("Source gateway startup", () => {
 	for (const first of ["TUI", "Web"] as const) {
 		it(`${first} first shares its gateway and session with the other frontend`, async () => {
 			const options = {
@@ -122,7 +122,7 @@ describe("Bun gateway startup", () => {
 		} else expect(existsSync(owner.socketPath!)).toBe(false);
 	}, 10_000);
 
-	it("Web uses Bun, forwards options, supports WS reconnect and releases its child", async () => {
+	it("Web uses the current runtime, forwards options, supports WS reconnect and releases its child", async () => {
 		const options = {
 			credentialsPath: join(dir, "credentials.json"),
 			storagePath: join(dir, "session.sqlite"),

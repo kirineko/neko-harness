@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GatewayUnsupportedError, mobileAdmin, resetMobileAdminSession } from "../src/client/lib/mobile-admin.ts";
 
 type FetchCall = { readonly url: string; readonly init: RequestInit | undefined };

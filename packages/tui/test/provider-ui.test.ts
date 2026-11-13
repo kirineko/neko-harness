@@ -1,8 +1,8 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoModelRef, NekoSelectableModel } from "@neko-harness/core";
 import type { NekoCredentialState, NekoDefaultModelState } from "@neko-harness/gateway";
+import { expect, it } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { modelDisplayName } from "../src/format.ts";

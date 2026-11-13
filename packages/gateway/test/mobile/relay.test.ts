@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { spawn as nodeSpawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 import {
 	buildRelayScript,
 	encodeRelayCommand,

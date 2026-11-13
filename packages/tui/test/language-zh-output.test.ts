@@ -1,6 +1,6 @@
-import { afterEach, expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { findProtectedTerms } from "@neko-harness/core/protected-terms";
+import { afterEach, expect, it } from "vitest";
 import { APPLICATION_PROTOCOL, type UpdateState } from "../../core/src/application-version.ts";
 import { contextEmpty, contextItems } from "../src/context-ui.ts";
 import { helpLines } from "../src/help-ui.ts";

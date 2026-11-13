@@ -1,9 +1,11 @@
-import { expect, it } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { obj } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { followConversation } from "../src/conversation-follow.ts";
@@ -14,7 +16,7 @@ async function pending(runtime: NekoRuntime): Promise<ToolApproval> {
 	for (let i = 0; i < 500; i++) {
 		const a = (await runtime.approvals.list(runtime.root.id, runtime.context)).find((a) => a.status === "pending");
 		if (a) return a;
-		await Bun.sleep(10);
+		await sleep(10);
 	}
 	throw new Error("No pending approval");
 }
@@ -41,7 +43,7 @@ for (const decision of ["allowed", "denied", "cancelled"] as const) {
 		try {
 			const job = await runtime.submit("Investigate");
 			const a = await pending(runtime);
-			expect(await Bun.file(join(dir, "result.txt")).exists()).toBe(false);
+			expect(existsSync(join(dir, "result.txt"))).toBe(false);
 			const { projectChatView } = await import("../src/projection.ts");
 			const childView = await followConversation(
 				(await runtime.harness.conversation(a.childId as never, runtime.context))!,
@@ -76,7 +78,7 @@ for (const decision of ["allowed", "denied", "cancelled"] as const) {
 			}
 			await runtime.waitAnswer(job);
 			expect((await runtime.approvals.list(runtime.root.id, runtime.context))[0]!.status).toBe(decision);
-			expect(await Bun.file(join(dir, "result.txt")).exists()).toBe(decision === "allowed");
+			expect(existsSync(join(dir, "result.txt"))).toBe(decision === "allowed");
 			if (decision === "allowed") expect(await readFile(join(dir, "result.txt"), "utf8")).toBe("approved");
 		} finally {
 			await runtime.close();
@@ -190,7 +192,7 @@ for (const checkpoint of ["decided", "intent", "executing"] as const) {
 			await runtime.close();
 			runtime = await createNekoRuntime(options);
 			await runtime.waitAnswer((await runtime.harness.submission(job.id, runtime.context))!);
-			const exists = await Bun.file(join(dir, "result.txt")).exists();
+			const exists = existsSync(join(dir, "result.txt"));
 			expect(exists).toBe(checkpoint !== "intent");
 			if (exists) expect(await readFile(join(dir, "result.txt"), "utf8")).toBe("once");
 			expect(await runtime.approvals.list(runtime.root.id, runtime.context)).toHaveLength(1);
@@ -247,7 +249,7 @@ for (const alteration of ["cwd", "arguments"] as const) {
 			}
 			await runtime.approvals.decide(runtime.root.id, a.delegationTaskId, a.id, a.version, "allowed", runtime.context);
 			await runtime.waitAnswer(job);
-			expect(await Bun.file(join(dir, "result.txt")).exists()).toBe(false);
+			expect(existsSync(join(dir, "result.txt"))).toBe(false);
 			const child = await runtime.harness.conversation(a.childId as never, runtime.context);
 			expect(JSON.stringify((await child!.entries({}, 100, undefined, runtime.context)).items)).toContain(
 				"operation changed",

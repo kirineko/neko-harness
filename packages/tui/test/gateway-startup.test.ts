@@ -1,5 +1,4 @@
 import "./support/lang-en.ts";
-import { expect, it, spyOn } from "bun:test";
 import * as childProcess from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -12,11 +11,18 @@ import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { APPLICATION_PROTOCOL, ApplicationProtocolError } from "@neko-harness/core/application-version";
 import { startGateway } from "@neko-harness/gateway";
+import { expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { waitFor } from "../../gateway/test/helpers.ts";
 import { connectToGateway } from "../src/gateway.ts";
+
+// An ES module namespace cannot be spied on in place, so swap `spawn` for a mock that defaults to the real one.
+vi.mock("node:child_process", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:child_process")>();
+	return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 // Exercise the Windows discovery branch without changing process.platform. Service handshakes use real WS.
 async function target(protocolVersion = APPLICATION_PROTOCOL) {
@@ -62,19 +68,15 @@ class TestChild extends EventEmitter {
 
 function mockSpawn(onSpawn: (child: TestChild) => void = () => {}) {
 	const child = new TestChild();
-	const kill = spyOn(child, "kill").mockImplementation(() => {
+	const kill = vi.spyOn(child, "kill").mockImplementation(() => {
 		child.signalCode = "SIGTERM";
 		child.emit("exit", null, "SIGTERM");
 		return true;
 	});
-	const spawn = spyOn(childProcess, "spawn").mockImplementation(
-		new Proxy(childProcess.spawn, {
-			apply() {
-				onSpawn(child);
-				return child;
-			},
-		}),
-	);
+	const spawn = vi.mocked(childProcess.spawn).mockImplementation((() => {
+		onSpawn(child);
+		return child;
+	}) as never);
 	return { child, kill, spawn, restore: () => spawn.mockRestore() };
 }
 
@@ -135,7 +137,7 @@ for (const phase of ["HTTP", "Chord"] as const) {
 			const fresh = await target();
 			const sockets = new Set<Socket>();
 			let accepted = 0;
-			// The HTTP stall uses a raw server because Bun 1.4.4 never emits 'close' for a node:http upgrade socket.
+			// The HTTP stall uses a raw server because Bun 1.4.4 never emitted 'close' for a node:http upgrade socket.
 			const httpServer = phase === "Chord" ? createServer() : undefined;
 			const ws = httpServer ? new WebSocketServer({ server: httpServer }) : undefined;
 			const server: NetServer = httpServer ?? createNetServer((socket) => void socket.resume());

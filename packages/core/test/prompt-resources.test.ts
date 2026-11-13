@@ -1,7 +1,7 @@
-import { afterEach, expect, it } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { createResourceLoader } from "../src/prompt/resources.ts";
 

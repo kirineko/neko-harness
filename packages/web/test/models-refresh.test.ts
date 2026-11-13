@@ -1,8 +1,8 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { NekoSelectableModel } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { startGateway } from "../../gateway/src/gateway.ts";
 import { testSocketPath, waitFor } from "../../gateway/test/helpers.ts";

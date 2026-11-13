@@ -1,7 +1,7 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { formatSkillsForPrompt, mergeSkills, parseSkillFile, scanSkillsDir } from "../src/prompt/skills.ts";
 

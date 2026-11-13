@@ -1,6 +1,6 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import { expect, it } from "vitest";
 import { diffTargetPath, highlightDiffLines, parseDiffLine, parseDiffLines } from "../src/components/diff-view.ts";
 import { diffBackgroundAnsi, theme } from "../src/theme/slots.ts";
 import { highlightCodeToAnsiLines, languageForPath } from "../src/theme/syntax.ts";

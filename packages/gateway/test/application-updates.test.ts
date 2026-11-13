@@ -1,7 +1,8 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { APPLICATION_PROTOCOL, ApplicationProtocolError } from "../../core/src/application-version.ts";
@@ -45,7 +46,7 @@ it("publishes install changes consistently without attaching or waiting for regi
 		expect(ws.application.info.value).toEqual(unix.application.info.value);
 		let events = 0;
 		const stop = ws.application.info.subscribe(() => events++);
-		await Bun.sleep(65);
+		await sleep(65);
 		expect(events).toBe(1);
 		stop();
 		expect((await ws.application.check(null)).checkState).toBe("failed");

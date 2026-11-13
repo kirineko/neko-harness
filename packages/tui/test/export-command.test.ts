@@ -1,9 +1,9 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChatItem } from "@neko-harness/core";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { copyLastAnswer } from "../src/clipboard-write.ts";
 import { exportToFile, parseExportArgs } from "../src/export-command.ts";

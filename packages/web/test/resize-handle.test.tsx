@@ -1,6 +1,6 @@
-import { afterEach, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, expect, it } from "vitest";
 
 const dom = new JSDOM("<!doctype html><html><head><title>neko.harness</title></head><body></body></html>", {
 	url: "http://localhost/",

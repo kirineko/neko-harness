@@ -1,5 +1,5 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { PickerPanel } from "../src/components/picker.ts";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));

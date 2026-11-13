@@ -1,12 +1,12 @@
 // 技能市场客户端（spec: skill-market）：mock fetch 喂目录与 fflate 现造的 zip，
 // 覆盖缓存、sha256 校验、zip-slip 防护、覆盖保护、临时目录卫生与卸载。
 
-import { afterEach, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zipSync } from "fflate";
+import { afterEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { activeLevelOf, createSkillMarketClient, SkillMarketError } from "../src/skill-market.ts";
 

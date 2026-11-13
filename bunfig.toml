@@ -1,6 +1,0 @@
-[install]
-linker = "hoisted"
-
-[test]
-root = "./packages"
-pathIgnorePatterns = ["**/dist/**", "**/node_modules/**"]

@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
 import { JobTail } from "@neko-harness/core/job-summary";
+import { expect, it } from "vitest";
 import { atBottom, jobStatusText, sanitizeJobOutput } from "../src/client/lib/job-output.ts";
 
 const base = {

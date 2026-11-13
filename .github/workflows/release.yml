@@ -21,11 +21,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v7
         with:
-          bun-version: '1.4.x'
+          node-version: '24.x'
       - id: check
-        run: bun scripts/release-preflight.ts
+        run: node scripts/release-preflight.ts
 
   verify:
     needs: preflight
@@ -40,27 +40,26 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.4.x'
-      # The published package runs on Node: the install smoke test installs with npm and starts neko on this Node.
+      # pnpm's version comes from the `packageManager` field of package.json.
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v7
         with:
           node-version: '24.x'
-      - run: bun install --frozen-lockfile
-      - run: bun run build:release
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:release
       # 格式与类型检查不随平台变化，只在 Linux 上跑一次。
       - if: matrix.os == 'ubuntu-26.04'
-        run: bun run check
-      - run: bun run test
-      - run: bun run test:package
+        run: pnpm check
+      - run: pnpm test
+      - run: pnpm test:package
       # Repeat the install smoke test on the declared minimum (engines.node); one platform is enough.
       - if: matrix.os == 'ubuntu-26.04'
         uses: actions/setup-node@v7
         with:
           node-version: '22.19.0'
       - if: matrix.os == 'ubuntu-26.04'
-        run: bun run test:package
+        run: pnpm test:package
       - if: matrix.os == 'ubuntu-26.04'
         uses: actions/upload-artifact@v7
         with:
@@ -162,7 +161,7 @@ jobs:
         with:
           name: npm-package
           path: artifacts
-      # npm uploads the tarball that `verify` installed with npm and ran on Node; builds and tests still use Bun 1.4.x.
+      # npm uploads the tarball that `verify` installed with npm and ran on Node.
       - uses: actions/setup-node@v7
         with:
           node-version: '24.x'

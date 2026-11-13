@@ -1,6 +1,6 @@
-import { expect, it, spyOn } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { expect, it, vi } from "vitest";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>");
 Object.assign(globalThis, {
@@ -48,7 +48,7 @@ async function mount(props: Props) {
 }
 
 it("shows a collapsed header with the call count and does not highlight until expanded", async () => {
-	const highlight = spyOn(hljs, "highlight");
+	const highlight = vi.spyOn(hljs, "highlight");
 	try {
 		const view = await mount(base);
 		expect(view.host.querySelector("[data-codemode-card]")).not.toBeNull();

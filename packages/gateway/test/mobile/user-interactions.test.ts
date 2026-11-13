@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
+import { afterEach, describe, expect, it } from "vitest";
 import {
 	checkSchema,
 	MOBILE_API_V1_METHODS,

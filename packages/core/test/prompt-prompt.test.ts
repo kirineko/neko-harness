@@ -1,9 +1,9 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { PromptInput } from "@earendil-works/pi-durable";
+import { afterEach, expect, it } from "vitest";
 import { removeDirSync } from "../../../test/temp-dir.ts";
 import { createNekoPrompt } from "../src/prompt/prompt.ts";
 import { createResourceLoader } from "../src/prompt/resources.ts";

@@ -1,10 +1,11 @@
-import { afterEach, expect, it, spyOn } from "bun:test";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { type FileChange, type FileListing, ok } from "@earendil-works/pi-durable/env";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { Connection, LocalExecutionEnv } from "@earendil-works/pi-env";
+import { afterEach, expect, it, vi } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { FILE_CACHE_LIMITS, WorkspaceFiles } from "../src/workspace-files.ts";
 
@@ -21,7 +22,7 @@ async function setup(limits = FILE_CACHE_LIMITS) {
 	roots.push(root);
 	const files = new WorkspaceFiles(limits);
 	instances.push(files);
-	const info = spyOn(Connection.prototype, "info").mockResolvedValue({
+	const info = vi.spyOn(Connection.prototype, "info").mockResolvedValue({
 		protocol: 1,
 		version: "1.2.0",
 		os: process.platform,
@@ -35,11 +36,11 @@ async function setup(limits = FILE_CACHE_LIMITS) {
 		features: ["listFiles"],
 	});
 	restores.push(() => info.mockRestore());
-	const session = spyOn(Connection.prototype, "session").mockResolvedValue(1);
+	const session = vi.spyOn(Connection.prototype, "session").mockResolvedValue(1);
 	restores.push(() => session.mockRestore());
 	const watches: ((change: FileChange) => void)[] = [];
 	let closed = 0;
-	const watch = spyOn(NodeExecutionEnv.prototype, "watch").mockImplementation(async (_targets, change) => {
+	const watch = vi.spyOn(NodeExecutionEnv.prototype, "watch").mockImplementation(async (_targets, change) => {
 		watches.push(change);
 		return ok({
 			mode: "native",
@@ -62,7 +63,7 @@ it("prioritizes directories before applying the candidate limit", async () => {
 	await Promise.all(entries.map((entry) => writeFile(join(root, entry.path), "")));
 	await mkdir(join(root, "z-directory"));
 	entries.push({ path: "z-directory", kind: "directory" });
-	const list = spyOn(LocalExecutionEnv.prototype, "listFiles").mockResolvedValue(ok({ entries, truncated: false }));
+	const list = vi.spyOn(LocalExecutionEnv.prototype, "listFiles").mockResolvedValue(ok({ entries, truncated: false }));
 	restores.push(() => list.mockRestore());
 	const result = await files.search(root, "", new AbortController().signal);
 	expect(result.entries[0]).toEqual({ name: "z-directory", path: "z-directory", kind: "directory" });
@@ -77,7 +78,7 @@ it("coalesces scans, isolates canceled waiters, rejects late scans after invalid
 			import("@earendil-works/pi-durable/env").FileError
 		>,
 	) => void = () => {};
-	const list = spyOn(LocalExecutionEnv.prototype, "listFiles").mockImplementation(
+	const list = vi.spyOn(LocalExecutionEnv.prototype, "listFiles").mockImplementation(
 		async () =>
 			new Promise((resolve) => {
 				complete = resolve;
@@ -87,7 +88,7 @@ it("coalesces scans, isolates canceled waiters, rejects late scans after invalid
 	const controller = new AbortController();
 	const first = files.search(root, "x", controller.signal);
 	const second = files.search(root, "y", new AbortController().signal);
-	for (let i = 0; i < 100 && !list.mock.calls.length; i++) await Bun.sleep(1);
+	for (let i = 0; i < 100 && !list.mock.calls.length; i++) await sleep(1);
 	controller.abort();
 	await expect(first).rejects.toThrow("cancelled");
 	expect(list).toHaveBeenCalledTimes(1);
@@ -95,7 +96,7 @@ it("coalesces scans, isolates canceled waiters, rejects late scans after invalid
 	expect((await second).incomplete).toBe(false);
 	watches[0]!({ kind: "overflow" });
 	const late = files.search(root, "", new AbortController().signal);
-	for (let i = 0; i < 100 && list.mock.calls.length < 2; i++) await Bun.sleep(1);
+	for (let i = 0; i < 100 && list.mock.calls.length < 2; i++) await sleep(1);
 	watches[0]!({ kind: "paths", paths: ["new.ts"] });
 	complete(ok(empty));
 	await expect(late).rejects.toThrow("changed");
@@ -108,7 +109,7 @@ it("bounds concurrent and queued scans and releases watchers on LRU, idle, remov
 	let running = 0,
 		maximum = 0;
 	const pending: (() => void)[] = [];
-	const list = spyOn(LocalExecutionEnv.prototype, "listFiles").mockImplementation(async () => {
+	const list = vi.spyOn(LocalExecutionEnv.prototype, "listFiles").mockImplementation(async () => {
 		running++;
 		maximum = Math.max(maximum, running);
 		await new Promise<void>((resolve) => pending.push(resolve));
@@ -121,14 +122,14 @@ it("bounds concurrent and queued scans and releases watchers on LRU, idle, remov
 		await mkdir(join(root, String(i)));
 		queries.push(files.search(root, `${i}/`, new AbortController().signal));
 	}
-	for (let i = 0; i < 100 && list.mock.calls.length < 2; i++) await Bun.sleep(1);
+	for (let i = 0; i < 100 && list.mock.calls.length < 2; i++) await sleep(1);
 	await mkdir(join(root, "overflow"));
 	await expect(files.search(root, "overflow/", new AbortController().signal)).rejects.toThrow("busy");
 	expect(maximum).toBe(2);
 	pending.splice(0).forEach((resolve) => {
 		resolve();
 	});
-	for (let i = 0; i < 100 && list.mock.calls.length < 3; i++) await Bun.sleep(1);
+	for (let i = 0; i < 100 && list.mock.calls.length < 3; i++) await sleep(1);
 	pending.splice(0).forEach((resolve) => {
 		resolve();
 	});
@@ -138,10 +139,10 @@ it("bounds concurrent and queued scans and releases watchers on LRU, idle, remov
 	expect(files.stats.keys).toBe(3);
 	expect(files.stats.watchers).toBe(1);
 	files.remove(root);
-	await Bun.sleep(0);
+	await sleep(0);
 	expect(closed()).toBe(1);
 	await files.search(root, "", new AbortController().signal);
-	await Bun.sleep(100);
+	await sleep(100);
 	expect(closed()).toBe(2);
 	await files.search(root, "", new AbortController().signal);
 	await files.close();
@@ -150,11 +151,11 @@ it("bounds concurrent and queued scans and releases watchers on LRU, idle, remov
 it("replaces a connection after startup timeout and retries, without affecting ordinary Node operations", async () => {
 	const { files, root, info } = await setup({ ...FILE_CACHE_LIMITS, startupMs: 20 });
 	info.mockImplementationOnce(() => new Promise(() => {}));
-	const closes = spyOn(Connection.prototype, "close");
+	const closes = vi.spyOn(Connection.prototype, "close");
 	restores.push(() => closes.mockRestore());
 	await expect(files.search(root, "", new AbortController().signal)).rejects.toThrow("startup timed out");
 	expect(closes).toHaveBeenCalledTimes(1);
-	const list = spyOn(LocalExecutionEnv.prototype, "listFiles").mockResolvedValue(ok(empty));
+	const list = vi.spyOn(LocalExecutionEnv.prototype, "listFiles").mockResolvedValue(ok(empty));
 	restores.push(() => list.mockRestore());
 	expect((await files.search(root, "", new AbortController().signal)).entries).toEqual([]);
 	expect(info).toHaveBeenCalledTimes(2);
@@ -166,25 +167,27 @@ import { BACKGROUND_CONTEXT as importContext } from "@earendil-works/chord/conte
 it("reclaims a canceled final waiter and watcher, and falls back to TTL after watch failure", async () => {
 	const { files, root, closed } = await setup({ ...FILE_CACHE_LIMITS, ttlMs: 15 });
 	let started = false;
-	const list = spyOn(LocalExecutionEnv.prototype, "listFiles").mockImplementation(async (_path, _options, context) => {
-		started = true;
-		await new Promise<void>((resolve) => {
-			if (context.abortSignal?.aborted) resolve();
-			else context.abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+	const list = vi
+		.spyOn(LocalExecutionEnv.prototype, "listFiles")
+		.mockImplementation(async (_path, _options, context) => {
+			started = true;
+			await new Promise<void>((resolve) => {
+				if (context.abortSignal?.aborted) resolve();
+				else context.abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+			});
+			return ok(empty);
 		});
-		return ok(empty);
-	});
 	restores.push(() => list.mockRestore());
 	const controller = new AbortController();
 	const pending = files.search(root, "", controller.signal);
-	for (let n = 0; n < 100 && !started; n++) await Bun.sleep(1);
+	for (let n = 0; n < 100 && !started; n++) await sleep(1);
 	controller.abort();
 	await expect(pending).rejects.toThrow("cancelled");
-	await Bun.sleep(0);
+	await sleep(0);
 	expect(files.stats.keys).toBe(0);
 	expect(closed()).toBe(1);
 	list.mockResolvedValue(ok(empty));
-	const failedWatch = spyOn(NodeExecutionEnv.prototype, "watch").mockImplementation(async () => ({
+	const failedWatch = vi.spyOn(NodeExecutionEnv.prototype, "watch").mockImplementation(async () => ({
 		ok: false,
 		error: new (await import("@earendil-works/pi-durable/env")).FileError("permission_denied", "watch denied"),
 	}));
@@ -193,7 +196,7 @@ it("reclaims a canceled final waiter and watcher, and falls back to TTL after wa
 	await files.search(root, "", new AbortController().signal);
 	await files.search(root, "", new AbortController().signal);
 	expect(list).toHaveBeenCalledTimes(2);
-	await Bun.sleep(20);
+	await sleep(20);
 	await files.search(root, "", new AbortController().signal);
 	expect(list).toHaveBeenCalledTimes(3);
 });

@@ -1,13 +1,17 @@
+import { spawnSync } from "node:child_process";
 import { chmod, cp, readFile, rm } from "node:fs/promises";
-import manifest from "../package.json";
+import { rolldown } from "rolldown";
+import { manifest } from "./manifest.ts";
 
-// The ordinary workspace build labels the client as development. Build the published client with the same release marker as the Bun bundles.
-const clientBuild = Bun.spawn([process.execPath, "run", "--cwd", "packages/web", "build"], {
-	env: { ...process.env, NEKO_RELEASE_BUILD: "1" },
-	stdout: "inherit",
-	stderr: "inherit",
-});
-if ((await clientBuild.exited) !== 0) throw new Error("Release client build failed");
+// The ordinary workspace build labels the client as development. Build the published client with the same release marker as the bundles.
+// pnpm exposes its own entry point to scripts; going through it avoids a shell and the `.cmd` shim on Windows.
+const pnpm = process.env.npm_execpath;
+const clientBuild = spawnSync(
+	pnpm ? process.execPath : "pnpm",
+	[...(pnpm ? [pnpm] : []), "--filter", "@neko-harness/web", "run", "build"],
+	{ env: { ...process.env, NEKO_RELEASE_BUILD: "1" }, stdio: "inherit" },
+);
+if (clientBuild.status !== 0) throw new Error("Release client build failed");
 await rm("dist", { recursive: true, force: true });
 // The published runtime is Node. `engines.node` is the only source of the minimum version the launcher enforces.
 const minimumNode = /^>=(\d+\.\d+\.\d+)$/.exec(manifest.engines.node)?.[1];
@@ -20,22 +24,26 @@ for (const [name, entry] of Object.entries({
 	gateway: "packages/gateway/src/bin.ts",
 	"gateway-main": "packages/gateway/src/main.ts",
 })) {
-	const result = await Bun.build({
-		entrypoints: [entry],
-		outdir: "dist",
-		naming: `${name}.js`,
-		target: "node",
-		format: "esm",
-		conditions: ["neko-source"],
-		external: Object.keys(manifest.dependencies),
-		define: {
-			"process.env.NEKO_RELEASE_BUILD": JSON.stringify("1"),
-			"process.env.NEKO_RELEASE_VERSION": JSON.stringify(manifest.version),
-			NEKO_BUILD_VERSION: JSON.stringify(manifest.version),
-			NEKO_MIN_NODE: JSON.stringify(minimumNode),
+	// Runtime dependencies stay external (the published package installs them); everything else is bundled.
+	const external = Object.keys(manifest.dependencies);
+	const bundle = await rolldown({
+		input: entry,
+		platform: "node",
+		external: (id) => id.startsWith("node:") || external.some((name) => id === name || id.startsWith(`${name}/`)),
+		resolve: { conditionNames: ["neko-source", "import", "node", "default"] },
+		transform: {
+			define: {
+				"process.env.NEKO_RELEASE_BUILD": JSON.stringify("1"),
+				"process.env.NEKO_RELEASE_VERSION": JSON.stringify(manifest.version),
+				NEKO_BUILD_VERSION: JSON.stringify(manifest.version),
+				NEKO_MIN_NODE: JSON.stringify(minimumNode),
+			},
 		},
+		logLevel: "warn",
 	});
-	if (!result.success) throw new AggregateError(result.logs, `Failed to build ${name}`);
+	// One file per entry: the launchers import their bundle by a computed path, nothing else may be split off.
+	await bundle.write({ file: `dist/${name}.js`, format: "esm", codeSplitting: false });
+	await bundle.close();
 	const output = await readFile(`dist/${name}.js`, "utf8");
 	for (const marker of ["// @bun", "import.meta.require", "Bun."]) {
 		if (output.includes(marker)) throw new Error(`dist/${name}.js is not a Node bundle: found ${marker}`);

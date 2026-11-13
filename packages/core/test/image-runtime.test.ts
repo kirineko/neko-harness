@@ -1,9 +1,10 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import sharp from "sharp";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { DEFAULT_IMAGE_PROMPT } from "../src/image-prompt.ts";
@@ -191,7 +192,7 @@ it("keeps distinct filenames for identical image bytes and queued messages", asy
 	}
 });
 it("reports denied and changing files as image tool errors", async () => {
-	const { spyOn } = await import("bun:test");
+	const { vi } = await import("vitest");
 	const { NodeExecutionEnv } = await import("@earendil-works/pi-durable/env/node");
 	const { chmod } = await import("node:fs/promises");
 	const dir = await mkdtemp(join(tmpdir(), "neko-image-read-failure-"));
@@ -221,7 +222,7 @@ it("reports denied and changing files as image tool errors", async () => {
 		return tool;
 	};
 	const original = NodeExecutionEnv.prototype.openBinaryReader;
-	let spy: ReturnType<typeof spyOn> | undefined;
+	let spy: ReturnType<typeof vi.spyOn> | undefined;
 	try {
 		// chmod does not revoke read access on Windows.
 		if (process.platform !== "win32") {
@@ -229,7 +230,7 @@ it("reports denied and changing files as image tool errors", async () => {
 			expect((await call()).isError).toBe(true);
 			await chmod(path, 0o600);
 		}
-		spy = spyOn(NodeExecutionEnv.prototype, "openBinaryReader").mockImplementation(async function (
+		spy = vi.spyOn(NodeExecutionEnv.prototype, "openBinaryReader").mockImplementation(async function (
 			this: InstanceType<typeof NodeExecutionEnv>,
 			...args
 		) {
@@ -281,12 +282,12 @@ it("names image-only first turns using an off-mode text placeholder, never image
 				imageNames: ["/temporary/private-image.png"],
 			}),
 		);
-		for (let n = 0; n < 100 && !naming; n++) await Bun.sleep(10);
+		for (let n = 0; n < 100 && !naming; n++) await sleep(10);
 		expect(naming).toContain("[Image message: 1]");
 		expect(naming).not.toContain(bytes.toString("base64"));
 		expect(naming).not.toContain("private-image");
 		await runtime.compact();
-		await Bun.sleep(20);
+		await sleep(20);
 		expect(faux.state.callCount).toBe(2);
 	} finally {
 		await runtime.close();

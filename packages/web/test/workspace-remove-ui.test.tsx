@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import { JSDOM } from "jsdom";
 import * as React from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { chatView } from "./support/interaction-fixtures.ts";
 
 const dom = new JSDOM("<!doctype html><html lang='zh-CN'><body></body></html>", { url: "http://localhost/" });
@@ -29,7 +29,7 @@ dialog.close ??= function (this: HTMLDialogElement) {
 
 const calls = { remove: [] as string[], select: [] as string[] };
 let removeImpl: (path: string) => Promise<void> = async () => {};
-mock.module("../src/client/lib/bootstrap", () => ({
+vi.doMock("../src/client/lib/bootstrap", () => ({
 	appActions: {
 		createSession: async () => {},
 		selectSession: async () => {},

@@ -1,8 +1,10 @@
-import { expect, it } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { PlanDoc } from "../src/plan.ts";
@@ -22,7 +24,7 @@ async function until<T>(read: () => Promise<T>, done: (value: T) => boolean, wha
 		const value = await read();
 		if (done(value)) return value;
 		if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`);
-		await Bun.sleep(10);
+		await sleep(10);
 	}
 }
 const toolNames = async (runtime: NekoRuntime, id?: number) => {
@@ -81,7 +83,7 @@ it("plans read-only, submits, then approves into one execute input with the tool
 		expect(resultText(results[0]!)).toContain("read-only");
 		expect(resultText(results[1]!)).toContain("planbash");
 		expect(results[2]!.isError).toBe(true);
-		expect(await Bun.file("plan-test-output.txt").exists()).toBe(false);
+		expect(existsSync("plan-test-output.txt")).toBe(false);
 		expect((await runtime.root.plan()).mode).toBe("plan");
 
 		const settled = await runtime.root.respondPlan(plan.version, { kind: "approve" });
@@ -93,7 +95,7 @@ it("plans read-only, submits, then approves into one execute input with the tool
 			(texts) => texts.length === 2,
 			"the execute input",
 		);
-		await Bun.sleep(100);
+		await sleep(100);
 		const texts = await userTexts(runtime);
 		expect(texts).toHaveLength(2);
 		expect(texts[1]).toContain('approved your plan "Add flag"');
@@ -316,7 +318,7 @@ it("submits a decision an older release saved without its input exactly once aft
 		expect(await toolNames(runtime)).toContain("edit");
 		await runtime.close();
 		runtime = await createNekoRuntime(options);
-		await Bun.sleep(100);
+		await sleep(100);
 		expect(await userTexts(runtime)).toHaveLength(2);
 	} finally {
 		await runtime.close();

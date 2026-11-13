@@ -1,12 +1,12 @@
 // 真机配对开发脚本（经 design D5 的 neko.mobile-admin；日常使用请走 Web 设置页，本脚本保留为开发工具）。
 // 连接一个已运行的 gateway，经 neko.mobile-admin 启用移动入口并打印配对文本与 ASCII 二维码。
-// 用法：bun scripts/mobile-dev-pair.ts --address <局域网 IPv4> [--port 8323] [--data-dir <数据目录>]
+// 用法：node --conditions=neko-source scripts/mobile-dev-pair.ts --address <局域网 IPv4> [--port 8323] [--data-dir <数据目录>]
 
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { DEFAULT_STORAGE_PATH } from "@neko-harness/core";
 import qrcode from "qrcode-generator";
+import { DEFAULT_STORAGE_PATH } from "../packages/core/src/runtime.ts";
 import { assertGatewayIdentity } from "../packages/gateway/src/client-session.ts";
 import { createClientHost } from "../packages/gateway/src/link.ts";
 import { NekoMobileAdmin } from "../packages/gateway/src/mobile/admin.ts";
@@ -82,7 +82,7 @@ function requireValue(flag: string | undefined, value: string | undefined): stri
 }
 
 function printUsage(): void {
-	console.log(`用法：bun scripts/mobile-dev-pair.ts --address <局域网 IPv4> [选项]
+	console.log(`用法：node --conditions=neko-source scripts/mobile-dev-pair.ts --address <局域网 IPv4> [选项]
 
 选项：
   --address <ipv4>   要监听的网卡地址（必填，例如 192.168.1.20）
@@ -121,7 +121,7 @@ async function readServerId(dataDir: string): Promise<string> {
 		// 落在下方统一提示。
 	}
 	throw new Error(
-		`数据目录 ${dataDir} 中还没有 gateway 身份文件（${SERVER_ID_FILE}）。请先正常运行一次电脑端（如 bun run neko serve），再执行本脚本。`,
+		`数据目录 ${dataDir} 中还没有 gateway 身份文件（${SERVER_ID_FILE}）。请先正常运行一次电脑端（如 pnpm neko serve），再执行本脚本。`,
 	);
 }
 
@@ -141,7 +141,7 @@ async function connectGatewayLink(options: ScriptOptions & { readonly serverId: 
 		return await createUnixLink(socketPath);
 	} catch {
 		throw new Error(
-			`无法连接 gateway Unix socket：${socketPath}\n请先启动电脑端（如 bun run neko serve），且不要在本脚本内重复启动第二个实例。`,
+			`无法连接 gateway Unix socket：${socketPath}\n请先启动电脑端（如 pnpm neko serve），且不要在本脚本内重复启动第二个实例。`,
 		);
 	}
 }

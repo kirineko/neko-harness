@@ -1,5 +1,5 @@
-import { expect, it, spyOn } from "bun:test";
 import { MemoryStorage } from "@earendil-works/pi-durable";
+import { expect, it, vi } from "vitest";
 import { GatewayConnection } from "../../web/src/client/lib/gateway.ts";
 import { NekoChat } from "../src/contract.ts";
 import { cleanup, connectTestClient, connectTestWsClient, makeGateway, waitFor } from "./helpers.ts";
@@ -110,11 +110,11 @@ it("closes both transports and clears Web busy state after fatal storage failure
 			};
 		},
 	]);
-	let spy: ReturnType<typeof spyOn> | undefined;
+	let spy: ReturnType<typeof vi.spyOn> | undefined;
 	try {
 		await chat.submit({ content: "hold" });
 		await waitFor(() => view?.busy === true, "both busy");
-		spy = spyOn(MemoryStorage.prototype, "scanEntries").mockImplementation(async () => {
+		spy = vi.spyOn(MemoryStorage.prototype, "scanEntries").mockImplementation(async () => {
 			throw new Error("disk read failure");
 		});
 		await expect(

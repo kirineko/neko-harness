@@ -1,7 +1,7 @@
 import "./support/lang-en.ts";
-import { expect, it } from "bun:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { NekoContextSettingsPatch, NekoContextSettingsState } from "@neko-harness/gateway";
+import { expect, it } from "vitest";
 import { PickerPanel } from "../src/components/picker.ts";
 import { contextItems, openContextPanel } from "../src/context-ui.ts";
 import { commands } from "../src/labels.ts";

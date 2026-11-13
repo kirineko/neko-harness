@@ -1,11 +1,11 @@
 // 断连语义（spec: 断连释放）：某前端断开后其 attachment 在已受理调用结算后释放，
 // 会话本身与其他 attachment 不受影响；重连 = 重新 attach + 取最新快照，不重放历史。
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { connectNekoGateway, startGateway } from "../src/index.ts";
 import {
 	cleanup,

@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { compile } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import { JOBS_UNSUPPORTED, jobsClient } from "../src/client-session.ts";
 import type { NekoChat } from "../src/contract.ts";
 import { ChatViewSchema } from "../src/contract.ts";

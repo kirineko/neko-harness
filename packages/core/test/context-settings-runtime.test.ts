@@ -1,8 +1,9 @@
-import { afterEach, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
+import { afterEach, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import type { ContextSettings } from "../src/context-settings.ts";
@@ -32,7 +33,7 @@ function open(options: { storagePath?: string; context?: ContextSettings; modelI
 
 async function pump(runtime: Awaited<ReturnType<typeof open>>, turns: number) {
 	for (let i = 0; i < turns; i++) await runtime.waitAnswer(await runtime.submit(`turn ${i} ${"x".repeat(60000)}`));
-	await Bun.sleep(200);
+	await sleep(200);
 }
 
 it("keeps the native thresholds when nothing is set", async () => {

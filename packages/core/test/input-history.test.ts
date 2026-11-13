@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { INPUT_HISTORY_LIMIT, promptHistory } from "../src/input-history.ts";
 import type { ChatItem } from "../src/projection.ts";
 

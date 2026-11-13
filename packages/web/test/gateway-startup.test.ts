@@ -1,13 +1,19 @@
-import { describe, expect, it, spyOn } from "bun:test";
 import * as childProcess from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createNetServer, type Server as NetServer, type Socket } from "node:net";
 import { join } from "node:path";
 import { connectNekoGateway, startGateway } from "@neko-harness/gateway";
+import { describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { cleanup, IS_WINDOWS, makeGateway, testAddress, waitFor } from "../../gateway/test/helpers.ts";
 import { ensureNekoGateway } from "../src/gateway-spawn.ts";
+
+// An ES module namespace cannot be spied on in place, so swap `spawn` for a mock that defaults to the real one.
+vi.mock("node:child_process", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:child_process")>();
+	return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 describe.skipIf(IS_WINDOWS)("POSIX Web gateway readiness", () => {
 	it("rejects a live Unix-only gateway without disturbing its client", async () => {
@@ -77,7 +83,7 @@ describe.skipIf(IS_WINDOWS)("POSIX Web gateway readiness", () => {
 			const sockets = new Set<Socket>();
 			let accepted = 0;
 			// HTTP: a TCP peer that never replies to the upgrade; Chord: upgrade but never send hello/service state.
-			// The HTTP stall uses a raw server because Bun 1.4.4 never emits 'close' for a node:http upgrade socket.
+			// The HTTP stall uses a raw server because Bun 1.4.4 never emitted 'close' for a node:http upgrade socket.
 			const httpServer = phase === "Chord" ? createServer() : undefined;
 			const ws = httpServer ? new WebSocketServer({ server: httpServer }) : undefined;
 			const server: NetServer = httpServer ?? createNetServer((socket) => void socket.resume());
@@ -119,15 +125,11 @@ describe.skipIf(IS_WINDOWS)("POSIX Web gateway readiness", () => {
 		const originalKey = process.env.DEEPSEEK_API_KEY;
 		process.env.DEEPSEEK_API_KEY = "unused-startup-test";
 		let child: childProcess.ChildProcess | undefined;
-		const originalSpawn = childProcess.spawn;
-		const spawn = spyOn(childProcess, "spawn").mockImplementation(
-			new Proxy(originalSpawn, {
-				apply(target, thisArg, args) {
-					child = Reflect.apply(target, thisArg, args);
-					return child;
-				},
-			}),
-		);
+		const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+		const spawn = vi.mocked(childProcess.spawn).mockImplementation(((...args: Parameters<typeof actual.spawn>) => {
+			child = actual.spawn(...args);
+			return child;
+		}) as never);
 		let unixReady = false;
 		try {
 			await expect(

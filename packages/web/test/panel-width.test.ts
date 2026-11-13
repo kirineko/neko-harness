@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { SIDE_PANEL_WIDTH } from "../src/client/lib/layout.ts";
 import { createPanelWidthStore, PANEL_WIDTH_KEY, parsePanelWidth } from "../src/client/lib/panel-width.ts";
 

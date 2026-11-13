@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { expect, it } from "vitest";
 import { rm, trySymlink } from "../../../test/temp-dir.ts";
 import { BROWSE_LIMITS, FILE_CACHE_LIMITS, isProtectedPath, WorkspaceFiles } from "../src/workspace-files.ts";
 

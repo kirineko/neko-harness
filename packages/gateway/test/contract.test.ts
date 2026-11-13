@@ -1,6 +1,6 @@
-import { expect, it } from "bun:test";
 import { createHost } from "@earendil-works/chord";
 import { compile } from "@earendil-works/pi-schema";
+import { expect, it } from "vitest";
 import {
 	ChatViewSchema,
 	DefaultModelStateSchema,

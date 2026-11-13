@@ -1,10 +1,11 @@
-import { expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import type { Context } from "@earendil-works/chord";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { defineExtension, wrapTool } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import type { QuestionResponse } from "../src/interactions.ts";
@@ -30,7 +31,7 @@ async function until<T>(read: () => Promise<T>, done: (value: T) => boolean, wha
 		const value = await read();
 		if (done(value)) return value;
 		if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`);
-		await Bun.sleep(10);
+		await sleep(10);
 	}
 }
 const firstPending = async (runtime: NekoRuntime, session = runtime.root) => {
@@ -69,7 +70,7 @@ it("answers a single choice with extra text and returns labels, ids and the user
 		const q = await firstPending(runtime);
 		expect(q.preview).toBe("Which database?");
 		expect(q.optionCount).toBe(3);
-		expect(runtime.root.questions().then((l) => l.revision)).resolves.toBeGreaterThan(0);
+		await expect(runtime.root.questions().then((l) => l.revision)).resolves.toBeGreaterThan(0);
 		const record = await runtime.root.question(q.id);
 		expect(record).toMatchObject({ status: "pending", multiple: false, answer: null });
 		expect(record!.options[0]).toMatchObject({ id: "pg", recommended: true });
@@ -293,7 +294,7 @@ it("cancels on stop: late answers get the cancelled record and start nothing", a
 		expect(late.answer).toBeNull();
 		expect(await runtime.root.questions()).toMatchObject({ pending: [] });
 		expect((await runtime.root.question(q.id))!.status).toBe("cancelled");
-		await Bun.sleep(100);
+		await sleep(100);
 		expect((await runtime.listConversations())[0]!.status).not.toBe("running");
 		expect(await userMessages(runtime)).toHaveLength(1);
 	} finally {
@@ -365,7 +366,7 @@ it("keeps a pending question across a SQLite reopen with the same identity and c
 	try {
 		const job = await runtime.submit("go");
 		const q = await firstPending(runtime);
-		await Bun.sleep(50);
+		await sleep(50);
 		await runtime.close();
 		runtime = await createNekoRuntime(options);
 		const again = await firstPending(runtime);
@@ -470,7 +471,7 @@ it("does not let a fork see or answer the parent's open question", async () => {
 	try {
 		const job = await runtime.submit("go");
 		const q = await firstPending(runtime);
-		await Bun.sleep(30);
+		await sleep(30);
 		const fork = await runtime.forkConversation(runtime.root.id);
 		expect((await fork.questions()).pending).toEqual([]);
 		expect(await fork.question(q.id)).toBeUndefined();
@@ -496,7 +497,7 @@ it("keeps chat input queued behind the question and applies it only after the an
 		const q = await firstPending(runtime);
 		const queued = await runtime.submit("PG please", { whenBusy: "followUp" });
 		const steered = await runtime.submit("hurry", { whenBusy: "steer" });
-		await Bun.sleep(100);
+		await sleep(100);
 		expect((await runtime.root.questions()).pending).toHaveLength(1);
 		expect(await userMessages(runtime)).toHaveLength(1);
 		expect(await results(runtime)).toHaveLength(0);
@@ -528,7 +529,7 @@ it("runs the rest of the round only after the question settles", async () => {
 	try {
 		const job = await runtime.submit("go");
 		const q = await firstPending(runtime);
-		await Bun.sleep(100);
+		await sleep(100);
 		expect((await runtime.root.todos()).revision).toBe(0);
 		await runtime.root.respondQuestion(q.id, q.version, answer(["pg"]));
 		await runtime.waitAnswer(job);
@@ -555,7 +556,7 @@ it("presents consecutive questions of one round one at a time", async () => {
 		const job = await runtime.submit("go");
 		const first = await firstPending(runtime);
 		expect(first.preview).toBe("First?");
-		await Bun.sleep(80);
+		await sleep(80);
 		expect((await runtime.root.questions()).pending).toHaveLength(1);
 		await runtime.root.respondQuestion(first.id, first.version, answer(undefined, "one"));
 		const second = await until(
@@ -608,14 +609,14 @@ it("waits on committed state only: settled before subscribing, aborted, closed, 
 		const q = await firstPending(runtime);
 		const controller = new AbortController();
 		const aborted = runtime.questions.wait(runtime.root.id, q.id, withAbortSignal(controller.signal, runtime.context));
-		await Bun.sleep(30);
+		await sleep(30);
 		controller.abort(new Error("stopped by test"));
 		await expect(aborted).rejects.toThrow("stopped by test");
 		const settled = await runtime.root.respondQuestion(q.id, q.version, answer(["pg"]));
 		await runtime.waitAnswer(job);
 		expect(await runtime.questions.wait(runtime.root.id, q.id, runtime.context)).toEqual(settled);
 		await expect(runtime.questions.wait(runtime.root.id, 424242, runtime.context)).rejects.toThrow(/unavailable/);
-		const ended = await Promise.all(watches.map((w) => Promise.race([w.closed, Bun.sleep(1000).then(() => "LEAK")])));
+		const ended = await Promise.all(watches.map((w) => Promise.race([w.closed, sleep(1000).then(() => "LEAK")])));
 		expect(watches.length).toBeGreaterThanOrEqual(3);
 		expect(ended).not.toContain("LEAK");
 	} finally {
@@ -636,9 +637,9 @@ it("fails a wait explicitly when the store closes instead of hanging or inventin
 		() => "resolved",
 		(error: Error) => error.message,
 	);
-	await Bun.sleep(30);
+	await sleep(30);
 	await runtime.close();
-	const result = await Promise.race([outcome, Bun.sleep(3000).then(() => "HUNG")]);
+	const result = await Promise.race([outcome, sleep(3000).then(() => "HUNG")]);
 	expect(result).not.toBe("HUNG");
 	expect(result).not.toBe("resolved");
 });

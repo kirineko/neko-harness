@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { chmod, mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { browseWorkspaces } from "../src/workspaces.ts";
 import { cleanup, connectTestClient, connectTestWsClient, IS_WINDOWS, makeGateway, waitFor } from "./helpers.ts";

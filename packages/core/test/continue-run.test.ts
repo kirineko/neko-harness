@@ -1,7 +1,7 @@
-import { expect, it } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
 	type FauxResponseFactory,
 	fauxAssistantMessage,
@@ -10,6 +10,7 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai";
 import { LiveDoc } from "@earendil-works/pi-durable";
+import { expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime, type NekoRuntime } from "../src/runtime.ts";
@@ -48,7 +49,7 @@ function gatedProvider() {
 async function until(test: () => Promise<boolean>) {
 	for (let i = 0; i < 300; i++) {
 		if (await test()) return;
-		await Bun.sleep(10);
+		await sleep(10);
 	}
 	throw new Error("timeout");
 }

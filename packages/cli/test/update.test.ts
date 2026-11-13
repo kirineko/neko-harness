@@ -1,8 +1,9 @@
-import { expect, it } from "bun:test";
 import { chmod, mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { expect, it } from "vitest";
+import { spawnProcess } from "../../../test/process.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { UpdateChecker } from "../../core/src/application-updates.ts";
 import { acquireUpdateLock, confirmGlobalInstallation, updateCommand } from "../src/update.ts";
@@ -200,15 +201,8 @@ it("only returns manual instructions on Windows, before touching installation or
 it("documents manual Windows updates and rejects invalid update arguments", async () => {
 	const entry = fileURLToPath(new URL("../src/main.ts", import.meta.url));
 	for (const args of [["--help"], ["--invalid"], ["--help", "extra"]]) {
-		const child = Bun.spawn([process.execPath, "--conditions=neko-source", entry, "update", ...args], {
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const [out, err, code] = await Promise.all([
-			new Response(child.stdout).text(),
-			new Response(child.stderr).text(),
-			child.exited,
-		]);
+		const child = spawnProcess([process.execPath, "--conditions=neko-source", entry, "update", ...args]);
+		const [out, err, code] = await Promise.all([child.stdout, child.stderr, child.exited]);
 		if (args.length === 1 && args[0] === "--help") {
 			expect(code).toBe(0);
 			expect(out).toContain("Windows：先退出 neko，再运行 npm install -g neko-harness@latest");

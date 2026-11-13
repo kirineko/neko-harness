@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "bun:test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { PLAN_LIMITS } from "@neko-harness/core/interactions";
+import { afterEach, describe, expect, it } from "vitest";
 import { planClient } from "../../src/client-session.ts";
 import {
 	checkSchema,
@@ -177,7 +177,8 @@ describe("mobile plan approval", () => {
 		expect(exited.mode).toBe("normal");
 		const notice = await phone.notification("plan.changed", () => true);
 		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
-		expect(chat.view.value?.plan?.mode).toBe("normal");
+		// The desktop client's replicated view arrives over a separate connection; nothing orders it against the phone's notification.
+		await eventually(() => chat.view.value?.plan?.mode === "normal", "desktop view left plan mode");
 		const record = await phone.call<Plan>("plan.get", { subscriptionId, version });
 		expect(record.status).toBe("cancelled");
 		await eventually(async () => {
