@@ -5,7 +5,7 @@
 		"packages/*"
 	],
 	"engines": {
-		"bun": ">=1.4.0 <1.5.0"
+		"node": ">=22.19.0"
 	},
 	"scripts": {
 		"build": "bun run --cwd packages/core build && bun run --cwd packages/gateway build && bun run --cwd packages/tui build && bun run --cwd packages/web build && bun run --cwd packages/cli build",
@@ -27,7 +27,7 @@
 	"packageManager": "bun@1.4.4",
 	"trustedDependencies": [],
 	"version": "0.5.4",
-	"description": "A local AI coding assistant with terminal and web interfaces, powered by Pi and Bun.",
+	"description": "A local AI coding assistant with terminal and web interfaces, powered by Pi and Node.js.",
 	"keywords": [
 		"ai",
 		"agent",
@@ -35,7 +35,7 @@
 		"cli",
 		"tui",
 		"web-ui",
-		"bun",
+		"node",
 		"pi"
 	],
 	"license": "MIT",
@@ -68,7 +68,7 @@
 		"@earendil-works/pi-schema": "1.5.0",
 		"@earendil-works/pi-tui": "1.5.0",
 		"sharp": "0.35.5",
-		"ws": "8.22.0",
+		"ws": "8.21.0",
 		"yaml": "2.9.1",
 		"@earendil-works/pi-env": "1.5.0"
 	}

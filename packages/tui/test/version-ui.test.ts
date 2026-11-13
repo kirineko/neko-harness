@@ -40,7 +40,7 @@ it("keeps the default overview concise and distinguishes incomplete check states
 it("shows only the necessary action and never suggests a downgrade", () => {
 	const newerRelease = { ...state, latestVersion: "1.1.0" };
 	for (const platform of ["darwin", "linux", "win32"] as const) {
-		const command = platform === "win32" ? "bun add --global neko-harness@latest" : "neko update";
+		const command = platform === "win32" ? "npm install -g neko-harness@latest" : "neko update";
 		const body = versionOverview(newerRelease, "1.0.0", { ...options, platform });
 		expect(body).toContain("Latest: v1.1.0");
 		expect(body).toContain(command);
@@ -135,6 +135,6 @@ it("uses the returned check result and makes the Windows command accessible in a
 		panel.handleInput("\x1b[B");
 	}
 	expect(output).toContain("Latest: v1.1.0");
-	expect(output).toContain("bun add --global neko-harness@latest");
+	expect(output).toContain("npm install -g neko-harness@latest");
 	panel.close();
 });

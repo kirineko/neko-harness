@@ -2,7 +2,7 @@
 
 ## 项目
 
-neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui / pi-schema 1.5.0，全部精确锁版本）的 agent harness monorepo。Bun 推荐 1.4.4（任意 1.4.x 可用）。设计决策见 `openspec/changes/archive/2026-10-11-bootstrap-neko-harness/design.md`。
+neko-harness：基于 Pi 生态（pi-durable / pi-ai / chord / pi-env / pi-tui / pi-schema 1.5.0，全部精确锁版本）的 agent harness monorepo。发布包运行在 Node.js（≥ 22.19，下限取自根 `package.json` 的 `engines.node`）上，用 npm 全局安装；开发工具链（安装、测试、打包）暂时仍是 Bun，推荐 1.4.4（任意 1.4.x 可用），迁移到 pnpm 见 `openspec/changes/migrate-toolchain-to-pnpm`。设计决策见 `openspec/changes/archive/2026-10-11-bootstrap-neko-harness/design.md`。
 
 ## 常用命令
 
@@ -18,7 +18,10 @@ bun run check:write        # biome 修复 + 根/Web 客户端类型检查
 bun run neko tui        # 启动终端 UI（自动拉起 gateway；需 DEEPSEEK_API_KEY）
 bun run neko web        # 启动 Web UI（静态 8322，自动拉起 gateway WS 8321）
 bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
-# 或构建后：bun packages/cli/dist/main.js tui|web|serve（bin 名 neko）
+# 或构建后：node packages/cli/dist/main.js tui|web|serve（bin 名 neko）
+# 发布产物：bun run build:release 生成 dist/（neko.js / gateway.js 是无依赖的启动器：检查 Node 版本、过滤 Node 22 的
+#           node:sqlite 实验性警告，再加载 cli.js / gateway-main.js）；
+#           bun run test:package 用 npm 安装 tarball 并在 Node 上冒烟（PATH 里需要 node 与 npm）
 ```
 
 发版：推送 `vX.Y.Z` tag 触发唯一的 `.github/workflows/release.yml`（没有 push / PR CI），流程与发布说明（`docs/releases/vX.Y.Z.md`）见 `docs/dev/releasing.md`。
@@ -28,7 +31,8 @@ bun run neko serve      # 仅启动 gateway（Unix socket + WebSocket）
 ## 约定
 
 - TypeScript strict + `noUncheckedIndexedAccess` + `erasableSyntaxOnly` + `verbatimModuleSyntax`（`tsconfig.base.json`，风格参照 `reference/pi`）。
-- 相对导入带 `.ts` 扩展名（`rewriteRelativeImportExtensions` 在构建时改写成 `.js`）；TS 运行用 Bun，构建用 tsc。
+- 相对导入带 `.ts` 扩展名（`rewriteRelativeImportExtensions` 在构建时改写成 `.js`）；开发时 TS 由 Bun 直接运行，构建用 tsc；发布产物只能含 Node 可运行的代码（`build-release.ts` 会拒绝含 `Bun.` / `import.meta.require` 的产物），运行时代码不要调用 `Bun.*`。
+- Node 不能监听超过系统上限的 Unix socket 路径（macOS 103 字节、Linux 107 字节，Bun 可以）：gateway 的 socket 在数据目录下，超长时启动报「Unix socket 路径过长」（`toStartupError`）。需要在 Node 上启动 gateway 的脚本与冒烟，临时目录在 POSIX 上用 `/tmp`，不要用 macOS 的系统临时目录。
 - Biome：tab 缩进、双引号、lineWidth 120（`biome.json`）。
 - 上游 pi 依赖为实验性包：只升版本不裹代码，升级走显式 OpenSpec 变更；core/gateway 做薄封装隔离上游类型。
 - 文档放置规则见 `docs/README.md`：入口文档在根目录与 `docs/`（`dev/`、`mobile/`、`releases/`），包内文档跟随包；英文文档不含中文，开发者内部文档只有中文。改文档路径要同步引用（含源码注释）。

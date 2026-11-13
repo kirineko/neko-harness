@@ -549,7 +549,7 @@ TUI SHALL 提供简洁英语升级提示及 `/version` 查看入口，区分可�
 
 #### Scenario: 新版本可用
 - **WHEN** 后台确认稳定渠道有高于已安装版本的新版本
-- **THEN** 显示简短版本提示；Windows 给出 `bun add --global neko-harness@latest`，macOS/Linux 给出 `neko update`，用户在另一个终端或退出界面后自行执行，不将命令作为聊天输入代为运行
+- **THEN** 显示简短版本提示；Windows 给出 `npm install -g neko-harness@latest`，macOS/Linux 给出 `neko update`，用户在另一个终端或退出界面后自行执行，不将命令作为聊天输入代为运行
 
 #### Scenario: 网关仍旧
 - **WHEN** 安装已升级，当前连接的 gateway 仍旧

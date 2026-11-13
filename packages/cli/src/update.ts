@@ -1,51 +1,53 @@
 import { execFile, spawn } from "node:child_process";
 import { lstat, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { installedVersion, UpdateChecker } from "@neko-harness/core/application-updates";
 import { newer, stableVersion, upgradeCommand } from "@neko-harness/core/application-version";
 
+/** Runs `command` (npm, or this Node for the freshly installed entry) without a shell and returns its trimmed stdout. */
+export type UpdateRunner = (command: string, args: string[], inherit?: boolean) => Promise<string>;
 export type UpdateCommandOptions = {
 	entry?: string;
 	runningVersion: string;
 	platform?: NodeJS.Platform;
-	run?: (args: string[], inherit?: boolean) => Promise<string>;
+	run?: UpdateRunner;
 	checker?: UpdateChecker;
 };
-async function runBun(args: string[], inherit = false): Promise<string> {
+const UNSUPPORTED = "当前安装方式不支持自升级，请按原方式更新，或改用 npm install -g neko-harness 安装。";
+const UNWRITABLE = "没有 npm 全局安装目录的写权限，升级失败。请手动运行：\nnpm install -g neko-harness@latest";
+const runCommand: UpdateRunner = async (command, args, inherit = false) => {
 	if (!inherit) {
-		const { stdout } = await promisify(execFile)(process.execPath, args, { maxBuffer: 1048576 });
+		const { stdout } = await promisify(execFile)(command, args, { maxBuffer: 1048576 });
 		return stdout.trim();
 	}
 	await new Promise<void>((resolve, reject) => {
-		const child = spawn(process.execPath, args, { stdio: "inherit" });
+		const child = spawn(command, args, { stdio: "inherit" });
 		child.once("error", reject);
-		child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error("Bun command failed"))));
+		child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${command} failed`))));
 	});
 	return "";
-}
+};
+/**
+ * Supported means: this package is the real, non-linked `neko-harness` directory inside npm's global `node_modules`.
+ * An npm that belongs to another prefix reports a different root, so it can never touch a foreign installation.
+ */
 export async function confirmGlobalInstallation(
 	entry: string,
-	run = runBun,
+	run: UpdateRunner = runCommand,
 ): Promise<{ manifest: string; entry: string; lock: string }> {
-	const bin = await run(["pm", "bin", "-g"]);
-	const executable = await realpath(entry);
-	const globalEntry = await realpath(join(bin, "neko"));
-	const root = dirname(dirname(executable));
+	const globalRoot = await realpath(await run("npm", ["root", "-g"]));
+	const root = dirname(dirname(await realpath(entry)));
+	const installed = join(globalRoot, "neko-harness");
 	const manifest = join(root, "package.json");
 	if (
-		globalEntry !== executable ||
-		basename(root) !== "neko-harness" ||
-		basename(dirname(root)) !== "node_modules" ||
-		(await lstat(root)).isSymbolicLink() ||
+		(await lstat(installed)).isSymbolicLink() ||
+		(await realpath(installed)) !== root ||
 		!(await installedVersion(manifest))
 	)
 		throw new Error("unsupported");
-	const globalManifest = JSON.parse(await readFile(join(dirname(dirname(root)), "package.json"), "utf8"));
-	const dependency = globalManifest.dependencies?.["neko-harness"];
-	if (typeof dependency !== "string" || /^(file:|link:|workspace:)/.test(dependency)) throw new Error("unsupported");
-	return { manifest, entry: executable, lock: join(dirname(dirname(root)), ".neko-update.lock") };
+	return { manifest, entry: join(root, "dist", "neko.js"), lock: join(globalRoot, ".neko-update.lock") };
 }
 export async function acquireUpdateLock(path: string): Promise<() => Promise<void>> {
 	const token = crypto.randomUUID();
@@ -104,15 +106,22 @@ export async function acquireUpdateLock(path: string): Promise<() => Promise<voi
 export async function updateCommand(options: UpdateCommandOptions): Promise<string> {
 	if ((options.platform ?? process.platform) === "win32")
 		return `请先退出 neko，然后运行：\n${upgradeCommand("win32")}\n完成后重新启动 neko。`;
-	if (!stableVersion(options.runningVersion)) throw new Error("当前安装方式不支持自升级，请按原方式更新。");
-	const run = options.run ?? runBun;
+	if (!stableVersion(options.runningVersion)) throw new Error(UNSUPPORTED);
+	const run = options.run ?? runCommand;
 	let install: Awaited<ReturnType<typeof confirmGlobalInstallation>>;
 	try {
 		install = await confirmGlobalInstallation(options.entry ?? fileURLToPath(import.meta.url), run);
 	} catch {
-		throw new Error("当前安装方式不支持自升级，请按原方式更新。");
+		throw new Error(UNSUPPORTED);
 	}
-	const release = await acquireUpdateLock(install.lock);
+	let release: Awaited<ReturnType<typeof acquireUpdateLock>>;
+	try {
+		release = await acquireUpdateLock(install.lock);
+	} catch (error) {
+		// The lock lives next to the installation: no write access here means npm could not install either.
+		if (["EACCES", "EPERM", "EROFS"].includes((error as NodeJS.ErrnoException).code ?? "")) throw new Error(UNWRITABLE);
+		throw error;
+	}
 	const checker =
 		options.checker ?? new UpdateChecker({ manifest: install.manifest, runningVersion: options.runningVersion });
 	try {
@@ -121,9 +130,9 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<stri
 		if (state.checkState !== "ok" || !state.latestVersion || !current)
 			throw new Error("检查失败，请重试 neko update。");
 		if (!newer(state.latestVersion, current)) return `已是最新版 v${current}。`;
-		await run(["add", "--global", `neko-harness@${state.latestVersion}`], true);
+		await run("npm", ["install", "-g", `neko-harness@${state.latestVersion}`], true);
 		const actual = await installedVersion(install.manifest);
-		const fresh = await run([install.entry, "--version"]);
+		const fresh = await run(process.execPath, [install.entry, "--version"]);
 		if (!actual || actual !== fresh || newer(state.latestVersion, actual))
 			throw new Error("Installation verification failed");
 		return `已升级至 v${actual}。重新启动 neko 生效。`;

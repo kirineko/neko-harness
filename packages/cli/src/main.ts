@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import { RUNNING_VERSION } from "@neko-harness/core/application-version";
 
 const USAGE = `用法: neko <命令> [选项]
@@ -8,7 +6,7 @@ const USAGE = `用法: neko <命令> [选项]
   tui     启动终端交互界面（自动拉起网关）
   web     启动 Web UI 静态托管（自动拉起网关）
   serve   仅启动网关（WebSocket；POSIX 另有 Unix socket）
-  update  升级当前 Bun 全局安装（Windows 显示手动升级命令）
+  update  升级当前 npm 全局安装（Windows 显示手动升级命令）
 
 选项:
   -v, --version  显示版本号
@@ -27,7 +25,7 @@ switch (command) {
 		if (rest.length) {
 			if (rest.length === 1 && (rest[0] === "--help" || rest[0] === "-h"))
 				console.log(
-					"用法: neko update\n\n升级当前 Bun 全局安装；完成后重新启动 neko。\nWindows：先退出 neko，再运行 bun add --global neko-harness@latest。\n\n选项:\n  -h, --help  显示此帮助",
+					"用法: neko update\n\n升级当前 npm 全局安装；完成后重新启动 neko。\nWindows：先退出 neko，再运行 npm install -g neko-harness@latest。\n\n选项:\n  -h, --help  显示此帮助",
 				);
 			else {
 				console.error("用法: neko update");
@@ -48,7 +46,7 @@ switch (command) {
 	case "web":
 	case "serve": {
 		// 子命令的 main 自行解析 process.argv.slice(2)，剥离子命令名后透传
-		process.argv = [process.argv[0] ?? "bun", process.argv[1] ?? "neko", ...rest];
+		process.argv = [process.argv[0] ?? "node", process.argv[1] ?? "neko", ...rest];
 		if (command === "tui") await import("@neko-harness/tui/cli");
 		else if (command === "web") await import("@neko-harness/web/cli");
 		else await import("@neko-harness/gateway/cli");

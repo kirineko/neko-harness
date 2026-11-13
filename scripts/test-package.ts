@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, symlink } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -14,8 +14,14 @@ async function run(cmd: string[], cwd: string, env = process.env) {
 		child.exited,
 	]);
 	if (code !== 0) throw new Error(`${cmd[0]} failed (${code})\n${stdout}\n${stderr}`);
+	// Node prints runtime warnings as "(node:<pid>) <Kind>Warning: ..."; the published CLI must start without any.
+	if (/\(node:\d+\) \w*Warning/.test(stderr)) throw new Error(`${cmd.join(" ")} printed a runtime warning\n${stderr}`);
 	return stdout;
 }
+
+/** npm and the installed `neko` are `.cmd` shims on Windows, which only start through the command interpreter. */
+const viaShell = (cmd: string[]) =>
+	process.platform === "win32" ? [process.env.ComSpec ?? "cmd.exe", "/d", "/s", "/c", ...cmd] : cmd;
 
 /** Windows has no graceful signal; kill the whole tree so the gateway child does not keep the temp dir locked. */
 function killWindowsTree(pid: number): void {
@@ -41,7 +47,9 @@ for (const file of files) {
 }
 for (const required of [
 	"dist/neko.js",
+	"dist/cli.js",
 	"dist/gateway.js",
+	"dist/gateway-main.js",
 	"dist/client/index.html",
 	"dist/skills/skill-creator/SKILL.md",
 	"dist/skills/skill-finder/SKILL.md",
@@ -56,20 +64,41 @@ if (packed.private || packed.name !== "neko-harness" || packed.version !== manif
 if (Object.keys(packed.dependencies).some((name) => name.startsWith("@neko-harness/"))) {
 	throw new Error("Internal workspace dependency escaped into published package");
 }
-const temp = await mkdtemp(join(tmpdir(), "neko-package-"));
+// The published package runs on Node and is installed with npm; Bun only drives this script.
+const node = Bun.which("node");
+const npm = Bun.which("npm");
+if (!node || !npm) throw new Error("The package smoke test needs node and npm on PATH");
+// Node cannot listen on a Unix socket path longer than the OS limit (104 bytes on macOS, 108 on Linux), and the
+// gateway socket lives under the storage directory. macOS's per-user tmpdir alone is ~50 bytes, so stay under /tmp.
+const temp = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "neko-package-"));
 let web: ReturnType<typeof Bun.spawn> | undefined;
 try {
-	await Bun.write(
-		join(temp, "package.json"),
-		JSON.stringify({ private: true, dependencies: { "neko-harness": archive } }),
-	);
-	await run([process.execPath, "install", "--production", "--ignore-scripts"], temp);
+	const prefix = join(temp, "prefix");
+	const installed = Bun.spawn(viaShell([npm, "install", "-g", "--prefix", prefix, archive]), {
+		cwd: temp,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [installOut, installErr, installCode] = await Promise.all([
+		new Response(installed.stdout).text(),
+		new Response(installed.stderr).text(),
+		installed.exited,
+	]);
+	if (installCode !== 0) throw new Error(`npm install failed (${installCode})\n${installOut}\n${installErr}`);
+	if (/ERESOLVE/.test(installOut + installErr)) throw new Error(`npm reported a peer conflict\n${installErr}`);
+	const windows = process.platform === "win32";
+	const packageRoot = windows
+		? join(prefix, "node_modules", "neko-harness")
+		: join(prefix, "lib", "node_modules", "neko-harness");
+	if (!(await readFile(join(packageRoot, "dist", "neko.js"), "utf8")).startsWith("#!/usr/bin/env node\n"))
+		throw new Error("Installed entry must start with the node shebang");
+	// The children see Node but neither Bun nor npm, so nothing can silently fall back to Bun.
 	const bin = join(temp, "bin");
 	await mkdir(bin);
-	if (process.platform === "win32") await cp(process.execPath, join(bin, "bun.exe"));
-	else await symlink(process.execPath, join(bin, "bun"));
-	await cp(join(root, "scripts/package-sdk-smoke.mjs"), join(temp, "package-sdk-smoke.mjs"));
-	const cli = join(temp, "node_modules", ".bin", process.platform === "win32" ? "neko.exe" : "neko");
+	if (windows) await cp(node, join(bin, "node.exe"));
+	else await symlink(node, join(bin, "node"));
+	const systemPath = windows ? join(process.env.SystemRoot ?? "C:\\Windows", "System32") : "/usr/bin:/bin";
+	const cli = viaShell([windows ? join(prefix, "neko.cmd") : join(prefix, "bin", "neko")]);
 	const home = join(temp, "home");
 	// Windows resolves the home directory from USERPROFILE, not HOME.
 	const env = {
@@ -78,24 +107,30 @@ try {
 		USERPROFILE: home,
 		DEEPSEEK_API_KEY: "",
 		TAVILY_API_KEY: "",
-		PATH: bin,
+		PATH: `${bin}${windows ? ";" : ":"}${systemPath}`,
 	};
+	if (Bun.which("bun", { PATH: env.PATH })) throw new Error("Bun must not be reachable from the smoke test PATH");
 	await mkdir(env.HOME, { recursive: true });
-	if ((await run([cli, "--version"], temp, env)).trim() !== manifest.version) throw new Error("Version mismatch");
+	if ((await run([...cli, "--version"], temp, env)).trim() !== manifest.version) throw new Error("Version mismatch");
 	for (const command of ["tui", "web", "serve", "update"]) {
-		const help = await run([cli, command, "--help"], temp, env);
+		const help = await run([...cli, command, "--help"], temp, env);
 		if (!help.includes("--help")) throw new Error(`Missing ${command} help`);
 	}
+	// Native and wasm dependencies resolve from the package's own node_modules, as they do for the CLI.
 	await run(
 		[
-			process.execPath,
+			node,
+			"--input-type=module",
 			"-e",
-			`const p = Bun.resolveSync('sharp', './node_modules/neko-harness/dist/neko.js'); const {default: sharp} = await import(p); await sharp({create:{width:1,height:1,channels:3,background:'#fff'}}).png().toBuffer();`,
+			"import sharp from 'sharp'; await sharp({create:{width:1,height:1,channels:3,background:'#fff'}}).png().toBuffer();",
 		],
-		temp,
+		packageRoot,
 		env,
 	);
-	console.log((await run([process.execPath, "package-sdk-smoke.mjs"], temp, env)).trim());
+	const smoke = join(packageRoot, "smoke");
+	await mkdir(smoke);
+	await cp(join(root, "scripts/package-sdk-smoke.mjs"), join(smoke, "package-sdk-smoke.mjs"));
+	console.log((await run([node, "package-sdk-smoke.mjs"], smoke, env)).trim());
 	const port = await new Promise<number>((resolvePort, reject) => {
 		const server = createServer();
 		server.once("error", reject);
@@ -107,7 +142,7 @@ try {
 	});
 	web = Bun.spawn(
 		[
-			cli,
+			...cli,
 			"web",
 			"--no-open",
 			"--port",
@@ -169,14 +204,14 @@ try {
 		if (asset[1]!.endsWith(".js") && !(await assetResponse.text()).includes(manifest.version))
 			throw new Error("Page version missing");
 	}
-	const updateResult = Bun.spawn([cli, "update"], { cwd: temp, env, stdout: "pipe", stderr: "pipe" });
+	const updateResult = Bun.spawn([...cli, "update"], { cwd: temp, env, stdout: "pipe", stderr: "pipe" });
 	const [updateOut, updateError, updateCode] = await Promise.all([
 		new Response(updateResult.stdout as ReadableStream).text(),
 		new Response(updateResult.stderr as ReadableStream).text(),
 		updateResult.exited,
 	]);
 	if (process.platform === "win32") {
-		if (updateCode !== 0 || !updateOut.includes("bun add --global neko-harness@latest"))
+		if (updateCode !== 0 || !updateOut.includes("npm install -g neko-harness@latest"))
 			throw new Error("Windows update should print manual upgrade instructions");
 	} else if (updateCode === 0 || !updateError.includes("不支持自升级")) {
 		throw new Error("Local install update should refuse");
@@ -195,6 +230,7 @@ try {
 		await readers;
 		if (exit !== 0) throw new Error(`Web failed to shut down: ${logs}`);
 	}
+	if (/\(node:\d+\) \w*Warning/.test(logs)) throw new Error(`neko web printed a runtime warning\n${logs}`);
 	console.log(`Package smoke test passed: ${archive} (${files.length} files)`);
 } finally {
 	if (web && web.exitCode === null) {

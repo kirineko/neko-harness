@@ -24,14 +24,14 @@ A local AI coding assistant for the terminal, the browser and your phone: it rea
 
 ## Requirements
 
-- **Bun 1.4.x** (1.4.4 recommended) — see the [Bun installation guide](https://bun.sh/docs/installation). If `neko` is not found afterwards, add Bun's bin directory to `PATH` (`~/.bun/bin`, on Windows `%USERPROFILE%\.bun\bin`).
+- **Node.js 22.19 or newer** (24 recommended) with npm — see the [Node.js downloads](https://nodejs.org/en/download). If `neko` is not found afterwards, add npm's global bin directory to `PATH` (`npm prefix -g` prints the prefix; the commands are in its `bin` directory, on Windows in the prefix itself).
 - macOS, Linux or Windows. **Windows also needs [Git for Windows](https://git-scm.com/download/win)**: the bash tool, background jobs and subagents run through Git Bash, which neko finds automatically (`shell.path` overrides the lookup).
 - A model API key. DeepSeek works out of the box; 31 other API-key providers can be enabled.
 
 ## Quick start
 
 ```bash
-bun add --global neko-harness
+npm install -g neko-harness
 
 cd /path/to/your/project
 neko tui   # terminal UI
@@ -192,15 +192,26 @@ The assistant runs commands and edits files: use it in projects you trust, and r
 
 ## Upgrade
 
-Finish your work, quit every neko UI and service, run `neko update`, then start again. On Windows, `neko update` prints the manual steps: quit neko and run `bun add --global neko-harness@latest`.
+Finish your work, quit every neko UI and service, run `neko update`, then start again. On Windows, `neko update` prints the manual steps: quit neko and run `npm install -g neko-harness@latest`. `neko update` only upgrades an npm global installation; if npm's global directory is not writable for your user it stops and prints the manual command.
 
 Version 0.5.0 raises the application protocol to 9 (project removal). A UI or gateway from an older release is refused with a protocol message, so restart every neko process after updating.
 
-`/version` in the TUI and web **About and updates** show the running version, check for updates and explain how to restart or reload. If the running version has no `neko update` command, reinstall with `bun add --global neko-harness`.
+`/version` in the TUI and web **About and updates** show the running version, check for updates and explain how to restart or reload. If the running version has no `neko update` command, reinstall with `npm install -g neko-harness`.
+
+### Migrating from a Bun installation
+
+neko used to be installed with Bun and run on Bun. It now runs on Node.js, and a Bun global installation is no longer supported: on a machine without Node.js it does not start, and `neko update` refuses to upgrade it. To move over:
+
+1. Quit every neko UI and service.
+2. Install Node.js 22.19 or newer.
+3. Remove the old installation: `bun remove --global neko-harness`.
+4. Install with npm: `npm install -g neko-harness`.
+
+Sessions, settings and keys stay in `~/.neko/` and are used as they are.
 
 ## Development
 
-Source development uses Bun 1.4.4 (see `.bun-version`; any 1.4.x works) and, on Windows, Git for Windows.
+The published package runs on Node.js. Source development still uses Bun 1.4.4 for installing, testing and bundling (see `.bun-version`; any 1.4.x works), plus Node.js 22.19 or newer for the package smoke test and, on Windows, Git for Windows.
 
 ```bash
 bun install --frozen-lockfile
@@ -217,7 +228,7 @@ bun run neko serve      # gateway only
 | `bun run check` | biome check plus type checks for the root and the web client |
 | `bun run check:write` | biome fixes plus the same type checks |
 | `bun run build:release` | build the `dist/` release bundle |
-| `bun run test:package` | pack into `artifacts/`, install in a temp directory and smoke test |
+| `bun run test:package` | pack into `artifacts/`, install with npm in a temp directory and smoke test on Node.js |
 
 Layout:
 

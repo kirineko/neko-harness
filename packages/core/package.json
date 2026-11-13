@@ -29,6 +29,11 @@
 			"types": "./dist/image-transfer.d.ts",
 			"import": "./dist/image-transfer.js"
 		},
+		"./runtime-warnings": {
+			"neko-source": "./src/runtime-warnings.ts",
+			"types": "./dist/runtime-warnings.d.ts",
+			"import": "./dist/runtime-warnings.js"
+		},
 		"./credential-providers": {
 			"neko-source": "./src/credential-providers.ts",
 			"types": "./dist/credential-providers.d.ts",

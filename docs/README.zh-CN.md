@@ -24,14 +24,14 @@
 
 ## 环境要求
 
-- **Bun 1.4.x**（推荐 1.4.4），见 [Bun 安装说明](https://bun.sh/docs/installation)。找不到 `neko` 命令时，将 Bun 的 bin 目录加入 `PATH`（`~/.bun/bin`，Windows 为 `%USERPROFILE%\.bun\bin`）。
+- **Node.js 22.19 及以上**（推荐 24）与 npm，见 [Node.js 下载页](https://nodejs.org/zh-cn/download)。找不到 `neko` 命令时，将 npm 的全局 bin 目录加入 `PATH`（`npm prefix -g` 输出前缀目录，命令位于其中的 `bin` 目录，Windows 上就在前缀目录）。
 - macOS、Linux 或 Windows。**Windows 还需要 [Git for Windows](https://git-scm.com/download/win)**：bash 工具、后台任务与子 agent 经 Git Bash 运行，neko 会自动查找（可用 `shell.path` 覆盖）。
 - 一个模型 API Key。默认 DeepSeek 开箱可用，另有 31 个纯 API Key 服务可启用。
 
 ## 快速开始
 
 ```bash
-bun add --global neko-harness
+npm install -g neko-harness
 
 cd /path/to/your/project
 neko tui   # 终端界面
@@ -192,15 +192,26 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 
 ## 升级
 
-先完成任务，退出所有 neko 界面与服务，执行 `neko update`，完成后重新启动。Windows 上 `neko update` 会显示手动升级指引：先退出 neko，再运行 `bun add --global neko-harness@latest`。
+先完成任务，退出所有 neko 界面与服务，执行 `neko update`，完成后重新启动。Windows 上 `neko update` 会显示手动升级指引：先退出 neko，再运行 `npm install -g neko-harness@latest`。`neko update` 只升级 npm 全局安装；当前用户对 npm 全局目录没有写权限时会停止并给出手动命令。
 
 0.5.0 把应用协议升到 9（项目移除）。旧版本的界面或网关会被新版本以协议提示拒绝，所以升级后请重启所有 neko 进程。
 
-TUI 输入 `/version`，或打开 Web「设置 → 关于与更新」，可查看版本、检查更新并按提示重启或刷新。若当前版本没有 `neko update` 命令，可重新运行 `bun add --global neko-harness`。
+TUI 输入 `/version`，或打开 Web「设置 → 关于与更新」，可查看版本、检查更新并按提示重启或刷新。若当前版本没有 `neko update` 命令，可重新运行 `npm install -g neko-harness`。
+
+### 从 Bun 安装迁移
+
+neko 过去用 Bun 安装并运行在 Bun 上，现在运行在 Node.js 上，不再支持 Bun 全局安装：没有 Node.js 的机器上无法启动，`neko update` 也会拒绝升级它。迁移步骤：
+
+1. 退出所有 neko 界面与服务。
+2. 安装 Node.js 22.19 及以上。
+3. 卸载旧安装：`bun remove --global neko-harness`。
+4. 用 npm 安装：`npm install -g neko-harness`。
+
+会话、设置与密钥仍在 `~/.neko/`，原样沿用。
 
 ## 开发
 
-源码开发使用 Bun 1.4.4（见 `.bun-version`，任意 1.4.x 可用）；Windows 还需要 Git for Windows。
+发布包运行在 Node.js 上。源码开发的安装、测试与打包暂时仍使用 Bun 1.4.4（见 `.bun-version`，任意 1.4.x 可用），安装冒烟另需 Node.js 22.19 及以上；Windows 还需要 Git for Windows。
 
 ```bash
 bun install --frozen-lockfile
@@ -217,7 +228,7 @@ bun run neko serve      # 仅启动网关
 | `bun run check` | biome check + 根/Web 客户端类型检查 |
 | `bun run check:write` | biome 修复 + 根/Web 客户端类型检查 |
 | `bun run build:release` | 以发布标记构建 `dist/` 可执行包 |
-| `bun run test:package` | 打包到 `artifacts/`，在临时目录安装并冒烟验证 |
+| `bun run test:package` | 打包到 `artifacts/`，用 npm 安装到临时目录并在 Node.js 上冒烟验证 |
 
 目录结构：
 

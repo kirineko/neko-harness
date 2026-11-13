@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 // neko 网关独立入口（供后续 `neko serve` 接入）：
 //   bun --conditions=neko-source packages/gateway/src/main.ts [选项]
 // 选项优先级：CLI flag > neko.config.json（向上查找，兜底 ~/.neko/） > 内置默认。

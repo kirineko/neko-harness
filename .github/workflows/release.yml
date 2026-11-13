@@ -43,6 +43,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.4.x'
+      # The published package runs on Node: the install smoke test installs with npm and starts neko on this Node.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
       - run: bun install --frozen-lockfile
       - run: bun run build:release
       # 格式与类型检查不随平台变化，只在 Linux 上跑一次。
@@ -50,6 +54,13 @@ jobs:
         run: bun run check
       - run: bun run test
       - run: bun run test:package
+      # Repeat the install smoke test on the declared minimum (engines.node); one platform is enough.
+      - if: matrix.os == 'ubuntu-26.04'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.19.0'
+      - if: matrix.os == 'ubuntu-26.04'
+        run: bun run test:package
       - if: matrix.os == 'ubuntu-26.04'
         uses: actions/upload-artifact@v7
         with:
@@ -151,7 +162,7 @@ jobs:
         with:
           name: npm-package
           path: artifacts
-      # Node/npm is only the registry uploader; builds/tests/runtime use Bun 1.4.x.
+      # npm uploads the tarball that `verify` installed with npm and ran on Node; builds and tests still use Bun 1.4.x.
       - uses: actions/setup-node@v7
         with:
           node-version: '24.x'

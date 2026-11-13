@@ -290,11 +290,20 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 }
 
 /** 活跃实例占用/stale 识别由 Chord Unix listener 负责；此处把错误翻译为可操作的提示。 */
-function toStartupError(
+export function toStartupError(
 	error: unknown,
 	info: { socketPath: string | null; port: number | null; host: string; serverId: string },
+	platform: NodeJS.Platform = process.platform,
 ): Error {
 	const message = error instanceof Error ? error.message : String(error);
+	// Node 无法监听超过 sockaddr_un 上限的路径（含结尾 NUL：Linux 108 字节，macOS/BSD 104 字节），报 EINVAL。
+	const limit = platform === "linux" ? 107 : 103;
+	const length = info.socketPath === null ? 0 : Buffer.byteLength(info.socketPath);
+	if ((error as { code?: string } | null)?.code === "EINVAL" && length > limit) {
+		return new Error(
+			`neko gateway 启动失败：Unix socket 路径过长（${length} 字节，上限 ${limit} 字节）：${info.socketPath}\n请把数据目录放到更短的路径（--storage），或用 --socket-path 指定更短的 socket 路径。`,
+		);
+	}
 	// 默认 socket 命名为 <serverId>.sock：占用方能从文件名推出现有实例的 serverId。
 	const existingServerId = info.socketPath === null ? undefined : serverIdFromSocketPath(info.socketPath);
 	const existingAddress =

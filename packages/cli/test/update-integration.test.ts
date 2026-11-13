@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -18,15 +18,12 @@ const posixIt = it.skipIf(process.platform === "win32");
 
 posixIt("upgrades an isolated installation, detects old live services, then a stale page", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "neko-update-flow-")),
-		root = join(dir, "global/node_modules/neko-harness"),
-		bin = join(dir, "bin"),
+		globalRoot = join(dir, "lib/node_modules"),
+		root = join(globalRoot, "neko-harness"),
 		manifest = join(root, "package.json"),
 		entry = join(root, "dist/neko.js"),
 		storagePath = join(dir, "session.sqlite");
 	await mkdir(join(root, "dist"), { recursive: true });
-	await mkdir(bin);
-	await writeFile(join(dir, "global/package.json"), JSON.stringify({ dependencies: { "neko-harness": "0.2.5" } }));
-	await symlink(entry, join(bin, "neko"));
 	const install = async (version: string) => {
 		await writeFile(manifest, JSON.stringify({ name: "neko-harness", version }));
 		await writeFile(entry, `console.log(${JSON.stringify(version)})`);
@@ -67,14 +64,14 @@ posixIt("upgrades an isolated installation, detects old live services, then a st
 				cachePath: join(dir, "cli-cache"),
 				fetch: fetchLatest,
 			}),
-			run: async (args) => {
-				if (args[0] === "pm") return bin;
-				if (args[0] === "add") {
-					expect(args).toEqual(["add", "--global", "neko-harness@0.2.6"]);
+			run: async (command, args) => {
+				if (command === "npm" && args[0] === "root") return globalRoot;
+				if (command === "npm") {
+					expect(args).toEqual(["install", "-g", "neko-harness@0.2.6"]);
 					await install("0.2.6");
 					return "";
 				}
-				return (await promisify(execFile)(process.execPath, args)).stdout.trim();
+				return (await promisify(execFile)(command, args)).stdout.trim();
 			},
 		});
 		expect(result).toContain("已升级至 v0.2.6");
