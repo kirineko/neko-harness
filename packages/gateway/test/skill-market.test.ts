@@ -73,6 +73,16 @@ it("lists with normalized fields and caches the catalog for 60s", async () => {
 	expect(calls.filter((u) => u.endsWith("/api/skills"))).toHaveLength(1);
 });
 
+it.each([
+	["https://market.test", "https://market.test/api/skills"],
+	["https://market.test/", "https://market.test/api/skills"],
+	["https://market.test/base//", "https://market.test/base/api/skills"],
+])("builds a single-slash catalog URL from %s", async (marketUrl, expected) => {
+	const { client, calls } = market({ marketUrl });
+	await client.list();
+	expect(calls).toEqual([expected]);
+});
+
 it("maps unreachable market and unknown skills to typed errors", async () => {
 	const dead = createSkillMarketClient({
 		marketUrl: "https://market.test",

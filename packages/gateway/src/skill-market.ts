@@ -124,14 +124,15 @@ export function createSkillMarketClient(options: SkillMarketOptions): SkillMarke
 	const fetchImpl: FetchLike = options.fetchImpl ?? fetch;
 	const now = options.now ?? Date.now;
 	const placeRename = options.renameImpl;
-	let base: URL;
+	let base: string;
 	try {
-		base = new URL(options.marketUrl);
-		if (base.protocol !== "https:" && base.protocol !== "http:") throw new Error("unsupported protocol");
+		const parsed = new URL(options.marketUrl);
+		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("unsupported protocol");
+		// 以字符串保存：URL 会把纯 origin 重新规范化成带 "/"，拼接后得到 "//api/..." 而 404。
+		base = parsed.toString().replace(/\/+$/, "");
 	} catch {
 		throw new SkillMarketError("market_invalid_url", `Invalid skill market URL: ${options.marketUrl}`);
 	}
-	base = new URL(base.toString().replace(/\/+$/, ""));
 
 	let catalog: { at: number; skills: MarketSkill[] } | undefined;
 	const zipCache = new Map<string, Uint8Array>();
