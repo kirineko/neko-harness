@@ -16,6 +16,9 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
+// Each run starts a fresh Node process on the TypeScript sources; on a loaded CI runner several of them exceed the 5 s default.
+const SPAWN_TIMEOUT_MS = 30_000;
+
 /** Runs the TUI entry with a private data directory so the user's saved language cannot leak in. */
 async function run(args: string[], env: Record<string, string> = {}) {
 	const { NEKO_LANG: _lang, ...inherited } = process.env;
@@ -48,46 +51,58 @@ it("records --help without choosing the output, so --lang works before or after 
 	expect(parseArgs(["--storage", storage], {}).help).toBe(false);
 });
 
-it("prints Chinese help by default and by --lang zh", async () => {
-	for (const args of [["--help"], ["-h"], ["--lang", "zh", "--help"]]) {
-		const { out, code } = await run(args);
-		expect(code).toBe(0);
-		expect(out).toContain("用法: neko tui [选项]");
-		expect(out).toContain("--lang");
-		expect(out).toContain("NEKO_LANG");
-	}
-});
+it(
+	"prints Chinese help by default and by --lang zh",
+	async () => {
+		for (const args of [["--help"], ["-h"], ["--lang", "zh", "--help"]]) {
+			const { out, code } = await run(args);
+			expect(code).toBe(0);
+			expect(out).toContain("用法: neko tui [选项]");
+			expect(out).toContain("--lang");
+			expect(out).toContain("NEKO_LANG");
+		}
+	},
+	SPAWN_TIMEOUT_MS,
+);
 
-it("prints English help for --lang en, NEKO_LANG=en and a saved en, with --lang taking precedence", async () => {
-	for (const [args, env] of [
-		[["--lang", "en", "--help"], {}],
-		[["--help", "--lang", "en"], {}],
-		[["--help"], { NEKO_LANG: "en" }],
-	] as const) {
-		const { out, code } = await run([...args], { ...env });
-		expect(code).toBe(0);
-		expect(out).toContain("Usage: neko tui [options]");
-		expect(out).toContain("Options:");
-		expect(out).toContain("-h, --help           Show this help");
-	}
-	const flagWins = await run(["--lang", "zh", "--help"], { NEKO_LANG: "en" });
-	expect(flagWins.out).toContain("用法: neko tui [选项]");
+it(
+	"prints English help for --lang en, NEKO_LANG=en and a saved en, with --lang taking precedence",
+	async () => {
+		for (const [args, env] of [
+			[["--lang", "en", "--help"], {}],
+			[["--help", "--lang", "en"], {}],
+			[["--help"], { NEKO_LANG: "en" }],
+		] as const) {
+			const { out, code } = await run([...args], { ...env });
+			expect(code).toBe(0);
+			expect(out).toContain("Usage: neko tui [options]");
+			expect(out).toContain("Options:");
+			expect(out).toContain("-h, --help           Show this help");
+		}
+		const flagWins = await run(["--lang", "zh", "--help"], { NEKO_LANG: "en" });
+		expect(flagWins.out).toContain("用法: neko tui [选项]");
 
-	writeFileSync(join(dir, "tui.json"), JSON.stringify({ language: "en" }));
-	const saved = await run(["--help"]);
-	expect(saved.out).toContain("Usage: neko tui [options]");
-	const overridden = await run(["--help", "--lang", "zh"]);
-	expect(overridden.out).toContain("用法: neko tui [选项]");
-	rmSync(join(dir, "tui.json"));
-});
+		writeFileSync(join(dir, "tui.json"), JSON.stringify({ language: "en" }));
+		const saved = await run(["--help"]);
+		expect(saved.out).toContain("Usage: neko tui [options]");
+		const overridden = await run(["--help", "--lang", "zh"]);
+		expect(overridden.out).toContain("用法: neko tui [选项]");
+		rmSync(join(dir, "tui.json"));
+	},
+	SPAWN_TIMEOUT_MS,
+);
 
-it("rejects an unsupported --lang value before starting", async () => {
-	const { out, err, code } = await run(["--lang", "fr"]);
-	expect(code).toBe(1);
-	expect(out).toBe("");
-	expect(err).toContain("--lang must be zh or en");
-	expect(err).toContain("fr");
-	const missing = await run(["--lang"]);
-	expect(missing.code).toBe(1);
-	expect(missing.err).toContain("--lang requires a value");
-});
+it(
+	"rejects an unsupported --lang value before starting",
+	async () => {
+		const { out, err, code } = await run(["--lang", "fr"]);
+		expect(code).toBe(1);
+		expect(out).toBe("");
+		expect(err).toContain("--lang must be zh or en");
+		expect(err).toContain("fr");
+		const missing = await run(["--lang"]);
+		expect(missing.code).toBe(1);
+		expect(missing.err).toContain("--lang requires a value");
+	},
+	SPAWN_TIMEOUT_MS,
+);

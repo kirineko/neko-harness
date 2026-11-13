@@ -186,7 +186,8 @@ it("locks read-modify-write across processes and preserves callback rejections",
 	const path = join(dir, "keys.json");
 	const store = new FileCredentialStore(path);
 	await store.modify("counter", async () => ({ type: "api_key", key: "0" }));
-	const modulePath = fileURLToPath(new URL("../src/credentials.ts", import.meta.url));
+	// An absolute import specifier has to be a file URL: Node rejects a Windows path.
+	const modulePath = new URL("../src/credentials.ts", import.meta.url).href;
 	const code = `import { FileCredentialStore } from ${JSON.stringify(modulePath)}; const store = new FileCredentialStore(process.argv[1]); for(let i=0;i<3;i++) await store.modify("counter", async(value)=> { await new Promise((done) => setTimeout(done, 10)); return {type:"api_key", key:String(Number(value.key)+1)}; });`;
 	const a = spawnProcess([process.execPath, "-e", code, path]);
 	const b = spawnProcess([process.execPath, "-e", code, path]);

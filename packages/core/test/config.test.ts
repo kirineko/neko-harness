@@ -49,7 +49,7 @@ describe("neko.config.json (2.4)", () => {
 				[
 					"--eval",
 					`
-				import { findNekoConfigFile, loadNekoConfig } from ${JSON.stringify(fileURLToPath(new URL("../src/config.ts", import.meta.url)))};
+				import { findNekoConfigFile, loadNekoConfig } from ${JSON.stringify(new URL("../src/config.ts", import.meta.url).href)};
 				console.log(JSON.stringify({ file: findNekoConfigFile(${JSON.stringify(join(root, "nowhere"))}), config: loadNekoConfig(${JSON.stringify(join(root, "nowhere"))}) }));
 			`,
 				],

@@ -43,9 +43,19 @@ it("restarts a lost helper, invalidates other cached directories and keeps share
 		for (let n = 0; n < 100 && isAlive(pids[0]!); n++) await sleep(20);
 		await sleep(20);
 		await writeFile(join(root, "a/after.ts"), "");
-		await files.search(root, "b/", signal);
+		// The write above can reach the watcher while a scan is in flight; that scan is rejected and meant to be retried.
+		const search = async (query: string) => {
+			for (let attempt = 1; ; attempt++) {
+				try {
+					return await files.search(root, query, signal);
+				} catch (error) {
+					if (attempt >= 5 || !(error instanceof Error) || !error.message.includes("Retry")) throw error;
+				}
+			}
+		};
+		await search("b/");
 		expect(pids.at(-1)).not.toBe(pids[0]);
-		expect((await files.search(root, "a/after", signal)).entries[0]?.path).toBe("a/after.ts");
+		expect((await search("a/after")).entries[0]?.path).toBe("a/after.ts");
 		expect(files.stats.active).toBe(0);
 	} finally {
 		observed.mockRestore();

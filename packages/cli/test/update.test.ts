@@ -211,4 +211,5 @@ it("documents manual Windows updates and rejects invalid update arguments", asyn
 			expect(err).toContain("用法: neko update");
 		}
 	}
-});
+	// Three fresh Node processes on the TypeScript sources; a loaded CI runner needs more than the 5 s default.
+}, 30_000);
