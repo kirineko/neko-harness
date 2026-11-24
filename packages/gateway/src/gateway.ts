@@ -10,6 +10,7 @@ import {
 	DEFAULT_SKILL_MARKET_URL,
 	DEFAULT_STORAGE_PATH,
 	loadNekoConfig,
+	type McpTransportFactory,
 	type NekoModelRef,
 	type NekoRuntime,
 	type NekoRuntimeTimings,
@@ -56,6 +57,10 @@ export type NekoGatewayOptions = {
 	readonly shellResolver?: WindowsShellResolver;
 	/** 缩短内置等待（测试用）；不由 CLI 或配置文件提供。 */
 	readonly timings?: NekoRuntimeTimings;
+	readonly mcpConfigPath?: string;
+	readonly mcpAuthPath?: string;
+	readonly mcpTransportFactory?: McpTransportFactory;
+	readonly mcpDisableWatch?: boolean;
 	/** 技能市场 API 地址；缺省读取配置 skills.marketUrl，再回落官方市场。 */
 	readonly marketUrl?: string;
 	// —— 网关监听地址 ——
@@ -162,6 +167,10 @@ export async function startGateway(options: NekoGatewayOptions = {}): Promise<Ne
 		...(fileConfig.shell?.path !== undefined ? { shellPath: fileConfig.shell.path } : {}),
 		...(options.shellResolver !== undefined ? { shellResolver: options.shellResolver } : {}),
 		...(options.timings !== undefined ? { timings: options.timings } : {}),
+		...(options.mcpConfigPath !== undefined ? { mcpConfigPath: options.mcpConfigPath } : {}),
+		...(options.mcpAuthPath !== undefined ? { mcpAuthPath: options.mcpAuthPath } : {}),
+		...(options.mcpTransportFactory !== undefined ? { mcpTransportFactory: options.mcpTransportFactory } : {}),
+		...(options.mcpDisableWatch !== undefined ? { mcpDisableWatch: options.mcpDisableWatch } : {}),
 	});
 	try {
 		return await bindGateway(runtime, {

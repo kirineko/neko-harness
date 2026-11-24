@@ -8,6 +8,7 @@ export type SettingsSection =
 	| "search"
 	| "context"
 	| "codemode"
+	| "mcp"
 	| "appearance"
 	| "language"
 	| "mobile"
@@ -16,13 +17,14 @@ export type SettingsSection =
 const MENU: readonly {
 	key: SettingsSection;
 	label: PlainKey;
-	icon: "key" | "layers" | "code" | "phone" | "info" | "search" | "palette" | "globe";
+	icon: "key" | "layers" | "code" | "plug" | "phone" | "info" | "search" | "palette" | "globe";
 	to: string;
 }[] = [
 	{ key: "credentials", label: "settings.menu.credentials", icon: "key", to: "/settings" },
 	{ key: "search", label: "settings.menu.search", icon: "search", to: "/settings/search" },
 	{ key: "context", label: "settings.menu.context", icon: "layers", to: "/settings/context" },
 	{ key: "codemode", label: "settings.menu.codemode", icon: "code", to: "/settings/codemode" },
+	{ key: "mcp", label: "settings.menu.mcp", icon: "plug", to: "/settings/mcp" },
 	{ key: "appearance", label: "settings.menu.appearance", icon: "palette", to: "/settings/appearance" },
 	{ key: "language", label: "settings.menu.language", icon: "globe", to: "/settings/language" },
 	{ key: "mobile", label: "settings.menu.mobile", icon: "phone", to: "/settings/mobile" },

@@ -37,7 +37,8 @@ export function Icon({
 		| "palette"
 		| "globe"
 		| "layers"
-		| "code";
+		| "code"
+		| "plug";
 	size?: number;
 	className?: string;
 }) {
@@ -69,6 +70,7 @@ export function Icon({
 		phone:
 			"M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3Zm2.5 14.5h3",
 		code: "m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14",
+		plug: "M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z",
 		layers: "M12 3 3 8l9 5 9-5-9-5ZM3 12.5l9 5 9-5M3 17l9 5 9-5",
 		palette:
 			"M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-1.9-.4-1 .2-2.1 1.4-2.1H17a4 4 0 0 0 4-4c0-5-4-10-9-10ZM7.5 11h.01M10 7.5h.01M14.5 7.5h.01",

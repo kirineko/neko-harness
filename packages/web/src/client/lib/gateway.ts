@@ -40,6 +40,10 @@ import type {
 	NekoMarketInstallResult,
 	NekoMarketPreview,
 	NekoMarketSkill,
+	NekoMcp,
+	NekoMcpBeginSignInResult,
+	NekoMcpServerConfigInput,
+	NekoMcpState,
 	NekoModels,
 	NekoSearchSettings,
 	NekoSearchSettingsState,
@@ -69,6 +73,7 @@ export type GatewayEvents = {
 	onSearchSettings?(state: NekoSearchSettingsState | null): void;
 	onContextSettings?(state: NekoContextSettingsState | null): void;
 	onCodemodeSettings?(state: NekoCodemodeSettingsState | null): void;
+	onMcp?(state: NekoMcpState | null): void;
 	onDefaultModel?(state: NekoDefaultModelState | null): void;
 	onError(text: string): void;
 	onDirectory(state: NekoDirectoryState): void;
@@ -109,6 +114,7 @@ export class GatewayConnection {
 	#searchSettings: NekoSearchSettings | undefined;
 	#contextSettings: NekoContextSettings | undefined;
 	#codemodeSettings: NekoCodemodeSettings | undefined;
+	#mcp: NekoMcp | undefined;
 	#defaultModel: NekoDefaultModel | undefined;
 	#skillMarket: NekoSkillMarket | undefined;
 	#chat: NekoChat | undefined;
@@ -173,6 +179,42 @@ export class GatewayConnection {
 	async resetCodemodeMode(): Promise<void> {
 		if (!this.#connected || !this.#codemodeSettings) throw new Error(getT()("gw.notConnected"));
 		await this.#codemodeSettings.reset({});
+	}
+	async upsertMcpServer(name: string, config: NekoMcpServerConfigInput): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.upsertServer({ name, config });
+	}
+	async removeMcpServer(name: string): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.removeServer({ name });
+	}
+	async setMcpServerEnabled(name: string, enabled: boolean): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.setEnabled({ name, enabled });
+	}
+	async saveMcpRawConfig(rawJson: string): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.saveRawConfig({ rawJson });
+	}
+	async reconnectMcpServer(name: string): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.reconnect({ name });
+	}
+	async beginMcpSignIn(server: string): Promise<NekoMcpBeginSignInResult> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.beginSignIn({ server });
+	}
+	async pasteMcpSignIn(id: string, redirectUrl: string): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.pasteSignIn({ id, redirectUrl });
+	}
+	async cancelMcpSignIn(id: string): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.cancelSignIn({ id });
+	}
+	async signOutMcpServer(server: string): Promise<NekoMcpState> {
+		if (!this.#connected || !this.#mcp) throw new Error(getT()("gw.notConnected"));
+		return this.#mcp.signOut({ server });
 	}
 	async resetContextSettings(): Promise<void> {
 		if (!this.#connected || !this.#contextSettings) throw new Error(getT()("gw.notConnected"));
@@ -540,6 +582,7 @@ export class GatewayConnection {
 		this.#searchSettings = client.searchSettings;
 		this.#contextSettings = client.contextSettings;
 		this.#codemodeSettings = client.codemodeSettings;
+		this.#mcp = client.mcp;
 		this.#defaultModel = client.defaultModel;
 		this.#skillMarket = client.skillMarket;
 
@@ -568,6 +611,12 @@ export class GatewayConnection {
 		this.#unsub.push(
 			subscribeState(codemodeSettings.snapshot, (value) => {
 				if (epoch === this.#epoch) this.#options.events.onCodemodeSettings?.(value);
+			}),
+		);
+		const mcp = this.#mcp;
+		this.#unsub.push(
+			subscribeState(mcp.snapshot, (value) => {
+				if (epoch === this.#epoch) this.#options.events.onMcp?.(value);
 			}),
 		);
 		const defaultModel = this.#defaultModel;
@@ -670,6 +719,8 @@ export class GatewayConnection {
 		this.#options.events.onContextSettings?.(null);
 		this.#codemodeSettings = undefined;
 		this.#options.events.onCodemodeSettings?.(null);
+		this.#mcp = undefined;
+		this.#options.events.onMcp?.(null);
 		this.#defaultModel = undefined;
 		this.#options.events.onDefaultModel?.(null);
 		this.#models = undefined;

@@ -68,6 +68,7 @@ import { commands } from "./labels.ts";
 import { saveLanguage } from "./language-settings.ts";
 import { openLanguagePanel } from "./language-ui.ts";
 import { createAppLayout, usableSize } from "./layout.ts";
+import { openMcpPanel, runMcpSubcommand } from "./mcp-ui.ts";
 import { plainText } from "./plain-text.ts";
 import { PlanDock } from "./plan-dock.ts";
 import { isProviderRejection, modelKey, openModelPanel, providerSendBlock } from "./provider-ui.ts";
@@ -174,6 +175,7 @@ class NekoTuiApp {
 	#searchStop: (() => void) | undefined;
 	#contextStop: (() => void) | undefined;
 	#codemodeStop: (() => void) | undefined;
+	#mcpStop: (() => void) | undefined;
 	#modelStop: (() => void) | undefined;
 	#agentDetails = new Map<string, SubagentDetail>();
 	#sessionId = "";
@@ -254,6 +256,8 @@ class NekoTuiApp {
 				this.#contextStop = undefined;
 				this.#codemodeStop?.();
 				this.#codemodeStop = undefined;
+				this.#mcpStop?.();
+				this.#mcpStop = undefined;
 				this.#modelStop?.();
 				this.#modelStop = undefined;
 				clearInterval(this.#sessionPanelTimer);
@@ -545,6 +549,12 @@ class NekoTuiApp {
 		}
 		if (trimmed === "/codemode") {
 			this.#showCodemode();
+			return;
+		}
+		if (trimmed === "/mcp" || trimmed.startsWith("/mcp ")) {
+			const args = trimmed.slice("/mcp".length).trim();
+			if (args === "") this.#showMcp();
+			else void runMcpSubcommand(args, this.#gateway.client, (msg, level, opts) => this.addNotice(msg, level, opts));
 			return;
 		}
 		if (trimmed === "/language") {
@@ -1273,6 +1283,13 @@ class NekoTuiApp {
 	#showCodemode(): void {
 		if (this.#exitStarted || this.#panel.open || this.#login.open) return;
 		this.#codemodeStop = openCodemodePanel(this.#panel, this.#gateway.client, (message) => this.addNotice(message));
+		this.#ui.setFocus(this.#panel);
+	}
+	#showMcp(): void {
+		if (this.#exitStarted || this.#panel.open || this.#login.open) return;
+		this.#mcpStop = openMcpPanel(this.#panel, this.#gateway.client, (message, level, opts) =>
+			this.addNotice(message, level, opts),
+		);
 		this.#ui.setFocus(this.#panel);
 	}
 	#agentDetail(target: string | number) {

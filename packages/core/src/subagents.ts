@@ -27,6 +27,7 @@ import { CodemodeDoc } from "./codemode.ts";
 import { CODEMODE_NAME } from "./codemode-mode.ts";
 import { onCommits } from "./commits.ts";
 import { NekoInput } from "./input.ts";
+import { MCP_EXTENSION_NAME, TOOL_SEARCH_EXTENSION_NAME } from "./mcp-tools.ts";
 import { PLAN_CODER_BLOCKED, PlanDoc } from "./plan-doc.ts";
 import type { UsageTotals } from "./projection.ts";
 import { emptySubagentUsage, subagentUsageTotals, subtractSubagentUsage } from "./subagent-usage.ts";
@@ -691,7 +692,10 @@ export function createSubagentExtension(
 								// The parent's turn limit, set from the configuration when it was created.
 								maxTurns: agent.maxTurns ?? null,
 								extensions: agent.extensions.filter(
-									(e) => e.name !== extension.name && !MAIN_ONLY_EXTENSIONS.has(e.name),
+									(e) =>
+										e.name !== extension.name &&
+										!MAIN_ONLY_EXTENSIONS.has(e.name) &&
+										(role === "coder" || (e.name !== MCP_EXTENSION_NAME && e.name !== TOOL_SEARCH_EXTENSION_NAME)),
 								),
 								modelTools: agentChangeFor({ plan: "normal", codemode, role: "subagent" }).modelTools,
 								tools: enabled.filter(

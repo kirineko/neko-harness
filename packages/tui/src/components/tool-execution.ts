@@ -1,6 +1,7 @@
 import { Box, Container, MouseRegion, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { CodemodeCallView, CodemodeView, ToolInteraction } from "@neko-harness/core";
 import type { PlanStatus } from "@neko-harness/core/interactions";
+import { parseMcpToolName } from "@neko-harness/core/mcp";
 import { localizeCoreText } from "../i18n/core-text.ts";
 import { getLanguage, t } from "../i18n/index.ts";
 import { plainLine, plainText } from "../plain-text.ts";
@@ -227,15 +228,26 @@ export class ToolExecutionComponent extends Container {
 
 	rebuild(): void {
 		const state = this.#state;
-		// Question, todo and plan text comes from the model: show it as plain text, never as terminal control.
+		const mcp = parseMcpToolName(state.name);
+		// Question, todo, plan, codemode and MCP text comes from the model or external servers: never render raw control sequences.
 		const plain =
 			state.name === "ask_user" ||
 			state.name === "todo" ||
 			state.name === "submit_plan" ||
+			state.name === "tool_search" ||
+			mcp !== null ||
 			state.codemode !== undefined;
+		const title = mcp ? `⚡ MCP · ${plainLine(mcp.server, 40)} / ${plainLine(mcp.tool, 60)}` : `⚡ ${state.name}`;
+		const rawSummary = (() => {
+			if (!mcp) return state.summary;
+			const prefix = `${mcp.server} / ${mcp.tool}`;
+			if (state.summary === prefix) return "";
+			if (state.summary.startsWith(`${prefix}: `)) return state.summary.slice(prefix.length + 2);
+			return state.summary;
+		})();
 		const parts = [
-			`${theme.toolTitle(`⚡ ${state.name}`)}`,
-			theme.dim((plain ? plainLine(state.summary) : state.summary) + diffCountSuffix(state)),
+			`${theme.toolTitle(title)}`,
+			theme.dim((plain ? plainLine(rawSummary) : rawSummary) + diffCountSuffix(state)),
 			this.#statusLine(state.phase),
 		];
 		let text = parts.join("  ");

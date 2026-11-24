@@ -1,5 +1,7 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { BACKGROUND_CONTEXT, type Context } from "@earendil-works/chord/context";
 import type {
 	CredentialStore,
@@ -97,6 +99,9 @@ import {
 } from "./interactions.ts";
 import { JobManager } from "./job-engine.ts";
 import { type JobOutputRead, type JobSummary, JobsDoc, summarizeJobRecord } from "./jobs.ts";
+import { McpManager, type McpTransportFactory } from "./mcp-manager.ts";
+import { createMcpExtension, createMcpToolSearchExtension } from "./mcp-tools.ts";
+import type { McpBeginSignInResult, McpServerConfigInput, McpSnapshot } from "./mcp-types.ts";
 import { approvedPlanPrompt, createPlanExtension, PLAN_BUSY, PlanService, planRevisionPrompt } from "./plan.ts";
 import type { PlanItem } from "./plan-doc.ts";
 import { totalUsage } from "./projection.ts";
@@ -209,6 +214,14 @@ export type NekoRuntimeOptions = {
 	readonly timings?: NekoRuntimeTimings;
 	/** Overrides the codemode worker cap and wait; tests use small values. Not exposed by the CLI or the config file. */
 	readonly codemodeLimits?: { readonly maxWorkers?: number; readonly waitMs?: number };
+	/** Override global mcp.json path; defaults to `<dirname(storagePath)>/mcp.json` (isolated for memory storage). */
+	readonly mcpConfigPath?: string;
+	/** Override global mcp-auth.json path; defaults to `<dirname(storagePath)>/mcp-auth.json`. */
+	readonly mcpAuthPath?: string;
+	/** Inject custom MCP transports for deterministic tests. */
+	readonly mcpTransportFactory?: McpTransportFactory;
+	/** Disable filesystem watching on mcp.json (tests). */
+	readonly mcpDisableWatch?: boolean;
 };
 
 export type NekoRuntimeTimings = {
@@ -546,6 +559,20 @@ export type NekoRuntime = {
 	setCodemodeMode(mode: CodemodeMode): Promise<CodemodeSettingsState>;
 	/** Clear the saved mode. */
 	resetCodemodeMode(): Promise<CodemodeSettingsState>;
+	/** Current global MCP snapshot (servers, statuses, tools, sign-in flows; never includes OAuth tokens). */
+	mcpSnapshot(): McpSnapshot;
+	/** Subscribe to global MCP configuration, connection, tool and OAuth flow updates. */
+	onMcpChange(listener: (snapshot: McpSnapshot) => void): () => void;
+	upsertMcpServer(name: string, input: McpServerConfigInput): Promise<McpSnapshot>;
+	removeMcpServer(name: string): Promise<McpSnapshot>;
+	setMcpServerEnabled(name: string, enabled: boolean): Promise<McpSnapshot>;
+	saveMcpRawConfig(rawJson: string): Promise<McpSnapshot>;
+	reconnectMcpServer(name: string): Promise<McpSnapshot>;
+	beginMcpSignIn(server: string): Promise<McpBeginSignInResult>;
+	pasteMcpSignIn(id: string, redirectUrl: string): Promise<McpSnapshot>;
+	cancelMcpSignIn(id: string): Promise<McpSnapshot>;
+	signOutMcpServer(server: string): Promise<McpSnapshot>;
+	waitForMcpReady(timeoutMs?: number): Promise<void>;
 	/** The search provider the next tool call uses. */
 	searchSettings(): Promise<SearchSettings>;
 	/** Persist the user's search provider choice; the next tool call uses it. */
@@ -654,10 +681,22 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		options.shellResolver ??
 		(process.platform === "win32" ? createWindowsShellResolver({ configPath: options.shellPath }) : undefined);
 	const workspaceFiles = new WorkspaceFiles(undefined, shellResolver);
-	const storage =
-		options.storage === "memory"
-			? new MemoryStorage()
-			: await openNodeSqliteStorage(options.storagePath ?? DEFAULT_STORAGE_PATH);
+	const storagePath = options.storagePath ?? DEFAULT_STORAGE_PATH;
+	const storage = options.storage === "memory" ? new MemoryStorage() : await openNodeSqliteStorage(storagePath);
+	const memMcpDir =
+		options.storage === "memory" && !options.mcpConfigPath && !options.mcpAuthPath
+			? join(tmpdir(), `neko-mem-mcp-${randomUUID()}`)
+			: undefined;
+	const mcp = new McpManager({
+		configPath:
+			options.mcpConfigPath ?? (memMcpDir ? join(memMcpDir, "mcp.json") : join(dirname(storagePath), "mcp.json")),
+		authPath:
+			options.mcpAuthPath ??
+			(memMcpDir ? join(memMcpDir, "mcp-auth.json") : join(dirname(storagePath), "mcp-auth.json")),
+		baseCwd: defaultCwd,
+		...(options.mcpTransportFactory ? { transportFactory: options.mcpTransportFactory } : {}),
+		...(options.mcpDisableWatch || memMcpDir ? { disableWatch: true } : {}),
+	});
 
 	const registry = createRegistry();
 	registry.install(createCodingTools({ images: await createNodePhotonImages() }));
@@ -700,12 +739,25 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 	let questions!: UserQuestions;
 	registry.install(createQuestionExtension(() => questions));
 	let plans!: PlanService;
-	registry.install(createPlanExtension(() => plans));
+	registry.install(
+		createPlanExtension(
+			() => plans,
+			(name) => mcp.isToolReadOnly(name),
+		),
+	);
 	const codemode = createCodemodeRuntime({
 		maxWorkers: options.codemodeLimits?.maxWorkers ?? CODEMODE_LIMITS.maxWorkers,
 		waitMs: options.codemodeLimits?.waitMs ?? CODEMODE_LIMITS.waitMs,
 	});
 	registry.install(codemode.extension);
+	const syncMcpExtensions = () => {
+		const hasDeferredMcp = mcp.offeredServers().some((srv) => srv.exposure !== "direct");
+		registry.install(createMcpToolSearchExtension(hasDeferredMcp));
+		registry.install(createMcpExtension(mcp));
+	};
+	await mcp.start();
+	syncMcpExtensions();
+	const stopMcpTools = mcp.onToolsChange(() => syncMcpExtensions());
 	for (const extension of options.extensions ?? []) registry.install(extension);
 	let approvals!: ToolApprovals;
 	const approvalExtension = createApprovalExtension(() => approvals);
@@ -790,6 +842,9 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			}
 		}
 	} catch (error) {
+		stopMcpTools();
+		await mcp.close();
+		if (memMcpDir) await rm(memMcpDir, { recursive: true, force: true }).catch(() => {});
 		await codemode.close();
 		await workspaceFiles.close();
 		await harness.close(context);
@@ -1624,6 +1679,18 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			}, context);
 			return codemodeState();
 		},
+		mcpSnapshot: () => mcp.snapshot(),
+		onMcpChange: (listener) => mcp.subscribe(listener),
+		upsertMcpServer: (name, input) => mcp.upsertServer(name, input),
+		removeMcpServer: (name) => mcp.removeServer(name),
+		setMcpServerEnabled: (name, value) => mcp.setEnabled(name, value),
+		saveMcpRawConfig: (rawJson) => mcp.saveRawJson(rawJson),
+		reconnectMcpServer: (name) => mcp.reconnect(name),
+		beginMcpSignIn: (server) => mcp.beginSignIn(server),
+		pasteMcpSignIn: (id, redirectUrl) => mcp.pasteSignIn(id, redirectUrl),
+		cancelMcpSignIn: (id) => mcp.cancelSignIn(id),
+		signOutMcpServer: (server) => mcp.signOut(server),
+		waitForMcpReady: (timeoutMs) => mcp.waitForReady(timeoutMs),
 		async searchSettings() {
 			return { selected: searchProvider };
 		},
@@ -1739,7 +1806,10 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			registry.install(extension);
 		},
 		async close() {
-			// Scripts are stopped first; an interrupted one is replayed on the next start.
+			// Stop MCP servers & loopback listeners and codemode workers before closing the Harness.
+			stopMcpTools();
+			await mcp.close();
+			if (memMcpDir) await rm(memMcpDir, { recursive: true, force: true }).catch(() => {});
 			await codemode.close();
 			await cleanup();
 			return harness.close(context);

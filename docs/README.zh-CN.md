@@ -88,11 +88,12 @@ TUI 输入 `/login`，或打开 Web「设置 → 模型服务」，填入 [DeepS
 - **待办。** 多步骤任务中助手维护一份有序、只读的待办：Web 顶栏「待办 n/m」、TUI `/todos`、手机聊天页进度入口查看。随会话保存，重启与压缩后仍在，子 agent 不能使用。
 - **向你提问。** 缺少必要决策时，助手用 `ask_user` 提问：可单选或多选（带「推荐」提示但不预选），可附加文字，也可跳过。Web 在输入区上方、TUI 按 `Ctrl+O` 或 `/question`、手机在聊天页回答；选择需提交（TUI 按 `Enter`）才生效，等待期间助手暂停、期间发送的消息排到回答之后。问题与选项按纯文本显示。
 - **Codemode。** 不必每步一次工具调用：助手可以写一小段 JavaScript 脚本，一次调用 `read`、`grep`、`edit`、`bash` 等工具。三种模式：`off`（默认）、`on`（普通工具之外再提供脚本工具）、`only`（模型只看到脚本工具以及待办、提问、子 agent）。在 TUI `/codemode`、Web「设置 → Codemode」或配置文件 `codemode.mode` 选择；界面保存的值优先于配置文件，只对新会话生效。嵌套调用在工具卡片里列出，脚本里的编辑与其他编辑一样出现在工作区「本次改动」。脚本在 worker 中运行（同时最多 2 个、每个 256 MiB），等待上限 60 秒；审批与 plan 模式对嵌套调用照常生效。
+- **MCP 服务器。** 经全局 `~/.neko/mcp.json` 接入本地 `stdio` 或远程 Streamable HTTP MCP 工具服务（含 OAuth 2.1 登录与静默刷新），支持文件热重载。在 Web「设置 → MCP」以表单或原始 `mcp.json` 管理，或在 TUI `/mcp` 查看状态、启停、重连与完成 OAuth 登录。默认按需发现（`codemode: off` 经 `tool_search`，`codemode: on/only` 经 `mcp__<server>` 命名空间直接供脚本调用），也可将单个服务器设为 `direct` 直接暴露；`plan` 模式下自动拦截未声明只读的 MCP 工具，子 agent 中仅 `coder` 继承 MCP 工具。
 - **联网搜索。** 默认 Tavily（无 Key 时为有限流的 keyless 模式），也可改用 DeepSeek 搜索与抓取并复用 DeepSeek Key。在 Web「设置 → 联网搜索」、TUI `/search` 或配置文件 `webSearch.provider` 选择。DeepSeek 搜索按成功请求计费（5 元 / 千次）。
 
 ### 多端
 
-**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/codemode` Codemode、`/settings/appearance` 外观、`/settings/language` 语言、`/settings/mobile` 手机配对、`/about` 关于与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
+**Web**：聊天、工作区侧栏（文件、改动、在本机打开）、技能市场，以及设置页：`/settings` 模型服务、`/settings/search` 联网搜索、`/settings/context` 上下文、`/settings/codemode` Codemode、`/settings/mcp` MCP 服务器、`/settings/appearance` 外观、`/settings/language` 语言、`/settings/mobile` 手机配对、`/about` 关于与更新。工作区、任务、子 agent 三个右侧面板共用同一个宽度：拖拽边缘（或用 ←/→、Home/End，双击恢复默认）调整，宽度记在浏览器里。
 
 Web 界面有中文（默认）与 English 两种语言，在「设置 → 语言」切换；「设置 → 外观」可选主题（樱花、纸白、夜墨）和聊天排版（字体、字号、字重、行高）。两者只保存在当前浏览器，不影响 TUI 与手机端。
 
@@ -105,6 +106,7 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 | `/compact`、`/context` | 压缩、裁剪及其设置 |
 | `/continue` | 一轮运行未得到回答就结束后，在原上下文上继续（Web 显示「继续」按钮） |
 | `/codemode` | 新会话的 codemode 模式（off、on、only） |
+| `/mcp` | 查看与控制全局 MCP 服务器（`/mcp paste <url>` 提交 OAuth 回调） |
 | `/copy`、`/export` | 复制上一条回答、导出会话 |
 | `/agents`、`/jobs`、`/todos`、`/question`、`/plan` | 委派、后台任务、待办、提问、规划模式 |
 | `/search`、`/skills`、`/theme`、`/language`、`/version`、`/help` | 搜索服务、技能市场、主题、界面语言、版本与更新、快捷键 |
@@ -179,10 +181,38 @@ Web 界面有中文（默认）与 English 两种语言，在「设置 → 语�
 | `maxTurns` | 新会话及其子 agent 单次运行的工具轮次上限（≥ 1 的整数，未设置不限制）；达到上限的运行会停下，可用「继续」接着运行 |
 | `shell.path` | Windows 上的 Git Bash `bash.exe`（会拒绝 WSL 的 `bash.exe`） |
 
+### MCP 服务器配置（`~/.neko/mcp.json`）
+
+全局 MCP 服务器配置存放在 `~/.neko/mcp.json`（所有工作区共用，修改后自动热重载，也可在 Web `/settings/mcp` 中直接编辑）。支持 `stdio` 与 Streamable HTTP（不支持旧版 `sse`），字符串值中的 `${ENV_VAR}` 在运行时从环境变量展开而磁盘保留原模板：
+
+```json
+{
+	"mcpServers": {
+		"filesystem": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/docs"],
+			"description": "Local documentation server",
+			"exposure": "auto"
+		},
+		"remote-docs": {
+			"url": "https://mcp.example.com/mcp",
+			"headers": {
+				"Authorization": "Bearer ${MCP_DOCS_TOKEN}"
+			},
+			"timeout": 60,
+			"exposure": "auto"
+		}
+	}
+}
+```
+
+对于需要 OAuth 2.1 认证的远程 HTTP MCP 服务器，省略静态 `Authorization` 头即可自动进入 OAuth 流程（可在 `oauth` 对象中选填 `clientId`、`scope`、`callbackPort` 等字段），在 Web `/settings/mcp` 或 TUI `/mcp` 中完成登录与登出。
+
 ### 数据与环境变量
 
 - `~/.neko/neko.sqlite`：会话、消息、文档与设置，包括各界面保存的值（默认模型、已启用的服务、上下文设置、codemode 模式、搜索服务）。
 - `~/.neko/credentials.json`：界面保存的 Key，以纯文本形式存给当前用户。要重置某个服务的 Key，从界面或该文件删除即可。
+- `~/.neko/mcp.json` 与 `~/.neko/mcp-auth.json`：全局 MCP 服务器配置与 OAuth 2.1 令牌存储（`0600` 权限）。
 - `~/.neko/gateway-server-id` 与 socket / 端口文件：界面用于发现网关，可自动重建；`~/.neko/update-check.json` 缓存上次更新检查。
 - 环境变量：每个服务一个（`DEEPSEEK_API_KEY`、`OPENROUTER_API_KEY`、`OPENCODE_API_KEY` 等）、`TAVILY_API_KEY` 用于联网搜索、`NEKO_THEME` 控制 TUI 主题、`NEKO_LANG` 控制 TUI 语言。
 

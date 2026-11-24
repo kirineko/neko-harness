@@ -88,11 +88,12 @@ Keys can come from environment variables instead (`DEEPSEEK_API_KEY`, `OPENROUTE
 - **Todos.** For multi-step work the assistant keeps an ordered, read-only todo list. Web top bar **Todo n/m**, TUI `/todos`, progress entry on the mobile chat page. It is saved with the session and survives restarts and compaction; subagents cannot use it.
 - **Questions.** When a decision is missing, the assistant asks with `ask_user`: single or multiple choice — a recommended option is marked but never preselected — with optional text, or skip. Answer above the composer in the web UI, with `Ctrl+O` or `/question` in the TUI, or on the mobile chat page. The answer counts only once submitted (`Enter` in the TUI); the assistant stays paused meanwhile and messages you send queue behind the answer. Questions and options are plain text.
 - **Codemode.** Instead of one tool call per step, the assistant can write a short JavaScript script that calls `read`, `grep`, `edit`, `bash` and other tools in one go. Three modes: `off` (default), `on` (the script tool is offered next to the normal tools) and `only` (the model sees just the script tool plus todos, questions and subagents). Pick the mode in TUI `/codemode`, web **Settings → Codemode** or `codemode.mode` in the config file; a saved value wins over the config file and applies to new sessions only. Nested calls show as a list on the tool card, and edits made from a script appear in the workspace changes like any other edit. A script runs in a worker (at most 2 at a time, 256 MiB each) with a 60 s wait; approvals and plan mode apply to nested calls as usual.
+- **MCP servers.** Connect local `stdio` or remote Streamable HTTP MCP tool servers (with OAuth 2.1 sign-in and silent token refresh) via the global `~/.neko/mcp.json` file with automatic hot reload. Manage servers from web **Settings → MCP** (form or raw `mcp.json`) or inspect, toggle, reconnect and sign in from TUI `/mcp`. Tools are discovered on demand by default (`tool_search` when `codemode: off`, per-server `mcp__<server>` namespaces inside scripts when `codemode: on/only`), or exposed upfront with `exposure: "direct"`. In plan mode, MCP tools without `readOnlyHint: true` are blocked; only the `coder` subagent inherits MCP tools.
 - **Web search.** Tavily by default — keyless mode is rate-limited until you add a key — or DeepSeek search and fetch, reusing your DeepSeek key. Pick the provider in web **Settings → Web search**, TUI `/search`, or `webSearch.provider` in the config file. DeepSeek search bills per successful request (CNY 5 per 1000).
 
 ### Clients
 
-**Web** — chat, workspace sidebar (files, changes, open in editor), skill market, and settings: `/settings` Model services, `/settings/search` Web search, `/settings/context` Context, `/settings/codemode` Codemode, `/settings/appearance` Appearance, `/settings/language` Language, `/settings/mobile` Mobile pairing, `/about` About and updates. The workspace, job and subagent panels share one width: drag its edge (or use ←/→ and Home/End, double-click to reset); it is remembered in the browser.
+**Web** — chat, workspace sidebar (files, changes, open in editor), skill market, and settings: `/settings` Model services, `/settings/search` Web search, `/settings/context` Context, `/settings/codemode` Codemode, `/settings/mcp` MCP servers, `/settings/appearance` Appearance, `/settings/language` Language, `/settings/mobile` Mobile pairing, `/about` About and updates. The workspace, job and subagent panels share one width: drag its edge (or use ←/→ and Home/End, double-click to reset); it is remembered in the browser.
 
 The web UI is available in Chinese (default) and English: switch it in **Settings → Language**. **Settings → Appearance** sets the theme (Sakura, Paper or Ink) and the chat typography (font, size, weight, line height). Both are stored in the browser only, apply to that browser alone, and do not affect the TUI or the mobile app.
 
@@ -105,6 +106,7 @@ The web UI is available in Chinese (default) and English: switch it in **Setting
 | `/compact`, `/context` | compaction, pruning and their settings |
 | `/continue` | run again on the same context after a run that ended without an answer (the web UI shows a **Continue** button) |
 | `/codemode` | codemode mode (off, on, only) for new sessions |
+| `/mcp` | inspect and control global MCP servers (`/mcp paste <url>` submits an OAuth redirect URL) |
 | `/copy`, `/export` | copy the last answer, export the session |
 | `/agents`, `/jobs`, `/todos`, `/question`, `/plan` | delegated work, background jobs, todos, questions, plan mode |
 | `/search`, `/skills`, `/theme`, `/language`, `/version`, `/help` | search provider, skill market, theme, language, version and updates, shortcuts |
@@ -179,10 +181,38 @@ CLI flags > config file > built-in defaults. `neko tui --help`, `neko web --help
 | `maxTurns` | Tool rounds one run may take in new sessions and their subagents (integer ≥ 1, unset means no limit); a run that reaches it stops and can be continued |
 | `shell.path` | Git Bash `bash.exe` on Windows (a WSL `bash.exe` is rejected) |
 
+### MCP servers (`~/.neko/mcp.json`)
+
+Global MCP servers are configured in `~/.neko/mcp.json` (shared across all workspaces, automatically hot-reloaded on disk changes, and editable from web `/settings/mcp`). Both `stdio` and Streamable HTTP transports are supported (legacy `sse` is rejected); `${ENV_VAR}` placeholders in string values are expanded from the environment at runtime while kept intact on disk:
+
+```json
+{
+	"mcpServers": {
+		"filesystem": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/docs"],
+			"description": "Local documentation server",
+			"exposure": "auto"
+		},
+		"remote-docs": {
+			"url": "https://mcp.example.com/mcp",
+			"headers": {
+				"Authorization": "Bearer ${MCP_DOCS_TOKEN}"
+			},
+			"timeout": 60,
+			"exposure": "auto"
+		}
+	}
+}
+```
+
+For remote HTTP MCP servers using OAuth 2.1, omit the static `Authorization` header (optionally configure `oauth` fields such as `clientId`, `scope`, or `callbackPort`) and complete sign-in or sign-out from web `/settings/mcp` or TUI `/mcp`.
+
 ### Data and environment
 
 - `~/.neko/neko.sqlite` — sessions, messages, documents and settings, including the values saved from the UIs (default model, enabled providers, context settings, codemode mode, search provider).
 - `~/.neko/credentials.json` — keys saved in the UI, in plain text for your user. Resetting a provider's key means removing it from the UI or this file.
+- `~/.neko/mcp.json` and `~/.neko/mcp-auth.json` — global MCP server configuration and OAuth 2.1 credential store (`0600` permissions).
 - `~/.neko/gateway-server-id`, socket and port files — gateway discovery used by the UIs; replaced automatically. `~/.neko/update-check.json` caches the last update check.
 - Environment variables: one per provider (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, …), `TAVILY_API_KEY` for web search, `NEKO_THEME` for the TUI theme, `NEKO_LANG` for the TUI language.
 

@@ -6,6 +6,7 @@ import type {
 	NekoBrowseOptions,
 	NekoCodemodeSettingsState,
 	NekoContextSettingsPatch,
+	NekoMcpServerConfigInput,
 	WirePlanDecision,
 	WireQuestionResponse,
 } from "./contract.ts";
@@ -93,6 +94,7 @@ export function startNekoApp(): void {
 				onSearchSettings: storeActions.setSearchSettings,
 				onContextSettings: storeActions.setContextSettings,
 				onCodemodeSettings: storeActions.setCodemodeSettings,
+				onMcp: storeActions.setMcp,
 				onDefaultModel: storeActions.setDefaultModel,
 				onWorkspaces: (state) => storeActions.setWorkspaces(state.workspaces),
 				onWorkspace: storeActions.setWorkspace,
@@ -160,6 +162,33 @@ export const appActions = {
 	},
 	resetCodemodeMode() {
 		return requireConnection().resetCodemodeMode();
+	},
+	upsertMcpServer(name: string, config: NekoMcpServerConfigInput) {
+		return requireConnection().upsertMcpServer(name, config);
+	},
+	removeMcpServer(name: string) {
+		return requireConnection().removeMcpServer(name);
+	},
+	setMcpServerEnabled(name: string, enabled: boolean) {
+		return requireConnection().setMcpServerEnabled(name, enabled);
+	},
+	saveMcpRawConfig(rawJson: string) {
+		return requireConnection().saveMcpRawConfig(rawJson);
+	},
+	reconnectMcpServer(name: string) {
+		return requireConnection().reconnectMcpServer(name);
+	},
+	beginMcpSignIn(server: string) {
+		return requireConnection().beginMcpSignIn(server);
+	},
+	pasteMcpSignIn(id: string, redirectUrl: string) {
+		return requireConnection().pasteMcpSignIn(id, redirectUrl);
+	},
+	cancelMcpSignIn(id: string) {
+		return requireConnection().cancelMcpSignIn(id);
+	},
+	signOutMcpServer(server: string) {
+		return requireConnection().signOutMcpServer(server);
 	},
 	resetContextSettings() {
 		return requireConnection().resetContextSettings();

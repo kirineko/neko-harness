@@ -17,6 +17,7 @@ import type { ImageInfo } from "./images.ts";
 import { type InputData, NekoInput } from "./input.ts";
 import type { PlanView, QuestionList, TodoList } from "./interactions.ts";
 import type { JobSummary } from "./jobs.ts";
+import { parseMcpToolName } from "./mcp-types.ts";
 import { projectQueued, type QueuedInput } from "./queued.ts";
 import type { NekoModelInfo, NekoModelRef } from "./runtime.ts";
 import type { SkillInvocation } from "./skill-invocation.ts";
@@ -423,7 +424,20 @@ export function summarizeToolCall(name: string, args: unknown): ToolSummary {
 			const limit = typeof record.limit === "number" ? ` limit ${record.limit}` : "";
 			return { args: truncateMiddle(`${path}${offset}${limit}`, 100) };
 		}
+		case "tool_search": {
+			const query = typeof record.query === "string" ? record.query.trim() : "";
+			return {
+				args: truncateMiddle(query, 100),
+				detail: JSON.stringify(record, null, 2),
+			};
+		}
 		default: {
+			const mcp = parseMcpToolName(name);
+			if (mcp) {
+				const compact = Object.keys(record).length > 0 ? (JSON.stringify(record) ?? "") : "";
+				const summary = compact ? `${mcp.server} / ${mcp.tool}: ${compact}` : `${mcp.server} / ${mcp.tool}`;
+				return { args: truncateMiddle(summary, 100), detail: JSON.stringify(record, null, 2) };
+			}
 			const json = JSON.stringify(record) ?? "";
 			return { args: truncateMiddle(json, 100), detail: json };
 		}

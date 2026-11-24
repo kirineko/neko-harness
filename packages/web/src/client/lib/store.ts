@@ -7,6 +7,7 @@ import type {
 	NekoContextSettingsState,
 	NekoCredentialState,
 	NekoDefaultModelState,
+	NekoMcpState,
 	NekoSearchSettingsState,
 	NekoShellStatus,
 	NekoWorkspaceSummary,
@@ -47,6 +48,7 @@ export type NekoState = {
 	searchSettings: NekoSearchSettingsState | null;
 	contextSettings: NekoContextSettingsState | null;
 	codemodeSettings: NekoCodemodeSettingsState | null;
+	mcp: NekoMcpState | null;
 	/** 新建会话的默认模型（neko.default-model 订阅，实时）；null = 未连接。 */
 	defaultModel: NekoDefaultModelState | null;
 	workspaceRoot: string;
@@ -72,6 +74,7 @@ let state: NekoState = {
 	searchSettings: null,
 	contextSettings: null,
 	codemodeSettings: null,
+	mcp: null,
 	defaultModel: null,
 	workspaceRoot: "",
 	workspaces: [],
@@ -129,6 +132,10 @@ export const storeActions = {
 		if (codemodeSettings && state.codemodeSettings && codemodeSettings.revision < state.codemodeSettings.revision)
 			return;
 		emit({ ...state, codemodeSettings });
+	},
+	setMcp(mcp: NekoMcpState | null): void {
+		if (mcp && state.mcp && mcp.revision < state.mcp.revision) return;
+		emit({ ...state, mcp });
 	},
 	setContextSettings(contextSettings: NekoContextSettingsState | null): void {
 		if (contextSettings && state.contextSettings && contextSettings.revision < state.contextSettings.revision) return;

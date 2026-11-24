@@ -27,6 +27,7 @@ import {
 } from "@earendil-works/pi-schema";
 import { CODEMODE_MODES } from "@neko-harness/core/codemode-mode";
 import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
+import { MCP_EXPOSURES, MCP_SERVER_STATUSES, MCP_SIGN_IN_STATUSES, MCP_TRANSPORTS } from "@neko-harness/core/mcp";
 
 /** Every gateway service lives on the one host kind that serves it; the server id is verified through application info. */
 export const GatewayKind = hostKind("neko");
@@ -993,6 +994,141 @@ export const NekoCodemodeSettings = remote("neko.codemode-settings", {
 	},
 });
 
+const mcpExposure = oneOf([...MCP_EXPOSURES]);
+const mcpTransport = oneOf([...MCP_TRANSPORTS]);
+const mcpServerStatus = oneOf([...MCP_SERVER_STATUSES]);
+const mcpSignInStatus = oneOf([...MCP_SIGN_IN_STATUSES]);
+
+const mcpOAuthInputFields = {
+	clientId: opt(text),
+	clientSecret: opt(text),
+	callbackPort: opt(int({ minimum: 1, maximum: 65535 })),
+	callbackUrl: opt(text),
+	scope: opt(text),
+	clientName: opt(text),
+	clientRegistration: opt(oneOf(["auto", "dcr"])),
+	authServerMetadataUrl: opt(text),
+};
+const mcpBaseConfigFields = {
+	enabled: opt(boolean),
+	description: opt(text),
+	timeout: opt(num()),
+	exposure: opt(mcpExposure),
+};
+const mcpKeyValue = obj({ key: text, value: text });
+export const McpServerConfigInputSchema = union([
+	obj({
+		transport: lit("stdio"),
+		command: text,
+		args: opt(arr(text)),
+		env: opt(arr(mcpKeyValue)),
+		cwd: opt(text),
+		...mcpBaseConfigFields,
+	}),
+	obj({
+		transport: lit("http"),
+		url: text,
+		headers: opt(arr(mcpKeyValue)),
+		oauth: opt(obj(mcpOAuthInputFields)),
+		...mcpBaseConfigFields,
+	}),
+]);
+const McpServerConfigStateSchema = union([
+	obj(
+		{
+			transport: lit("stdio"),
+			command: text,
+			args: opt(arr(text)),
+			env: opt(map(text)),
+			cwd: opt(text),
+			...mcpBaseConfigFields,
+		},
+		{ open: true },
+	),
+	obj(
+		{
+			transport: lit("http"),
+			url: text,
+			headers: opt(map(text)),
+			oauth: opt(obj(mcpOAuthInputFields, { open: true })),
+			...mcpBaseConfigFields,
+		},
+		{ open: true },
+	),
+]);
+export const McpToolInfoSchema = obj(
+	{
+		name: text,
+		registeredName: text,
+		title: opt(text),
+		description: text,
+		readOnly: boolean,
+	},
+	{ open: true },
+);
+export const McpServerSnapshotSchema = obj(
+	{
+		name: text,
+		transport: mcpTransport,
+		enabled: boolean,
+		exposure: mcpExposure,
+		config: McpServerConfigStateSchema,
+		status: mcpServerStatus,
+		error: nullableString,
+		stderrTail: text,
+		tools: arr(McpToolInfoSchema),
+		oauth: obj({ supported: boolean, signedIn: boolean }, { open: true }),
+	},
+	{ open: true },
+);
+export const McpSignInSnapshotSchema = obj(
+	{
+		id: text,
+		server: text,
+		status: mcpSignInStatus,
+		authorizationUrl: text,
+		error: nullableString,
+	},
+	{ open: true },
+);
+export const McpStateSchema = obj(
+	{
+		revision: integer,
+		configPath: text,
+		configError: nullableString,
+		entryErrors: arr(text),
+		rawJson: text,
+		servers: arr(McpServerSnapshotSchema),
+		signIns: arr(McpSignInSnapshotSchema),
+	},
+	{ open: true },
+);
+export const McpBeginSignInResultSchema = union([
+	obj({ status: lit("authorized") }, { open: true }),
+	obj({ status: lit("redirect"), id: text, authorizationUrl: text }, { open: true }),
+]);
+export const NekoMcp = remote("neko.mcp", {
+	version: 1,
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
+	variants: {
+		ready: {
+			state: { snapshot: McpStateSchema },
+			methods: {
+				upsertServer: method(obj({ name: text, config: McpServerConfigInputSchema }), McpStateSchema),
+				removeServer: method(obj({ name: text }), McpStateSchema),
+				setEnabled: method(obj({ name: text, enabled: boolean }), McpStateSchema),
+				saveRawConfig: method(obj({ rawJson: text }), McpStateSchema),
+				reconnect: method(obj({ name: text }), McpStateSchema),
+				beginSignIn: method(obj({ server: text }), McpBeginSignInResultSchema),
+				pasteSignIn: method(obj({ id: text, redirectUrl: text }), McpStateSchema),
+				cancelSignIn: method(obj({ id: text }), McpStateSchema),
+				signOut: method(obj({ server: text }), McpStateSchema),
+			},
+		},
+	},
+});
+
 const defaultModelSource = oneOf(["cli", "saved", "config", "default"]);
 export const DefaultModelStateSchema = obj(
 	{
@@ -1106,6 +1242,12 @@ export type NekoSearchSettings = ClientHeld<typeof NekoSearchSettings>;
 export type NekoContextSettings = ClientHeld<typeof NekoContextSettings>;
 export type NekoCodemodeSettings = ClientHeld<typeof NekoCodemodeSettings>;
 export type NekoCodemodeSettingsState = Static<typeof CodemodeSettingsStateSchema>;
+export type NekoMcp = ClientHeld<typeof NekoMcp>;
+export type NekoMcpState = Static<typeof McpStateSchema>;
+export type NekoMcpServer = Static<typeof McpServerSnapshotSchema>;
+export type NekoMcpSignIn = Static<typeof McpSignInSnapshotSchema>;
+export type NekoMcpBeginSignInResult = Static<typeof McpBeginSignInResultSchema>;
+export type NekoMcpServerConfigInput = Static<typeof McpServerConfigInputSchema>;
 export type NekoDefaultModel = ClientHeld<typeof NekoDefaultModel>;
 export type NekoDefaultModelState = Static<typeof DefaultModelStateSchema>;
 export type NekoSkillMarket = ClientHeld<typeof NekoSkillMarket>;

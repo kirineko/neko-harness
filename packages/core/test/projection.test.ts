@@ -1,6 +1,6 @@
 import type { ConversationView } from "@earendil-works/pi-durable";
 import { expect, it } from "vitest";
-import { type ChatItem, projectChatView } from "../src/projection.ts";
+import { type ChatItem, projectChatView, summarizeToolCall } from "../src/projection.ts";
 
 type ToolChatItem = Extract<ChatItem, { type: "tool" }>;
 
@@ -386,4 +386,17 @@ it("shows the newest run failure only while idle, with a bounded plain detail", 
 	);
 	expect(running.runFailure).toBeUndefined();
 	expect(projectChatView(makeView([]), "m").runFailure).toBeUndefined();
+});
+
+it("summarizes tool_search and mcp__* tool calls cleanly", () => {
+	const search = summarizeToolCall("tool_search", { query: "github issues", limit: 5 });
+	expect(search.args).toBe("github issues");
+	expect(search.detail).toContain('"query": "github issues"');
+
+	const mcpWithArgs = summarizeToolCall("mcp__github__list_issues", { repo: "neko", state: "open" });
+	expect(mcpWithArgs.args).toContain("github / list_issues:");
+	expect(mcpWithArgs.args).toContain('"repo":"neko"');
+
+	const mcpEmpty = summarizeToolCall("mcp__docs__ping", {});
+	expect(mcpEmpty.args).toBe("docs / ping");
 });

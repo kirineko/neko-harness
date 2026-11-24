@@ -102,6 +102,44 @@ export {
 	type JobSummary,
 	JobsDoc,
 } from "./jobs.ts";
+export { DEFAULT_MCP_AUTH_PATH, McpAuthStore, mcpAuthKey } from "./mcp-auth.ts";
+export {
+	DEFAULT_MCP_CONFIG_PATH,
+	expandEnvTemplate,
+	expandRecordTemplates,
+	McpConfigStore,
+	parseMcpConfigText,
+	resolveMcpCwd,
+} from "./mcp-config.ts";
+export { McpManager, type McpManagerOptions, type McpTransportFactory } from "./mcp-manager.ts";
+export { MCP_EXTENSION_NAME, TOOL_SEARCH_EXTENSION_NAME } from "./mcp-tools.ts";
+export {
+	containsEnvTemplate,
+	isMcpExposure,
+	isMcpServerName,
+	isPureEnvTemplate,
+	isSensitiveFieldKey,
+	MCP_EXPOSURES,
+	MCP_LIMITS,
+	MCP_SERVER_STATUSES,
+	MCP_SIGN_IN_STATUSES,
+	MCP_TRANSPORTS,
+	type McpBeginSignInResult,
+	type McpExposure,
+	type McpHttpConfigInput,
+	type McpOAuthSettingsInput,
+	type McpServerConfigInput,
+	type McpServerSnapshot,
+	type McpServerStatus,
+	type McpSignInSnapshot,
+	type McpSignInStatus,
+	type McpSnapshot,
+	type McpStdioConfigInput,
+	type McpToolInfo,
+	type McpTransportKind,
+	maskSecretValue,
+	parseMcpToolName,
+} from "./mcp-types.ts";
 export {
 	type ChatImage,
 	type ChatItem,

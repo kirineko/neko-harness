@@ -23,6 +23,8 @@ import {
 	type NekoDefaultModelState,
 	type NekoDirectoryState,
 	type NekoMarketSkill,
+	NekoMcp,
+	type NekoMcpState,
 	NekoModels,
 	NekoSearchSettings,
 	type NekoSearchSettingsState,
@@ -167,6 +169,12 @@ export async function createNekoServerServices<
 	const contextSettingsHub = createStateHub<NekoContextSettingsState>({ revision: 1, ...contextSettings0 });
 	const codemodeSettingsHub = createStateHub<NekoCodemodeSettingsState>({ revision: 1, ...codemodeSettings0 });
 	const defaultModelHub = createStateHub<NekoDefaultModelState>(defaultModel0);
+	const cloneMcp = (snap: ReturnType<NekoRuntime["mcpSnapshot"]>): NekoMcpState =>
+		JSON.parse(JSON.stringify(snap)) as NekoMcpState;
+	const mcpHub = createStateHub<NekoMcpState>(cloneMcp(runtime.mcpSnapshot()));
+	const stopMcp = runtime.onMcpChange((snap) => {
+		if (!closed) mcpHub.set(cloneMcp(snap));
+	});
 
 	let mutationTail = Promise.resolve();
 	const serialize = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -355,6 +363,47 @@ export async function createNekoServerServices<
 			},
 		}));
 
+		const toMcpError = (error: unknown): never => {
+			throw invalid("args", error instanceof Error ? error.message : String(error));
+		};
+		const toKeyValueRecord = (
+			entries: readonly { readonly key: string; readonly value: string }[] | undefined,
+		): Record<string, string> | undefined => {
+			if (!entries || entries.length === 0) return undefined;
+			const record: Record<string, string> = {};
+			for (const entry of entries) record[entry.key] = entry.value;
+			return record;
+		};
+		facetHost.serve(NekoMcp, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, mcpHub),
+				upsertServer: (input) =>
+					serialize(async () => {
+						const cfg =
+							input.config.transport === "stdio"
+								? { ...input.config, env: toKeyValueRecord(input.config.env) }
+								: { ...input.config, headers: toKeyValueRecord(input.config.headers) };
+						return cloneMcp(await runtime.upsertMcpServer(input.name, cfg).catch(toMcpError));
+					}),
+				removeServer: (input) =>
+					serialize(async () => cloneMcp(await runtime.removeMcpServer(input.name).catch(toMcpError))),
+				setEnabled: (input) =>
+					serialize(async () =>
+						cloneMcp(await runtime.setMcpServerEnabled(input.name, input.enabled).catch(toMcpError)),
+					),
+				saveRawConfig: (input) =>
+					serialize(async () => cloneMcp(await runtime.saveMcpRawConfig(input.rawJson).catch(toMcpError))),
+				reconnect: (input) =>
+					serialize(async () => cloneMcp(await runtime.reconnectMcpServer(input.name).catch(toMcpError))),
+				beginSignIn: (input) => runtime.beginMcpSignIn(input.server).catch(toMcpError),
+				pasteSignIn: (input) => runtime.pasteMcpSignIn(input.id, input.redirectUrl).then(cloneMcp).catch(toMcpError),
+				cancelSignIn: (input) => runtime.cancelMcpSignIn(input.id).then(cloneMcp).catch(toMcpError),
+				signOut: (input) =>
+					serialize(async () => cloneMcp(await runtime.signOutMcpServer(input.server).catch(toMcpError))),
+			},
+		}));
+
 		facetHost.serve(NekoDefaultModel, (_input, _principal, self) => ({
 			variant: "ready",
 			members: {
@@ -483,6 +532,7 @@ export async function createNekoServerServices<
 	if (report.failed.length > 0) {
 		closed = true;
 		stopDirectoryCommits();
+		stopMcp();
 		clearInterval(updateTimer);
 		updates.close();
 		throw report.failed[0]?.error ?? new Error("Failed to load gateway facet");
@@ -492,6 +542,7 @@ export async function createNekoServerServices<
 		async dispose() {
 			closed = true;
 			stopDirectoryCommits();
+			stopMcp();
 			clearInterval(updateTimer);
 			updates.close();
 			appInfoHub.clear();
@@ -502,6 +553,7 @@ export async function createNekoServerServices<
 			contextSettingsHub.clear();
 			codemodeSettingsHub.clear();
 			defaultModelHub.clear();
+			mcpHub.clear();
 			await mutationTail;
 		},
 	};

@@ -1,3 +1,4 @@
+import { parseMcpToolName } from "@neko-harness/core/mcp";
 import { useState } from "react";
 import { diffPathFromSummary } from "../lib/diff-highlight.ts";
 import { localizeCoreText } from "../lib/i18n/core-text.ts";
@@ -83,6 +84,16 @@ export function ToolCard(props: ToolCardProps) {
 	const hasBody =
 		showDetail || props.output != null || props.result != null || props.note != null || props.diff != null;
 
+	const mcp = parseMcpToolName(props.name);
+	const displayName = mcp ? `${mcp.server} / ${mcp.tool}` : props.name;
+	const displaySummary = (() => {
+		if (!mcp) return props.summary;
+		const prefix = `${mcp.server} / ${mcp.tool}`;
+		if (props.summary === prefix) return "";
+		if (props.summary.startsWith(`${prefix}: `)) return props.summary.slice(prefix.length + 2);
+		return props.summary;
+	})();
+
 	return (
 		<div className="overflow-hidden rounded-card border border-tianyi-200 bg-surface shadow-soft">
 			<button
@@ -94,11 +105,21 @@ export function ToolCard(props: ToolCardProps) {
 				className="focus-neko flex w-full items-center gap-2 px-3 py-2 text-left"
 			>
 				<span className="text-tianyi-500">
-					<Icon name="bolt" size={14} />
+					<Icon name={mcp ? "plug" : props.name === "tool_search" ? "search" : "bolt"} size={14} />
 				</span>
-				<span className="font-mono text-sm font-semibold text-tianyi-800">{props.name}</span>
+				{mcp && (
+					<span className="rounded-full bg-tianyi-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-tianyi-800">
+						{t("tool.mcpBadge")}
+					</span>
+				)}
+				{props.name === "tool_search" && (
+					<span className="rounded-full bg-tianyi-50 px-1.5 py-0.5 text-[10px] font-semibold text-tianyi-800">
+						{t("tool.searchBadge")}
+					</span>
+				)}
+				<span className="font-mono text-sm font-semibold text-tianyi-800">{displayName}</span>
 				<span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-600">
-					{props.summary}
+					{displaySummary}
 					{diffCount !== null && <span className="text-ink-400"> {diffCount}</span>}
 				</span>
 				<span

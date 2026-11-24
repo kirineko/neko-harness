@@ -1,6 +1,7 @@
 import type { Agent, AgentChange, Extension, ToolRegistration } from "@earendil-works/pi-durable";
 import { CODEMODE_NAME, type CodemodeMode } from "./codemode-mode.ts";
 import type { PlanMode } from "./interactions.ts";
+import { TOOL_SEARCH_EXTENSION_NAME } from "./mcp-tools.ts";
 import { PLAN_INSTRUCTIONS, PLAN_REMOVED_TOOLS } from "./plan-doc.ts";
 
 export type AgentRole = "main" | "subagent";
@@ -34,7 +35,10 @@ export function agentChangeFor({ plan, codemode, role }: AgentState): AgentChang
 		extensions:
 			codemode === "off"
 				? { remove: [{ name: CODEMODE_NAME } as Extension] }
-				: { add: [{ name: CODEMODE_NAME } as Extension] },
+				: {
+						add: [{ name: CODEMODE_NAME } as Extension],
+						remove: [{ name: TOOL_SEARCH_EXTENSION_NAME } as Extension],
+					},
 		instructions: planning ? PLAN_INSTRUCTIONS : null,
 	};
 }
@@ -61,21 +65,34 @@ export function agentSyncChange(agent: Agent, state: AgentState): AgentChange | 
 	const desired = agentChangeFor(state);
 	const planMismatch = agentInPlanMode(agent) !== (state.plan === "plan");
 	const hasExtension = agent.extensions.some((extension) => extension.name === CODEMODE_NAME);
+	const hasToolSearch = agent.extensions.some((extension) => extension.name === TOOL_SEARCH_EXTENSION_NAME);
 	const callable = new Set(agent.callable.map((tool) => tool.name));
 	const offered = agent.tools.map((tool) => tool.name);
 	let codemodeMismatch: boolean;
 	if (state.codemode === "off") codemodeMismatch = hasExtension || callable.has(CODEMODE_NAME);
 	else {
-		codemodeMismatch = !hasExtension || !offered.includes(CODEMODE_NAME);
+		codemodeMismatch = !hasExtension || !offered.includes(CODEMODE_NAME) || hasToolSearch;
 		if (state.codemode === "only") {
 			const allowed = new Set(onlyModeTools(state.plan, state.role));
 			codemodeMismatch ||= offered.some((name) => !allowed.has(name));
 		}
 	}
 	if (!planMismatch && !codemodeMismatch) return undefined;
+	// Preserve deferred MCP tools loaded via `tool_search` when entering/exiting plan mode or repairing agent state.
+	const loadedMcp = agent.tools
+		.filter((tool) => tool.deferred === true && tool.name.startsWith("mcp__"))
+		.map((tool) => named(tool.name));
+	let modelTools = desired.modelTools;
+	if (state.codemode !== "only" && loadedMcp.length > 0) {
+		const baseAdd =
+			desired.modelTools && !Array.isArray(desired.modelTools) && "add" in desired.modelTools
+				? (desired.modelTools.add ?? [])
+				: [];
+		modelTools = { add: [...baseAdd, ...loadedMcp] };
+	}
 	return {
 		...(planMismatch ? { tools: desired.tools, instructions: desired.instructions } : {}),
-		modelTools: desired.modelTools,
+		modelTools,
 		...(codemodeMismatch ? { extensions: desired.extensions } : {}),
 	};
 }

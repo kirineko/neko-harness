@@ -80,3 +80,32 @@ it("hides duplicate complete write details and preserves code indentation and nu
 		expect(html).toContain('<span class="hljs-number">123</span>');
 	});
 });
+
+it("formats mcp__* and tool_search tool cards with clean titles and badges", () => {
+	const mcpHtml = renderToStaticMarkup(
+		React.createElement(ToolCard, {
+			name: "mcp__github__list_issues",
+			summary: 'github / list_issues: {"repo":"neko"}',
+			detail: '{"repo":"neko"}',
+			phase: "done",
+			isError: false,
+			result: "ok",
+		}),
+	);
+	expect(mcpHtml).toContain("MCP");
+	expect(mcpHtml).toContain("github / list_issues");
+	expect(mcpHtml).toContain("{&quot;repo&quot;:&quot;neko&quot;}");
+
+	const searchHtml = renderToStaticMarkup(
+		React.createElement(ToolCard, {
+			name: "tool_search",
+			summary: "github issues",
+			detail: '{"query":"github issues"}',
+			phase: "done",
+			isError: false,
+			result: "Loaded 2 tools",
+		}),
+	);
+	expect(searchHtml).toContain("tool_search");
+	expect(searchHtml).toContain("github issues");
+});

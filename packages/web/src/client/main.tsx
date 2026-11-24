@@ -10,6 +10,7 @@ import { SettingsAppearancePage } from "./pages/settings-appearance-page";
 import { SettingsCodemodePage } from "./pages/settings-codemode-page";
 import { SettingsContextPage } from "./pages/settings-context-page";
 import { SettingsLanguagePage } from "./pages/settings-language-page";
+import { SettingsMcpPage } from "./pages/settings-mcp-page";
 import { SettingsMobilePage } from "./pages/settings-mobile-page";
 import { SettingsPage } from "./pages/settings-page";
 import { SettingsSearchPage } from "./pages/settings-search-page";
@@ -28,6 +29,11 @@ const settingsCodemodeRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/settings/codemode",
 	component: SettingsCodemodePage,
+});
+const settingsMcpRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/settings/mcp",
+	component: SettingsMcpPage,
 });
 const settingsContextRoute = createRoute({
 	getParentRoute: () => rootRoute,
@@ -57,6 +63,7 @@ const routeTree = rootRoute.addChildren([
 	settingsSearchRoute,
 	settingsContextRoute,
 	settingsCodemodeRoute,
+	settingsMcpRoute,
 	settingsAppearanceRoute,
 	settingsLanguageRoute,
 	settingsMobileRoute,

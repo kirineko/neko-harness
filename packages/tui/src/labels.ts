@@ -25,6 +25,7 @@ export const commands = (): SlashCommand[] => [
 	{ name: "search", description: t("command.search") },
 	{ name: "context", description: t("command.context") },
 	{ name: "codemode", description: t("command.codemode") },
+	{ name: "mcp", description: t("command.mcp") },
 	{ name: "theme", description: t("command.theme") },
 	{ name: "language", description: t("command.language") },
 	{ name: "think", description: t("command.think") },

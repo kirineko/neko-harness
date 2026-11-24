@@ -5,18 +5,28 @@ import { CODEMODE_MODES } from "../src/codemode-mode.ts";
 import { PLAN_INSTRUCTIONS } from "../src/plan-doc.ts";
 
 const names = (list: readonly { name: string }[] | undefined) => list?.map((item) => item.name);
-const tool = (name: string) => ({ name }) as ToolRegistration;
+const tool = (name: string, deferred?: true) => ({ name, ...(deferred ? { deferred } : {}) }) as ToolRegistration;
 const extension = (name: string) => ({ name }) as Extension;
-const fakeAgent = (input: { tools: string[]; callable?: string[]; extensions?: string[]; planning?: boolean }): Agent =>
-	({
-		tools: input.tools.map(tool),
-		callable: (input.callable ?? input.tools).map(tool),
+const fakeAgent = (input: {
+	tools: Array<string | { name: string; deferred?: true }>;
+	callable?: string[];
+	extensions?: string[];
+	planning?: boolean;
+}): Agent => {
+	const mappedTools = input.tools.map((item) =>
+		typeof item === "string" ? tool(item) : tool(item.name, item.deferred),
+	);
+	const callableNames = input.callable ?? mappedTools.map((t) => t.name);
+	return {
+		tools: mappedTools,
+		callable: callableNames.map((n) => tool(n)),
 		extensions: (input.extensions ?? ["codemode"]).map(extension),
 		deferred: [],
 		sections: [],
 		thinkingLevel: "high",
 		...(input.planning ? { instructions: PLAN_INSTRUCTIONS } : {}),
-	}) as unknown as Agent;
+	} as unknown as Agent;
+};
 
 it("derives the agent configuration for every combination of plan mode and codemode mode", () => {
 	const table = [
@@ -33,7 +43,7 @@ it("derives the agent configuration for every combination of plan mode and codem
 		expect(removed).toEqual(plan === "plan" ? ["edit", "write", "job"] : undefined);
 		expect(change.instructions).toBe(plan === "plan" ? PLAN_INSTRUCTIONS : null);
 		const extensions = change.extensions as { add?: Extension[]; remove?: Extension[] };
-		expect(names(extensions.remove)).toEqual(codemode === "off" ? ["codemode"] : undefined);
+		expect(names(extensions.remove)).toEqual(codemode === "off" ? ["codemode"] : ["tool-search"]);
 		expect(names(extensions.add)).toEqual(codemode === "off" ? undefined : ["codemode"]);
 		const modelTools = change.modelTools;
 		if (codemode === "only")
@@ -84,4 +94,24 @@ it("changes nothing when the agent already matches, and only the mismatched aspe
 it("lists every enabled tool, including those that only scripts reach", () => {
 	const agent = fakeAgent({ tools: ["codemode", "todo"], callable: ["read", "bash", "todo"] });
 	expect(names(enabledTools(agent))).toEqual(["codemode", "todo", "read", "bash"]);
+});
+
+it("preserves deferred MCP tools loaded via tool_search across plan mode transitions", () => {
+	const loaded = fakeAgent({
+		tools: ["read", { name: "mcp__github__list_issues", deferred: true }],
+		extensions: ["tool-search", "neko-mcp"],
+	});
+	const enterPlan = agentSyncChange(loaded, { plan: "plan", codemode: "off", role: "main" });
+	expect(names((enterPlan?.modelTools as { add?: ToolRegistration[] })?.add)).toEqual([
+		"submit_plan",
+		"mcp__github__list_issues",
+	]);
+
+	const inPlan = fakeAgent({
+		tools: ["read", { name: "submit_plan", deferred: true }, { name: "mcp__github__list_issues", deferred: true }],
+		extensions: ["tool-search", "neko-mcp"],
+		planning: true,
+	});
+	const leavePlan = agentSyncChange(inPlan, { plan: "normal", codemode: "off", role: "main" });
+	expect(names((leavePlan?.modelTools as { add?: ToolRegistration[] })?.add)).toEqual(["mcp__github__list_issues"]);
 });

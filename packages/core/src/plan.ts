@@ -287,9 +287,14 @@ const unsafeBash = (command: string) =>
 	`Plan mode is read-only, so this command was not run (it is not on the read-only allowlist): ${command}\nUse read, find_files or search_text, run a read-only command, or ask the user. If the command is needed, put it in the plan.`;
 const blockedTool = (name: string) =>
 	`Plan mode is read-only: ${name} is unavailable. Research with read-only tools, then call submit_plan.`;
+export const blockedMcpTool = (name: string) =>
+	`Plan mode is read-only: MCP tool ${name} is not marked read-only and is unavailable. Research with read-only tools, then call submit_plan.`;
 
 /** The `submit_plan` tool plus the read-only guards that apply while a session is in plan mode. */
-export const createPlanExtension = (service: () => PlanService): Extension =>
+export const createPlanExtension = (
+	service: () => PlanService,
+	isMcpReadOnly: (name: string) => boolean = () => false,
+): Extension =>
 	defineExtension({
 		name: "neko-plan",
 		tools: [submitPlanTool(service) as ToolRegistration],
@@ -298,6 +303,9 @@ export const createPlanExtension = (service: () => PlanService): Extension =>
 				beforeTool: async (call, api, context) => {
 					if ((await api.snapshot(PlanDoc, api.conversationId, context))?.mode !== "plan") return;
 					if ((PLAN_REMOVED_TOOLS as readonly string[]).includes(call.name)) return { block: blockedTool(call.name) };
+					if (call.name.startsWith("mcp__") && !isMcpReadOnly(call.name)) {
+						return { block: blockedMcpTool(call.name) };
+					}
 					if (call.name === "bash") {
 						const command = String(call.arguments.command ?? "");
 						if (!isSafeCommand(command)) return { block: unsafeBash(command) };

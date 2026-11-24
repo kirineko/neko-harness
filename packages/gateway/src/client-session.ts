@@ -11,6 +11,7 @@ import {
 	NekoContextSettings,
 	NekoCredentials,
 	NekoDefaultModel,
+	NekoMcp,
 	NekoModels,
 	NekoSearchSettings,
 	NekoSessionDirectory,
@@ -289,6 +290,7 @@ export type NekoGatewayConnection = {
 	readonly contextSettings: NekoContextSettings;
 	readonly codemodeSettings: NekoCodemodeSettings;
 	readonly defaultModel: NekoDefaultModel;
+	readonly mcp: NekoMcp;
 	readonly skillMarket: NekoSkillMarket;
 	readonly attachment: NekoAttachment | undefined;
 	ready(signal?: AbortSignal): Promise<void>;
@@ -336,6 +338,7 @@ export function createGatewayConnection(
 			contextSettings = get(NekoContextSettings),
 			codemodeSettings = get(NekoCodemodeSettings),
 			defaultModel = get(NekoDefaultModel),
+			mcp = get(NekoMcp),
 			skillMarket = get(NekoSkillMarket);
 		keep.push(
 			subscribeState(directory.snapshot, () => {}),
@@ -345,6 +348,7 @@ export function createGatewayConnection(
 			subscribeState(contextSettings.snapshot, () => {}),
 			subscribeState(codemodeSettings.snapshot, () => {}),
 			subscribeState(defaultModel.snapshot, () => {}),
+			subscribeState(mcp.snapshot, () => {}),
 		);
 		return {
 			directory,
@@ -357,6 +361,7 @@ export function createGatewayConnection(
 			contextSettings,
 			codemodeSettings,
 			defaultModel,
+			mcp,
 			skillMarket,
 		};
 	}
@@ -382,6 +387,7 @@ export function createGatewayConnection(
 			contextSettings,
 			codemodeSettings,
 			defaultModel,
+			mcp,
 			workspaceFiles,
 			skillMarket,
 		} = services();
@@ -396,6 +402,7 @@ export function createGatewayConnection(
 				contextSettings,
 				codemodeSettings,
 				defaultModel,
+				mcp,
 				workspaceFiles,
 				skillMarket,
 			].map((ref) => waitForLive(ref, signal, readyTimeoutMs)),
@@ -448,6 +455,9 @@ export function createGatewayConnection(
 		},
 		get defaultModel() {
 			return services().defaultModel;
+		},
+		get mcp() {
+			return services().mcp;
 		},
 		get skillMarket() {
 			return services().skillMarket;

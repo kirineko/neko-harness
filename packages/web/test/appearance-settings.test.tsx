@@ -145,7 +145,8 @@ it("lists 外观 between Codemode and 语言 / Language and marks it current", a
 	const view = await mount(React.createElement(RouterProvider, { router }));
 	const links = [...view.host.querySelectorAll("nav[aria-label='设置菜单'] a")];
 	const labels = links.map((link) => link.textContent?.trim());
-	expect(labels.indexOf("外观")).toBe(labels.indexOf("Codemode") + 1);
+	expect(labels.indexOf("MCP")).toBe(labels.indexOf("Codemode") + 1);
+	expect(labels.indexOf("外观")).toBe(labels.indexOf("MCP") + 1);
 	expect(labels.indexOf("Codemode")).toBe(labels.indexOf("上下文") + 1);
 	expect(labels.indexOf("语言 / Language")).toBe(labels.indexOf("外观") + 1);
 	expect(labels.indexOf("手机配对")).toBe(labels.indexOf("语言 / Language") + 1);
