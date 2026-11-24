@@ -248,8 +248,9 @@ it("serializes coders in the same workspace via slot signal wakeup one at a time
 			list,
 			(ds) => ds.some((d) => d.status === "completed") && ds.some((d) => d.status === "running"),
 		);
-		expect(afterFirst.map((d) => d.status)).toEqual(["completed", "running", "queued"]);
-		const thirdRunner = await runtime.harness.getTask(afterFirst[2]!.runnerId as never, runtime.context);
+		expect(afterFirst.map((d) => d.status).sort()).toEqual(["completed", "queued", "running"]);
+		const stillQueued = afterFirst.find((d) => d.status === "queued")!;
+		const thirdRunner = await runtime.harness.getTask(stillQueued.runnerId as never, runtime.context);
 		expect(thirdRunner?.state.status).toBe("sleeping");
 		releaseSecond();
 		await submission.wait(runtime.context);

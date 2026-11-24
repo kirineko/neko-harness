@@ -143,6 +143,7 @@ for (const checkpoint of ["created", "parked", "reported"] as const) {
 			),
 			async (_context, options) => {
 				if (checkpoint === "parked") {
+					entered();
 					await Promise.race([
 						childGate,
 						new Promise<void>((resolve) => options?.signal?.addEventListener("abort", () => resolve(), { once: true })),
@@ -166,6 +167,7 @@ for (const checkpoint of ["created", "parked", "reported"] as const) {
 		try {
 			const submission = await runtime.submit("checkpoint");
 			if (checkpoint === "parked") {
+				await reached;
 				const end = Date.now() + 5000;
 				while (Date.now() < end) {
 					const d = (await listDelegations(runtime.harness, runtime.root.id, runtime.context))[0];
