@@ -4,7 +4,7 @@ import { Container, CURSOR_MARKER, stripTerminalSequences, Text, visibleWidth } 
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import { MODEL_PROVIDERS } from "@neko-harness/core";
 import type { NekoCredentialState } from "@neko-harness/gateway";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { StatusFooter } from "../src/components/footer.ts";
 import { LoginPanel } from "../src/components/login.ts";
 import { createAppLayout } from "../src/layout.ts";
@@ -324,61 +324,71 @@ it("saves to the selected non-DeepSeek provider", async () => {
 });
 
 it("surfaces the server error message and auto-closes after a successful save", async () => {
-	let fail = true;
-	let closed = 0;
-	const panel = new LoginPanel(
-		options({
-			closed: () => {
-				closed++;
-			},
-			save: async () => {
-				if (fail) throw new Error("Enter a valid API key.");
-			},
-			autoCloseMs: 5,
-		}),
-	);
-	panel.show(emptyState(), () => () => {});
-	openKey(panel);
-	panel.handleInput("\x1b[200~sk-anything\x1b[201~");
-	panel.handleInput("\r");
-	await sleep(1);
-	expect(text(panel)).toContain("Enter a valid API key.");
-	expect(panel.open).toBe(true);
-	fail = false;
-	panel.handleInput("\x1b[200~sk-anything\x1b[201~");
-	panel.handleInput("\r");
-	await sleep(1);
-	expect(text(panel)).toContain("Saved. Used");
-	expect(panel.open).toBe(true);
-	await sleep(20);
-	expect(panel.open).toBe(false);
-	expect(closed).toBe(1);
+	vi.useFakeTimers();
+	try {
+		let fail = true;
+		let closed = 0;
+		const panel = new LoginPanel(
+			options({
+				closed: () => {
+					closed++;
+				},
+				save: async () => {
+					if (fail) throw new Error("Enter a valid API key.");
+				},
+				autoCloseMs: 50,
+			}),
+		);
+		panel.show(emptyState(), () => () => {});
+		openKey(panel);
+		panel.handleInput("\x1b[200~sk-anything\x1b[201~");
+		panel.handleInput("\r");
+		await vi.advanceTimersByTimeAsync(0);
+		expect(text(panel)).toContain("Enter a valid API key.");
+		expect(panel.open).toBe(true);
+		fail = false;
+		panel.handleInput("\x1b[200~sk-anything\x1b[201~");
+		panel.handleInput("\r");
+		await vi.advanceTimersByTimeAsync(0);
+		expect(text(panel)).toContain("Saved. Used");
+		expect(panel.open).toBe(true);
+		await vi.advanceTimersByTimeAsync(50);
+		expect(panel.open).toBe(false);
+		expect(closed).toBe(1);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 it("does not auto-close when Escape wins the race", async () => {
-	let closed = 0;
-	const panel = new LoginPanel(
-		options({
-			closed: () => {
-				closed++;
-			},
-			autoCloseMs: 30,
-		}),
-	);
-	panel.show(emptyState(), () => () => {});
-	openKey(panel);
-	panel.handleInput("\x1b[200~sk-anything\x1b[201~");
-	panel.handleInput("\r");
-	await sleep(1);
-	expect(text(panel)).toContain("Saved. Used");
-	panel.handleInput("\x1b");
-	expect(closed).toBe(1);
-	await sleep(60);
-	expect(closed).toBe(1);
-	panel.show(emptyState(), () => () => {});
-	expect(panel.open).toBe(true);
-	await sleep(60);
-	expect(panel.open).toBe(true);
+	vi.useFakeTimers();
+	try {
+		let closed = 0;
+		const panel = new LoginPanel(
+			options({
+				closed: () => {
+					closed++;
+				},
+				autoCloseMs: 50,
+			}),
+		);
+		panel.show(emptyState(), () => () => {});
+		openKey(panel);
+		panel.handleInput("\x1b[200~sk-anything\x1b[201~");
+		panel.handleInput("\r");
+		await vi.advanceTimersByTimeAsync(0);
+		expect(text(panel)).toContain("Saved. Used");
+		panel.handleInput("\x1b");
+		expect(closed).toBe(1);
+		await vi.advanceTimersByTimeAsync(100);
+		expect(closed).toBe(1);
+		panel.show(emptyState(), () => () => {});
+		expect(panel.open).toBe(true);
+		await vi.advanceTimersByTimeAsync(100);
+		expect(panel.open).toBe(true);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 it("emits a hardware cursor marker at the insertion point only when focused", () => {

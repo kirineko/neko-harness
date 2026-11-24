@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	expandEnvTemplate,
@@ -70,9 +70,13 @@ describe("env templates and cwd resolution", () => {
 	});
 
 	it("resolves ~ and relative cwd paths", () => {
-		expect(resolveMcpCwd("~/proj", "/work", "/home/alice")).toBe("/home/alice/proj");
-		expect(resolveMcpCwd("sub", "/work", "/home/alice")).toBe("/work/sub");
-		expect(resolveMcpCwd(undefined, "/work", "/home/alice")).toBe("/work");
+		const work = resolve("/work");
+		const home = resolve("/home/alice");
+		expect(resolveMcpCwd("~", work, home)).toBe(home);
+		expect(resolveMcpCwd("~/proj", work, home)).toBe(resolve(home, "proj"));
+		expect(resolveMcpCwd("~\\proj", work, home)).toBe(resolve(home, "proj"));
+		expect(resolveMcpCwd("sub", work, home)).toBe(resolve(work, "sub"));
+		expect(resolveMcpCwd(undefined, work, home)).toBe(work);
 	});
 });
 
