@@ -512,6 +512,8 @@ body.is-resizing-panel * {
 /* ---- 聊天气泡 ---- */
 
 .bubble-user {
+	min-width: 0;
+	overflow-wrap: break-word;
 	font-family: var(--chat-font-family);
 	font-size: var(--chat-font-size);
 	font-weight: var(--chat-font-weight);
@@ -525,6 +527,8 @@ body.is-resizing-panel * {
 }
 
 .bubble-assistant {
+	max-width: 100%;
+	min-width: 0;
 	font-family: var(--chat-font-family);
 	font-size: var(--chat-font-size);
 	font-weight: var(--chat-font-weight);
@@ -1070,6 +1074,11 @@ body.is-resizing-panel * {
 }
 
 .md table {
+	display: block;
+	width: max-content;
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-wrap: normal;
 	border-collapse: collapse;
 	margin: 0.6rem 0;
 	font-size: 0.9em;

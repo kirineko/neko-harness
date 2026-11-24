@@ -71,7 +71,7 @@ function UserRow({
 				<div className="chat-bubble flex min-w-0 flex-col items-stretch gap-1.5">
 					<SkillInvocationCard invocation={invocation} />
 					{invocation.args !== "" && (
-						<div className="bubble-user px-4 py-2.5 whitespace-pre-wrap">{invocation.args}</div>
+						<div className="bubble-user px-4 py-2.5 whitespace-pre-wrap break-words">{invocation.args}</div>
 					)}
 				</div>
 				<CopyButton text={copy} />
@@ -81,7 +81,7 @@ function UserRow({
 	return (
 		<div className="chat-row anim-user flex flex-col items-end">
 			<div
-				className={`bubble-user chat-bubble px-4 py-2.5 whitespace-pre-wrap${defaultImagePrompt ? " [&>div]:mt-0" : ""}`}
+				className={`bubble-user chat-bubble px-4 py-2.5 whitespace-pre-wrap break-words${defaultImagePrompt ? " [&>div]:mt-0" : ""}`}
 			>
 				{text}
 				{defaultImagePrompt && (
@@ -115,9 +115,11 @@ function AssistantRow({ item }: { item: Extract<ChatItem, { type: "assistant" }>
 	if (item.text.trim() === "" && item.thinking.trim() === "" && item.note === null) return null;
 	return (
 		<div className="chat-row anim-other flex flex-col items-start">
-			<div className="bubble-assistant space-y-1.5 px-4 py-2.5">
+			<div className="bubble-assistant min-w-0 max-w-full space-y-1.5 px-4 py-2.5">
 				<AssistantBody thinking={item.thinking} text={item.text} />
-				{item.note !== null && <div className="text-xs text-sakura-800 italic">⚠ {localizeCoreText(item.note, t)}</div>}
+				{item.note !== null && (
+					<div className="break-words text-xs text-sakura-800 italic">⚠ {localizeCoreText(item.note, t)}</div>
+				)}
 			</div>
 			<CopyButton text={copyText(item)} label={t("message.copyAnswer")} />
 		</div>
@@ -197,7 +199,7 @@ function StreamingRow({ streaming, busy }: { streaming: StreamingView; busy: boo
 		<>
 			{hasContent && (
 				<div className="chat-row stream-block flex justify-start">
-					<div className="bubble-assistant space-y-1.5 px-4 py-2.5">
+					<div className="bubble-assistant min-w-0 max-w-full space-y-1.5 px-4 py-2.5">
 						<AssistantBody thinking={streaming.thinking} text={streaming.text} />
 						{busy && <span className="stream-caret" aria-hidden />}
 					</div>
