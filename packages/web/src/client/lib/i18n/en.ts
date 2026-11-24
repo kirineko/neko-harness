@@ -606,7 +606,7 @@ export const en: { readonly [K in keyof typeof zh]: string } = {
 	"task.status.completed": "Completed",
 	"task.status.failed": "Failed",
 	"task.status.cancelled": "Stopped",
-	"message.cat": "neko cat",
+	"message.whale": "neko whale",
 	"message.defaultImagePrompt": "Default image prompt",
 	"message.copyAnswer": "Copy answer",
 	"message.welcome": "Type a message to start ✦",

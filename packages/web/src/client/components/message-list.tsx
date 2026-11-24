@@ -2,7 +2,7 @@ import type { ChatItem, ChatView, DefaultImagePrompt, StreamingView } from "@nek
 import { copyText } from "@neko-harness/core/conversation-export";
 import type { PlanRecord, QuestionSummary } from "@neko-harness/core/interactions";
 import type { SkillInvocation } from "@neko-harness/core/skill-invocation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { localizeCoreText } from "../lib/i18n/core-text.ts";
 import { type Translate, useT } from "../lib/i18n/index.ts";
 import { questionUi } from "../lib/question-ui";
@@ -22,30 +22,164 @@ const BOTTOM_THRESHOLD = 48;
 type TaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 const taskStatus = (t: Translate, status: TaskStatus): string => t(`task.status.${status}`);
 
-/** 空会话占位：内联 SVG 小猫（无外部资源），颜色取自主题 tokens。 */
-function WelcomeCat() {
+const WHALE_GRID = [
+	".......MM...MM..............",
+	"........M...M.....KK........",
+	"..........M.......KBK....KK.",
+	"..................KBBK..KBBK",
+	".....KKKKKKKK.....KBBBK.KBBK",
+	"...KKBBBBBBBBKK....KBBBKBBK.",
+	"..KBBHHHBBBBBBBK....KBBBBK..",
+	".KBBHHBBBBBBBBBBK...KBBBK...",
+	".KBBHBBBBBBBBBBBBK.KBBBBK...",
+	"KBBBBBBBBBBBBBBBBBKBBBBK....",
+	"KBBBBBBBBBBBBBBBBBBBBBBK....",
+	"KBBBBBEBBBBBEBBBBBBBBBK.....",
+	"KBBBBBEBBBBBEBBBBBBBBBK.....",
+	"KBBPPBBBBBBBBBPPBBBBBBK.....",
+	"KBBBBWWWWWWWWWBBBBKBBBK.....",
+	"KBBBWWWWWWWWWWWBBBBKBBBK....",
+	".KBWWWWWWWWWWWWWBBBBKBBBK...",
+	".KBWWWWWWWWWWWWWBBBBBKBBBK..",
+	"..KSSSSSSSSSSSSSBBBBBBBBBK..",
+	"...KSSSSSSSSSSSSKBBBBBBBBK..",
+	"....KKKKKKKKKKKK.KKKKKKKK...",
+] as const;
+
+const WHALE_FILLS: Readonly<Record<string, string>> = {
+	K: "var(--whale-outline)",
+	E: "var(--whale-eye)",
+	B: "var(--whale-body)",
+	H: "var(--whale-shine)",
+	M: "var(--whale-spout)",
+	W: "var(--whale-belly)",
+	S: "var(--whale-belly-shade)",
+	P: "var(--whale-cheek)",
+};
+
+const WHALE_RECTS = (() => {
+	const rects: { key: string; x: number; y: number; w: number; fill: string }[] = [];
+	WHALE_GRID.forEach((row, y) => {
+		let x = 0;
+		while (x < row.length) {
+			const code = row[x] ?? ".";
+			const fill = WHALE_FILLS[code];
+			if (!fill) {
+				x++;
+				continue;
+			}
+			let end = x + 1;
+			while (end < row.length && row[end] === code) end++;
+			rects.push({ key: `${x}-${y}`, x, y, w: end - x, fill });
+			x = end;
+		}
+	});
+	return rects;
+})();
+
+const WORDMARK_GLYPHS: Readonly<Record<string, readonly string[]>> = {
+	N: ["##..##", "###.##", "###.##", "###.##", "##.###", "##.###", "##.###", "##..##", "##..##", "##..##"],
+	E: ["######", "######", "##....", "##....", "#####.", "#####.", "##....", "##....", "######", "######"],
+	K: ["##..##", "##..##", "##.##.", "####..", "###...", "####..", "##.##.", "##..##", "##..##", "##..##"],
+	O: [".####.", "######", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "######", ".####."],
+	H: ["##..##", "##..##", "##..##", "##..##", "######", "######", "##..##", "##..##", "##..##", "##..##"],
+	A: [".####.", "######", "##..##", "##..##", "######", "######", "##..##", "##..##", "##..##", "##..##"],
+	R: ["#####.", "######", "##..##", "##..##", "#####.", "####..", "##.##.", "##..##", "##..##", "##..##"],
+	S: [".#####", "######", "##....", "##....", "#####.", ".#####", "....##", "....##", "######", "#####."],
+};
+
+function buildWordRects(
+	word: string,
+	offsetX: number,
+	offsetY: number,
+): { key: string; x: number; y: number; w: number }[] {
+	const rows = Array.from({ length: 10 }, () => "");
+	[...word].forEach((ch, idx) => {
+		const glyph = WORDMARK_GLYPHS[ch];
+		if (!glyph) return;
+		for (let r = 0; r < 10; r++) {
+			rows[r] = `${rows[r] ?? ""}${idx > 0 ? ".." : ""}${glyph[r] ?? ""}`;
+		}
+	});
+	const rects: { key: string; x: number; y: number; w: number }[] = [];
+	rows.forEach((row, y) => {
+		let x = 0;
+		while (x < row.length) {
+			if (row[x] !== "#") {
+				x++;
+				continue;
+			}
+			let end = x + 1;
+			while (end < row.length && row[end] === "#") end++;
+			rects.push({ key: `${offsetX + x}-${offsetY + y}`, x: offsetX + x, y: offsetY + y, w: end - x });
+			x = end;
+		}
+	});
+	return rects;
+}
+
+const WORDMARK_LAYOUT = (() => {
+	const topWidth = 4 * 6 + 3 * 2;
+	const bottomWidth = 7 * 6 + 6 * 2;
+	const topOffset = Math.floor((bottomWidth - topWidth) / 2);
+	return {
+		width: bottomWidth,
+		height: 23,
+		topRects: buildWordRects("NEKO", topOffset, 0),
+		bottomRects: buildWordRects("HARNESS", 0, 13),
+	};
+})();
+
+/** 空会话占位：内联像素 SVG 萌系小鲸鱼（无外部资源），配色取自主题 tokens。 */
+function WelcomeWhale() {
 	const t = useT();
-	const sakura200 = "var(--color-sakura-200)";
-	const sakura300 = "var(--color-sakura-300)";
-	const tianyi800 = "var(--color-tianyi-800)";
-	const sakura800 = "var(--color-sakura-800)";
 	return (
-		<svg width="132" height="112" viewBox="0 0 132 112" fill="none" aria-hidden="true">
-			<title>{t("message.cat")}</title>
-			<path d="M30 46 L24 14 L54 30 Z" fill={sakura200} stroke={sakura300} strokeWidth="2.5" strokeLinejoin="round" />
-			<path d="M102 46 L108 14 L78 30 Z" fill={sakura200} stroke={sakura300} strokeWidth="2.5" strokeLinejoin="round" />
-			<path d="M32 39 L29 23 L46 32 Z" fill={sakura300} opacity="0.55" />
-			<path d="M100 39 L103 23 L86 32 Z" fill={sakura300} opacity="0.55" />
-			<ellipse cx="66" cy="66" rx="44" ry="38" fill="var(--color-surface)" stroke={sakura200} strokeWidth="2.5" />
-			<circle cx="50" cy="62" r="5" fill={tianyi800} />
-			<circle cx="82" cy="62" r="5" fill={tianyi800} />
-			<circle cx="51.8" cy="60" r="1.6" fill="var(--color-surface)" />
-			<circle cx="83.8" cy="60" r="1.6" fill="var(--color-surface)" />
-			<ellipse cx="40" cy="74" rx="6.5" ry="3.6" fill={sakura300} opacity="0.65" />
-			<ellipse cx="92" cy="74" rx="6.5" ry="3.6" fill={sakura300} opacity="0.65" />
-			<path d="M62 71 q4 4.5 4 1 q0 -3.5 4 -1" stroke={sakura800} strokeWidth="2" fill="none" strokeLinecap="round" />
-			<path d="M18 64 L32 66 M19 72 L32 70" stroke={sakura200} strokeWidth="2" strokeLinecap="round" />
-			<path d="M114 64 L100 66 M113 72 L100 70" stroke={sakura200} strokeWidth="2" strokeLinecap="round" />
+		<svg
+			width="154"
+			height="115"
+			viewBox="0 0 28 21"
+			shapeRendering="crispEdges"
+			aria-hidden="true"
+			className="h-auto max-w-full"
+		>
+			<title>{t("message.whale")}</title>
+			{WHALE_RECTS.map((rect) => (
+				<rect key={rect.key} x={rect.x} y={rect.y} width={rect.w} height={1} fill={rect.fill} />
+			))}
+		</svg>
+	);
+}
+
+/** 像素大字标题：上排 NEKO 纯色强调、下排 HARNESS 左至右流光渐变。 */
+function WelcomeWordmark() {
+	const gradId = useId();
+	return (
+		<svg
+			width={WORDMARK_LAYOUT.width * 4}
+			height={WORDMARK_LAYOUT.height * 4}
+			viewBox={`0 0 ${WORDMARK_LAYOUT.width} ${WORDMARK_LAYOUT.height}`}
+			shapeRendering="crispEdges"
+			role="img"
+			aria-label="neko.harness"
+			className="h-auto max-w-full"
+		>
+			<defs>
+				<linearGradient id={gradId} x1="0" y1="0" x2={WORDMARK_LAYOUT.width} y2="0" gradientUnits="userSpaceOnUse">
+					<stop offset="0%" stopColor="var(--wordmark-start)" />
+					<stop offset="55%" stopColor="var(--wordmark-mid)" />
+					<stop offset="100%" stopColor="var(--wordmark-end)" />
+				</linearGradient>
+			</defs>
+			<g fill="var(--wordmark-top)">
+				{WORDMARK_LAYOUT.topRects.map((rect) => (
+					<rect key={rect.key} x={rect.x} y={rect.y} width={rect.w} height={1} />
+				))}
+			</g>
+			<g fill={`url(#${gradId})`}>
+				{WORDMARK_LAYOUT.bottomRects.map((rect) => (
+					<rect key={rect.key} x={rect.x} y={rect.y} width={rect.w} height={1} />
+				))}
+			</g>
 		</svg>
 	);
 }
@@ -308,15 +442,11 @@ export function MessageList({
 						(emptyLabel ? (
 							<p className="p-4 text-sm text-ink-500">{emptyLabel}</p>
 						) : (
-							<div className="mt-[14vh] flex flex-col items-center gap-4 text-center">
-								<div className="welcome-cat">
-									<WelcomeCat />
+							<div className="mt-[12vh] flex flex-col items-center gap-4 text-center">
+								<div className="welcome-whale">
+									<WelcomeWhale />
 								</div>
-								<div className="text-4xl font-extrabold tracking-tight">
-									<span className="logo-gradient">neko</span>
-									<span className="text-tianyi-600">.</span>
-									<span className="logo-gradient">harness</span>
-								</div>
+								<WelcomeWordmark />
 								<p className="max-w-sm text-sm text-ink-600">{t("message.welcome")}</p>
 							</div>
 						))}

@@ -4,8 +4,11 @@ export { DARK_PALETTE, LIGHT_PALETTE, SLOT_NAMES } from "./palette.ts";
 export {
 	darkTheme,
 	getActiveThemeMode,
+	getLogoPalette,
+	type LogoPalette,
 	lightTheme,
 	type NekoTheme,
+	renderHalfBlockRows,
 	setActiveTheme,
 	style,
 	type ThemeMode,

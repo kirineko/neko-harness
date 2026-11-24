@@ -580,7 +580,7 @@ export const zh = {
 	"task.status.completed": "已完成",
 	"task.status.failed": "失败",
 	"task.status.cancelled": "已停止",
-	"message.cat": "neko 小猫",
+	"message.whale": "neko 小鲸鱼",
 	"message.defaultImagePrompt": "默认图片提示",
 	"message.copyAnswer": "复制回答",
 	"message.welcome": "输入消息开始吧 ✦",

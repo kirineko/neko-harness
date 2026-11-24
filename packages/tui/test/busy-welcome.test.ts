@@ -51,16 +51,29 @@ it("shows the busy row only while busy, keeping editor and footer visible", () =
 	}
 });
 
-it("welcome screen renders the brand block with a live model line", () => {
+it("welcome screen renders the pixel whale banner, fits 80x24, adapts to theme, and falls back on narrow widths", () => {
 	const welcome = new WelcomeScreen();
 	welcome.setModelLine("deepseek-flash · Think high");
-	const first = plain(welcome.render(60));
-	expect(first).toContain("neko harness");
+
+	const wide80 = welcome.render(80);
+	expect(wide80.length).toBeLessThanOrEqual(20);
+	const first = plain(wide80);
+	expect(first).toContain("▀");
+	expect(first).toContain("█");
 	expect(first).toContain("deepseek-flash · Think high");
 	expect(first).toContain("Type a message");
-	expect(first).toContain("|\\___/|");
+
+	for (const width of [80, 60, 45]) {
+		for (const line of welcome.render(width)) {
+			expect(stripTerminalSequences(line).length).toBeLessThanOrEqual(width);
+		}
+	}
+
 	welcome.setModelLine("deepseek-chat · Think max");
 	expect(plain(welcome.render(60))).toContain("deepseek-chat · Think max");
-	// 窄宽度下不溢出。
-	for (const line of welcome.render(24)) expect(stripTerminalSequences(line).length).toBeLessThanOrEqual(24);
+
+	// 窄宽度下退化为紧凑文本布局且不溢出。
+	const narrow = welcome.render(24);
+	expect(plain(narrow)).toContain("neko harness");
+	for (const line of narrow) expect(stripTerminalSequences(line).length).toBeLessThanOrEqual(24);
 });

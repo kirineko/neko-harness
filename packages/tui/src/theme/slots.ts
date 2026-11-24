@@ -113,6 +113,95 @@ export function diffBackgroundAnsi(kind: "added" | "removed"): string {
 	return backgroundAnsi(parseColor(style.bg!), getTerminalColorMode());
 }
 
+export type LogoPalette = {
+	readonly outline: string;
+	readonly eye: string;
+	readonly body: string;
+	readonly shine: string;
+	readonly spout: string;
+	readonly shade: string;
+	readonly belly: string;
+	readonly cheek: string;
+	readonly wordTop: string;
+	readonly wordStart: string;
+	readonly wordEnd: string;
+};
+
+const LIGHT_LOGO_PALETTE: LogoPalette = {
+	outline: "#12265E",
+	eye: "#0B1942",
+	body: "#356BF6",
+	shine: "#82B4FF",
+	spout: "#7CC8FF",
+	shade: "#BCE4FF",
+	belly: "#FFFFFF",
+	cheek: "#FF9BB3",
+	wordTop: "#2862DF",
+	wordStart: "#3874EB",
+	wordEnd: "#AACBF8",
+};
+
+const DARK_LOGO_PALETTE: LogoPalette = {
+	outline: "#1E4294",
+	eye: "#0B1942",
+	body: "#4E8BFF",
+	shine: "#94C2FF",
+	spout: "#78CBFF",
+	shade: "#9ED4FF",
+	belly: "#F0F7FF",
+	cheek: "#FF8FAB",
+	wordTop: "#66A0FF",
+	wordStart: "#66A0FF",
+	wordEnd: "#3D6BC2",
+};
+
+const pixelColorCache = new Map<string, Color>();
+
+function cachedColor(hex: string): Color {
+	let parsed = pixelColorCache.get(hex);
+	if (parsed === undefined) {
+		parsed = parseColor(hex);
+		pixelColorCache.set(hex, parsed);
+	}
+	return parsed;
+}
+
+export function getLogoPalette(): LogoPalette {
+	return activeMode === "dark" ? DARK_LOGO_PALETTE : LIGHT_LOGO_PALETTE;
+}
+
+/**
+ * 将像素颜色矩阵（每格为 `#RRGGBB` 或 `null` 透明）按两行一组编码为终端半高块（`▀`/`▄`/`█`）。
+ * 透明像素只重置前景/背景（`\x1b[39m` / `\x1b[49m`），透出终端自身底色与壁纸。
+ */
+export function renderHalfBlockRows(rows: readonly (readonly (string | null)[])[]): string[] {
+	const mode = getTerminalColorMode();
+	const out: string[] = [];
+	for (let y = 0; y < rows.length; y += 2) {
+		const top = rows[y] ?? [];
+		const bottom = rows[y + 1] ?? [];
+		const width = Math.max(top.length, bottom.length);
+		let line = "";
+		for (let x = 0; x < width; x++) {
+			const t = top[x] ?? null;
+			const b = bottom[x] ?? null;
+			if (t === null && b === null) {
+				line += " ";
+			} else if (t !== null && b === null) {
+				line += `${foregroundAnsi(cachedColor(t), mode)}▀\x1b[39m`;
+			} else if (t === null && b !== null) {
+				line += `${foregroundAnsi(cachedColor(b), mode)}▄\x1b[39m`;
+			} else if (t === b && t !== null) {
+				line += `${foregroundAnsi(cachedColor(t), mode)}${backgroundAnsi(cachedColor(t), mode)}█\x1b[39m\x1b[49m`;
+			} else if (t !== null && b !== null) {
+				line += `${foregroundAnsi(cachedColor(t), mode)}${backgroundAnsi(cachedColor(b), mode)}▀\x1b[39m\x1b[49m`;
+			}
+		}
+		out.push(line.replace(/ +$/, ""));
+	}
+	return out;
+}
+
 // bold/italic/strikethrough/underline 是无色属性:SGR 开关不随主题变化,本地实现。
 const sgr =
 	(attrs: SlotStyle): ThemeSlot =>

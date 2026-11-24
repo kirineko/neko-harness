@@ -162,6 +162,18 @@
 	--color-ink-900: #322b34;
 	--body-gradient: linear-gradient(150deg, #ffffff 0%, #fff5f8 42%, #eff9ff 100%);
 	--logo-gradient: linear-gradient(115deg, #c26279 0%, #da7f93 35%, #059fd7 100%);
+	--whale-outline: #12265e;
+	--whale-eye: #0b1942;
+	--whale-body: #356bf6;
+	--whale-shine: #82b4ff;
+	--whale-spout: #7cc8ff;
+	--whale-belly: #ffffff;
+	--whale-belly-shade: #bce4ff;
+	--whale-cheek: #ff9bb3;
+	--wordmark-top: #2862df;
+	--wordmark-start: #3874eb;
+	--wordmark-mid: #7aa9f7;
+	--wordmark-end: #bfd9fa;
 	--highlight-inset: rgb(255 255 255 / 0.75);
 	--mix-base: white;
 	--overlay: rgb(50 43 52 / 0.33);
@@ -212,6 +224,18 @@
 	--color-ink-900: #222731;
 	--body-gradient: linear-gradient(150deg, #ffffff 0%, #f6f7fb 50%, #eef1f6 100%);
 	--logo-gradient: linear-gradient(115deg, #4343ab 0%, #6c73de 35%, #0f7f8f 100%);
+	--whale-outline: #12265e;
+	--whale-eye: #0b1942;
+	--whale-body: #356bf6;
+	--whale-shine: #82b4ff;
+	--whale-spout: #7cc8ff;
+	--whale-belly: #ffffff;
+	--whale-belly-shade: #bce4ff;
+	--whale-cheek: #ffa4be;
+	--wordmark-top: #2d5be0;
+	--wordmark-start: #3b6de8;
+	--wordmark-mid: #7ca7f5;
+	--wordmark-end: #c2daf9;
 	--highlight-inset: rgb(255 255 255 / 0.8);
 	--mix-base: white;
 	--overlay: rgb(24 28 38 / 0.35);
@@ -271,6 +295,18 @@
 	--color-ink-900: #e6e9ee;
 	--body-gradient: linear-gradient(160deg, #0e1116 0%, #11151c 55%, #0e1318 100%);
 	--logo-gradient: linear-gradient(115deg, #8da1e8 0%, #a6b6f0 40%, #6dbad0 100%);
+	--whale-outline: #1e4294;
+	--whale-eye: #0b1942;
+	--whale-body: #4e8bff;
+	--whale-shine: #94c2ff;
+	--whale-spout: #78cbff;
+	--whale-belly: #f0f7ff;
+	--whale-belly-shade: #9ed4ff;
+	--whale-cheek: #ff8fab;
+	--wordmark-top: #66a0ff;
+	--wordmark-start: #66a0ff;
+	--wordmark-mid: #4e86eb;
+	--wordmark-end: #3b67ba;
 	--highlight-inset: rgb(255 255 255 / 0.05);
 	--mix-base: #0e1116;
 	--overlay: rgb(1 4 9 / 0.65);
@@ -684,8 +720,8 @@ body.is-resizing-panel * {
 	color: transparent;
 }
 
-/* 空会话占位小猫：缓慢浮动 */
-@keyframes cat-float {
+/* 空会话占位小鲸鱼：缓慢浮动 */
+@keyframes whale-float {
 	0%,
 	100% {
 		transform: translateY(0);
@@ -695,8 +731,8 @@ body.is-resizing-panel * {
 	}
 }
 
-.welcome-cat {
-	animation: cat-float 3.2s ease-in-out infinite;
+.welcome-whale {
+	animation: whale-float 3.2s ease-in-out infinite;
 }
 
 /* 离散显示切换（回到底部按钮 / notice 条）：入场 fade + 上浮 */
@@ -1185,7 +1221,7 @@ body.is-resizing-panel * {
 	.anim-user,
 	.anim-other,
 	.stream-block,
-	.welcome-cat {
+	.welcome-whale {
 		animation: none;
 	}
 
