@@ -79,6 +79,8 @@ export function nestedChangeWraps(): Wrap[] {
 			...inner,
 			execute: async (args, api, context) => {
 				const result = await inner.execute(args as never, api, context);
+				// `Tool.execute` in pi-durable 1.6 returns `ToolExecutionResult | ToolPark`; pass parks straight through.
+				if ("sleep" in result || "wait" in result) return result;
 				const path = (args as { path?: unknown } | undefined)?.path;
 				if (result.isError || typeof path !== "string" || path === "") return result;
 				const task = await api.getTask(api.taskId, context);

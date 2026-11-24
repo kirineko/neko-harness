@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import type { Context } from "@earendil-works/chord";
-import { createHost, type Link } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { createHost, type HostError, type Link } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT, type Context } from "@earendil-works/chord/context";
 import type { ModelThinkingLevel, Provider } from "@earendil-works/pi-ai";
 import type { ConversationId, Extension } from "@earendil-works/pi-durable";
 import {
@@ -18,12 +17,18 @@ import {
 	type WindowsShellResolver,
 } from "@neko-harness/core";
 import type { UpdateCheckerOptions } from "@neko-harness/core/application-updates";
-import { GATEWAY_HOST } from "./contract.ts";
+import { GATEWAY_ADDRESS } from "./contract.ts";
 import { isServerId } from "./identity.ts";
-import { createMobileAdminFactory, NekoMobileAdmin } from "./mobile/admin.ts";
+import type { MobileAdminDeps } from "./mobile/admin.ts";
 import { MobileGateway, type MobileNetworkHooks } from "./mobile/listener.ts";
 import { removeGatewayPortFile, writeGatewayPortFile } from "./port-file.ts";
-import { type GatewayPrincipal, gatewayPrincipalKey, HOST_PRINCIPAL } from "./principal.ts";
+import {
+	type GatewayPrincipal,
+	type GatewayRevocation,
+	gatewayPrincipalKey,
+	gatewayRevokedBy,
+	HOST_PRINCIPAL,
+} from "./principal.ts";
 import { createNekoServerServices } from "./server-services.ts";
 import { createUnixListener } from "./unix-link.ts";
 import { createWsListener, type WsListener } from "./ws-listener.ts";
@@ -86,6 +91,22 @@ export type NekoGateway = {
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8321;
 const SERVER_ID_FILENAME = "gateway-server-id";
+
+function toHostError(event: HostError): Error | undefined {
+	if (event.kind === "activation_failed") {
+		const code = event.failure.error.code;
+		// Client-facing rejections (gone/forbidden/invalid) are delivered to the caller via reference state.
+		if (code === "gone" || code === "forbidden" || code === "invalid") return undefined;
+		return event.failure.error;
+	}
+	if ("error" in event) {
+		return event.error instanceof Error ? event.error : new Error(String(event.error));
+	}
+	if ("failure" in event) {
+		return event.failure.error;
+	}
+	return new Error(`Chord host error: ${event.kind}`);
+}
 
 /**
  * 启动 neko 会话网关：打开 core runtime，以 Chord 宿主模型托管全部会话，
@@ -182,19 +203,24 @@ type BindOptions = {
 
 async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<NekoGateway> {
 	const { context, host, port, socketPath, serverId, nekoDir } = options;
-	const chord = createHost<GatewayPrincipal>({
-		name: GATEWAY_HOST,
-		self: HOST_PRINCIPAL,
-		dev: true,
-		onError: (error) => options.onError?.(error instanceof Error ? error : new Error(String(error))),
+	const chord = createHost<GatewayPrincipal, GatewayRevocation>({
+		address: GATEWAY_ADDRESS,
+		principal: HOST_PRINCIPAL,
 		principalKey: gatewayPrincipalKey,
+		revokedBy: gatewayRevokedBy,
+		onError: (event) => {
+			const err = toHostError(event);
+			if (err !== undefined) options.onError?.(err);
+		},
 	});
+	let mobileAdminDeps: MobileAdminDeps | undefined;
 	const serverServices = await createNekoServerServices({
 		host: chord,
 		runtime,
 		context,
 		serverId,
 		marketUrl: options.marketUrl,
+		mobileAdmin: () => mobileAdminDeps,
 		...(options.updates ? { updates: options.updates } : {}),
 		...(options.updateIntervalMs ? { updateIntervalMs: options.updateIntervalMs } : {}),
 		...(options.promptHome !== undefined ? { promptHome: options.promptHome } : {}),
@@ -207,16 +233,12 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 		listeners.push(wsListener);
 	}
 	const acceptLocal = (link: Link) =>
-		chord.accept(link, {
-			principal: { kind: "local", connectionId: randomUUID() },
-			onProtocolMismatch: ({ peer }) =>
-				options.onError?.(new Error(`Rejected a client on Chord protocol ${peer ?? "unknown"}; restart or update it.`)),
-		});
+		chord.accept(link, { principal: { kind: "local", connectionId: randomUUID() } }, BACKGROUND_CONTEXT);
 	try {
 		for (const listener of listeners) await listener.start(acceptLocal);
 	} catch (error) {
 		await Promise.allSettled(listeners.map((listener) => listener.close()));
-		await chord.close();
+		await chord.close(BACKGROUND_CONTEXT);
 		await serverServices.dispose();
 		throw toStartupError(error, { socketPath, port, host, serverId });
 	}
@@ -235,8 +257,8 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 		onError: options.onError,
 		network: options.mobileNetwork,
 		chord: {
-			accept: (link, acceptOptions) => chord.accept(link, acceptOptions),
-			invalidatePrincipal: (match) => chord.invalidatePrincipal(match),
+			accept: (link, acceptOptions) => chord.accept(link, { principal: acceptOptions.principal }, BACKGROUND_CONTEXT),
+			revoke: (revocation) => chord.revoke(revocation, BACKGROUND_CONTEXT),
 		},
 		runtime: {
 			listApprovals: (sessionId) => runtime.approvals.list(Number(sessionId) as ConversationId, context),
@@ -252,7 +274,7 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 		},
 	});
 	// 本机移动管理（design D5）：仅持 admin token 的服务端专用客户端可 get；不进入 createGatewayConnection。
-	chord.serve(NekoMobileAdmin, createMobileAdminFactory({ mobile, store: mobile.store }));
+	mobileAdminDeps = { mobile, store: mobile.store };
 
 	let closing: Promise<void> | undefined;
 	const gateway: NekoGateway = {
@@ -271,7 +293,7 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 				await mobile.close();
 				if (portFile !== undefined) await removeGatewayPortFile(portFile.nekoDir, portFile.serverId).catch(() => {});
 				await Promise.all(listeners.map((listener) => listener.close()));
-				await chord.close();
+				await chord.close(BACKGROUND_CONTEXT);
 				await serverServices.dispose();
 				await runtime.close();
 			})();
@@ -289,7 +311,7 @@ async function bindGateway(runtime: NekoRuntime, options: BindOptions): Promise<
 	return gateway;
 }
 
-/** 活跃实例占用/stale 识别由 Chord Unix listener 负责；此处把错误翻译为可操作的提示。 */
+/** 活跃实例占用/stale 识别由 Unix listener 负责；此处把错误翻译为可操作的提示。 */
 export function toStartupError(
 	error: unknown,
 	info: { socketPath: string | null; port: number | null; host: string; serverId: string },

@@ -23,23 +23,23 @@ it("synchronizes the search provider across clients without touching credentials
 	const unix = await connectTestClient(gateway);
 	const web = await connectTestWsClient(gateway);
 	try {
-		await waitFor(() => !!web.searchSettings.state.value && !!unix.searchSettings.state.value);
-		expect(web.searchSettings.state.value!.selected).toBe("tavily");
+		await waitFor(() => !!web.searchSettings.snapshot.value && !!unix.searchSettings.snapshot.value);
+		expect(web.searchSettings.snapshot.value!.selected).toBe("tavily");
 
 		await unix.searchSettings.set({ provider: "deepseek" });
-		await waitFor(() => web.searchSettings.state.value?.selected === "deepseek");
-		expect(unix.searchSettings.state.value).toEqual(web.searchSettings.state.value);
+		await waitFor(() => web.searchSettings.snapshot.value?.selected === "deepseek");
+		expect(unix.searchSettings.snapshot.value).toEqual(web.searchSettings.snapshot.value);
 
 		// Saving or removing a DeepSeek key never changes the explicit choice.
 		await unix.credentials.save({ provider: "deepseek", key: "test-private-value" });
-		await waitFor(() => web.credentials.state.value?.statuses.deepseek?.source === "saved");
-		expect(JSON.stringify(web.searchSettings.state.value)).not.toContain("test-private-value");
+		await waitFor(() => web.credentials.snapshot.value?.statuses.deepseek?.source === "saved");
+		expect(JSON.stringify(web.searchSettings.snapshot.value)).not.toContain("test-private-value");
 		await web.credentials.remove({ provider: "deepseek" });
-		await waitFor(() => unix.credentials.state.value?.statuses.deepseek?.source === "none");
-		expect(unix.searchSettings.state.value!.selected).toBe("deepseek");
+		await waitFor(() => unix.credentials.snapshot.value?.statuses.deepseek?.source === "none");
+		expect(unix.searchSettings.snapshot.value!.selected).toBe("deepseek");
 
 		await web.searchSettings.set({ provider: "tavily" });
-		await waitFor(() => unix.searchSettings.state.value?.selected === "tavily");
+		await waitFor(() => unix.searchSettings.snapshot.value?.selected === "tavily");
 	} finally {
 		await unix.close();
 		await web.close();
@@ -62,10 +62,10 @@ it("rejects unknown providers and does not publish when persistence fails", asyn
 	});
 	const client = await connectTestClient(gateway);
 	try {
-		await waitFor(() => !!client.searchSettings.state.value);
+		await waitFor(() => !!client.searchSettings.snapshot.value);
 		await client.searchSettings.set({ provider: "deepseek" });
-		await waitFor(() => client.searchSettings.state.value?.selected === "deepseek");
-		const revision = client.searchSettings.state.value!.revision;
+		await waitFor(() => client.searchSettings.snapshot.value?.selected === "deepseek");
+		const revision = client.searchSettings.snapshot.value!.revision;
 
 		for (const provider of ["auto", "bing"])
 			await expect(client.searchSettings.set({ provider: provider as never })).rejects.toThrow();
@@ -80,7 +80,7 @@ it("rejects unknown providers and does not publish when persistence fails", asyn
 		} finally {
 			runtime.setSearchProvider = original;
 		}
-		expect(client.searchSettings.state.value).toMatchObject({ selected: "deepseek", revision });
+		expect(client.searchSettings.snapshot.value).toMatchObject({ selected: "deepseek", revision });
 		expect((await gateway.runtime.searchSettings()).selected).toBe("deepseek");
 	} finally {
 		await client.close();

@@ -91,13 +91,13 @@ it("shares independent workspace additions over Unix and WS and keeps them after
 		const dir = await realpath(target.dir);
 		await unix.workspaces.add({ path: dir });
 		await waitFor(
-			() => ws.workspaces.state.value?.workspaces.some((w) => w.path === dir) === true,
+			() => ws.workspaces.snapshot.value?.workspaces.some((w) => w.path === dir) === true,
 			"workspace broadcast",
 		);
 		const session = await ws.management.create({ cwd: dir });
 		expect(session.workspaceRoot).toBe(dir);
 		await ws.management.archive(session.id);
-		expect(unix.workspaces.state.value?.workspaces.some((w) => w.path === dir)).toBe(true);
+		expect(unix.workspaces.snapshot.value?.workspaces.some((w) => w.path === dir)).toBe(true);
 		expect((await ws.workspaces.browse({ path: dir })).path).toBe(dir);
 	} finally {
 		await unix.close();
@@ -118,32 +118,32 @@ it("removes a workspace for every client, hides its sessions and rejects invalid
 		await unix.workspaces.add({ path: other });
 		const session = await ws.management.create({ cwd: other });
 		await waitFor(
-			() => unix.directory.state.value?.sessions.some((s) => s.id === session.id) === true,
+			() => unix.directory.snapshot.value?.sessions.some((s) => s.id === session.id) === true,
 			"session listed",
 		);
 
 		await expect(unix.workspaces.remove({ path: join(root, "missing") })).rejects.toThrow("WORKSPACE_UNKNOWN:");
 		await unix.workspaces.remove({ path: other });
 		await waitFor(
-			() => ws.workspaces.state.value?.workspaces.some((w) => w.path === other) === false,
+			() => ws.workspaces.snapshot.value?.workspaces.some((w) => w.path === other) === false,
 			"removal broadcast",
 		);
 		await waitFor(
-			() => unix.directory.state.value?.sessions.every((s) => s.id !== session.id) === true,
+			() => unix.directory.snapshot.value?.sessions.every((s) => s.id !== session.id) === true,
 			"session hidden",
 		);
 		await expect(ws.workspaces.remove({ path: other })).rejects.toThrow("WORKSPACE_UNKNOWN:");
 
-		const remaining = ws.workspaces.state.value?.workspaces.map((w) => w.path) ?? [];
+		const remaining = ws.workspaces.snapshot.value?.workspaces.map((w) => w.path) ?? [];
 		expect(remaining.length).toBeGreaterThan(0);
 		for (const path of remaining.slice(1)) await ws.workspaces.remove({ path });
-		await waitFor(() => ws.workspaces.state.value?.workspaces.length === 1, "only one workspace left");
+		await waitFor(() => ws.workspaces.snapshot.value?.workspaces.length === 1, "only one workspace left");
 		await expect(ws.workspaces.remove({ path: remaining[0]! })).rejects.toThrow("WORKSPACE_LAST:");
-		expect(ws.workspaces.state.value?.workspaces.map((w) => w.path)).toEqual([remaining[0]!]);
+		expect(ws.workspaces.snapshot.value?.workspaces.map((w) => w.path)).toEqual([remaining[0]!]);
 
 		await unix.workspaces.add({ path: other });
 		await waitFor(
-			() => ws.directory.state.value?.sessions.some((s) => s.id === session.id) === true,
+			() => ws.directory.snapshot.value?.sessions.some((s) => s.id === session.id) === true,
 			"session restored",
 		);
 	} finally {
@@ -163,12 +163,12 @@ it("serializes concurrent remove and add of the same workspace", async () => {
 		await mkdir(other);
 		await unix.workspaces.add({ path: other });
 		await Promise.allSettled([unix.workspaces.remove({ path: other }), ws.workspaces.add({ path: other })]);
-		const paths = (unix.workspaces.state.value?.workspaces ?? []).map((w) => w.path);
+		const paths = (unix.workspaces.snapshot.value?.workspaces ?? []).map((w) => w.path);
 		expect(paths.filter((path) => path === other).length).toBeLessThanOrEqual(1);
 		await waitFor(
 			() =>
-				JSON.stringify(ws.workspaces.state.value?.workspaces.map((w) => w.path)) ===
-				JSON.stringify(unix.workspaces.state.value?.workspaces.map((w) => w.path)),
+				JSON.stringify(ws.workspaces.snapshot.value?.workspaces.map((w) => w.path)) ===
+				JSON.stringify(unix.workspaces.snapshot.value?.workspaces.map((w) => w.path)),
 			"clients agree",
 		);
 	} finally {

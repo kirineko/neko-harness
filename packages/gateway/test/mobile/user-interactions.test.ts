@@ -279,7 +279,7 @@ describe("mobile todos and questions", () => {
 		const desktop = await harness!.desktop();
 		const chat = await desktop.attach(sessionId);
 		expect((await chat.questionGet({ id: summary!.id }))?.status).toBe("pending");
-		await chat.abort(null);
+		await chat.abort();
 	}, 40_000);
 
 	it("refuses reads and answers once the device is revoked", async () => {
@@ -295,7 +295,7 @@ describe("mobile todos and questions", () => {
 		const chat = await desktop.attach(sessionId);
 		// Nothing was applied: the question is still open for the desktop.
 		expect((await chat.questionGet({ id: summary!.id }))?.status).toBe("pending");
-		await chat.abort(null);
+		await chat.abort();
 	}, 40_000);
 
 	it("sends a change notice for a question that appears between attach and the first query", async () => {
@@ -312,7 +312,7 @@ describe("mobile todos and questions", () => {
 		const list = await phone.call<QuestionList>("questions.list", { subscriptionId: attached.subscriptionId });
 		expect(list.revision).toBeGreaterThanOrEqual(Number(notice.revision));
 		expect(list.pending).toHaveLength(1);
-		await chat.abort(null);
+		await chat.abort();
 	}, 40_000);
 
 	it("keeps the largest todo list and question records inside the payload and frame limits", async () => {

@@ -53,7 +53,7 @@ export class QueueRow implements Component {
 		else this.#selected = Math.max(0, next);
 	}
 
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		const total = this.#items.length;
 		if (total === 0) return [];
 		const end = this.#selected === undefined ? total : Math.max(this.#selected + 1, Math.min(total, QUEUE_ROWS));

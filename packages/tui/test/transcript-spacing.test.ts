@@ -3,7 +3,7 @@ import { stripTerminalSequences, Text } from "@earendil-works/pi-tui";
 import { expect, it } from "vitest";
 import { ImageTranscript } from "../src/components/history-image.ts";
 
-const plain = (lines: string[]) => lines.map((line) => stripTerminalSequences(line).trimEnd()).join("\n");
+const plain = (lines: readonly string[]) => lines.map((line) => stripTerminalSequences(line).trimEnd()).join("\n");
 
 it("spaces top-level items with one blank line, except the first", () => {
 	const transcript = new ImageTranscript(() => undefined);

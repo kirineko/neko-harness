@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai";
 import type { ChatView } from "@neko-harness/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { subscribeState } from "../src/client-session.ts";
 import { connectNekoGateway, startGateway } from "../src/index.ts";
 import {
 	cleanup,
@@ -53,7 +54,7 @@ describe("disconnect semantics", () => {
 			const dyingChat = await dying.attach(created.id);
 
 			const seenByStable: ChatView[] = [];
-			stableChat.view.subscribe((value) => {
+			subscribeState(stableChat.view, (value) => {
 				if (value) seenByStable.push(value);
 			});
 
@@ -70,7 +71,7 @@ describe("disconnect semantics", () => {
 			// 网关整体无恙：新客户端可连接并看到目录。
 			const newcomer = await connectTestClient(target);
 			try {
-				expect(newcomer.directory.state.value?.sessions.map((s) => s.id)).toContain(created.id);
+				expect(newcomer.directory.snapshot.value?.sessions.map((s) => s.id)).toContain(created.id);
 			} finally {
 				await newcomer.close();
 			}
@@ -138,7 +139,7 @@ describe("stale socket takeover", () => {
 			try {
 				const client = await connectNekoGateway(testAddress({ socketPath, serverId: target.serverId }));
 				try {
-					expect(client.directory.state.value?.sessions.map((s) => s.id)).toEqual(["1"]);
+					expect(client.directory.snapshot.value?.sessions.map((s) => s.id)).toEqual(["1"]);
 				} finally {
 					await client.close();
 				}

@@ -1,5 +1,14 @@
-/** Browser-safe Chord 1.3 contracts. All wire values are validated schemas. */
-import { type HostNamed, hostNamed, method, type Ref, type RemoteContract, remote } from "@earendil-works/chord";
+/** Browser-safe Chord v2 contracts. All wire values are validated schemas. */
+import {
+	type Contract,
+	str as chordStr,
+	type Held,
+	hostKind,
+	method,
+	type Reference,
+	remote,
+} from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT, type Context } from "@earendil-works/chord/context";
 import {
 	arr,
 	bool,
@@ -19,44 +28,73 @@ import {
 import { CODEMODE_MODES } from "@neko-harness/core/codemode-mode";
 import { PLAN_LIMITS, QUESTION_LIMITS, TODO_LIMITS } from "@neko-harness/core/interactions";
 
-/** Every gateway service lives on the one host that serves it; the server id is verified through application info. */
-export const GATEWAY_HOST = "neko";
-// Chord does not export MethodSpec; keep public schema tuples so emitted declarations stay portable.
-export type Definition = {
-	version: number;
-	input: Schema;
-	variants: Record<string, { state?: Record<string, Schema>; methods?: Record<string, readonly [Schema, Schema]> }>;
+/** Every gateway service lives on the one host kind that serves it; the server id is verified through application info. */
+export const GatewayKind = hostKind("neko");
+export const GATEWAY_ADDRESS = GatewayKind();
+
+/** Makes `context` optional on a Chord `Reference` or `Held` method, defaulting to `BACKGROUND_CONTEXT`. */
+export type ClientMethod<F> = F extends (context: Context) => Promise<infer R>
+	? (context?: Context) => Promise<R>
+	: F extends (args: infer A, context: Context) => Promise<infer R>
+		? (args: A, context?: Context) => Promise<R>
+		: F;
+
+export type ClientWrapped<R> = {
+	readonly [K in keyof R]: K extends "release" | "retry" | "state" | "variant" ? R[K] : ClientMethod<R[K]>;
 };
-export type WireDef<D extends Definition> = {
-	version: D["version"];
-	input: D["input"];
-	host: HostNamed;
-	variants: {
-		[K in keyof D["variants"]]: {
-			state: D["variants"][K] extends { state: infer S extends Record<string, Schema> } ? S : Record<never, never>;
-			methods: D["variants"][K] extends { methods: infer M extends Record<string, readonly [Schema, Schema]> }
-				? { [P in keyof M]: ReturnType<typeof method<M[P][0], M[P][1]>> }
-				: Record<never, never>;
-		};
-	};
-};
-export const rpc = <A extends Schema, R extends Schema>(args: A, result: R): readonly [A, R] => [args, result];
-export function contract<const D extends Definition>(name: string, def: D): RemoteContract<WireDef<D>> {
-	const variants = Object.fromEntries(
-		Object.entries(def.variants).map(([key, value]) => [
-			key,
-			{
-				...value,
-				methods: Object.fromEntries(
-					Object.entries(value.methods ?? {}).map(([member, [args, result]]) => [member, method(args, result)]),
-				),
-			},
-		]),
-	);
-	return remote(name, { ...def, host: hostNamed(GATEWAY_HOST), variants } as unknown as Parameters<
-		typeof remote
-	>[1]) as unknown as RemoteContract<WireDef<D>>;
+
+export type ClientRef<C extends Contract> = ClientWrapped<Reference<C>>;
+export type ClientHeld<C extends Contract> = ClientWrapped<Held<C>>;
+
+function wrapRawRef<T extends object>(raw: T): T {
+	return new Proxy(raw, {
+		get(target, prop) {
+			const value = Reflect.get(target, prop, target);
+			if (typeof value !== "function") return value;
+			if (prop === "release" || prop === "retry") return value.bind(target);
+			// Chord's built reference methods have length 1 `(context)` for no-arg methods and length 2 `(args, context)` otherwise.
+			if (value.length === 1) {
+				return (context?: Context) => (value as (c: Context) => unknown).call(target, context ?? BACKGROUND_CONTEXT);
+			}
+			return (args: unknown, context?: Context) =>
+				(value as (a: unknown, c: Context) => unknown).call(target, args, context ?? BACKGROUND_CONTEXT);
+		},
+	});
 }
+
+export function wrapClientRef<R extends object>(ref: R): ClientWrapped<R> {
+	return wrapRawRef(ref) as unknown as ClientWrapped<R>;
+}
+
+export function wrapClientHeld<R extends object>(ref: R): ClientWrapped<R> {
+	return wrapRawRef(ref) as unknown as ClientWrapped<R>;
+}
+
+/** Encodes a subagent target (round `taskId` or `agentId`) into Chord v2's flat required `target` param. */
+export function encodeSubagentTarget(target: number | string): string {
+	return typeof target === "number" ? `round:${target}` : `agent:${target}`;
+}
+
+export type DecodedSubagentTarget =
+	| { readonly kind: "round"; readonly taskId: number }
+	| { readonly kind: "agent"; readonly agentId: string };
+
+/** Decodes `NekoSubagent`'s flat `target` param; returns `undefined` for malformed values. */
+export function decodeSubagentTarget(target: string): DecodedSubagentTarget | undefined {
+	if (target.startsWith("round:")) {
+		const raw = target.slice("round:".length);
+		if (!/^\d+$/.test(raw)) return undefined;
+		const taskId = Number(raw);
+		return Number.isSafeInteger(taskId) ? { kind: "round", taskId } : undefined;
+	}
+	if (target.startsWith("agent:")) {
+		const agentId = target.slice("agent:".length);
+		return agentId.length > 0 ? { kind: "agent", agentId } : undefined;
+	}
+	return undefined;
+}
+
+const paramStr = chordStr();
 const text = str();
 const number = num();
 const boolean = bool();
@@ -67,7 +105,8 @@ const phase = oneOf(["pending", "running", "done"]);
 const level = oneOf(["project", "user", "builtin"]);
 const thinking = oneOf(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const model = obj({ provider: text, modelId: text }, { open: true });
-const changeProperties = { model: opt(model), thinkingLevel: opt(thinking) };
+const modelInput = obj({ provider: text, modelId: text });
+const changeProperties = { model: opt(modelInput), thinkingLevel: opt(thinking) };
 const change = obj(changeProperties);
 const usage = obj(
 	{ input: number, output: number, cacheRead: number, cacheWrite: number, cost: number },
@@ -86,6 +125,7 @@ const image = obj(
 	{ open: true },
 );
 const skill = obj({ name: text, location: text, body: text, args: text }, { open: true });
+
 /** Nested calls of a codemode script; the projection bounds the list, previews and errors. */
 export const CodemodeViewSchema = obj(
 	{
@@ -610,27 +650,31 @@ export const CredentialStateSchema = obj(
 	{ open: true },
 );
 export const AttachmentSchema = obj({ sessionId: text, attachmentId: text }, { open: true });
-const chatInput = obj({ sessionId: text, attachmentId: text });
-export const NekoSessionDirectory = contract("neko.session-directory", {
+
+export const NekoSessionDirectory = remote("neko.session-directory", {
 	version: 1,
-	input: obj({}),
-	variants: { ready: { state: { state: DirectoryStateSchema } } },
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
+	variants: { ready: { state: { snapshot: DirectoryStateSchema } } },
 });
-export const NekoSessionManagement = contract("neko.session-management", {
+
+export const NekoSessionManagement = remote("neko.session-management", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
 			methods: {
-				create: rpc(obj({ ...changeProperties, cwd: opt(text) }), SessionSummarySchema),
-				archive: rpc(text, nil),
-				attach: rpc(text, AttachmentSchema),
-				detach: rpc(nil, nil),
-				fork: rpc(text, SessionSummarySchema),
+				create: method(obj({ ...changeProperties, cwd: opt(text) }), SessionSummarySchema),
+				archive: method(text, nil),
+				attach: method(text, AttachmentSchema),
+				detach: method(),
+				fork: method(text, SessionSummarySchema),
 			},
 		},
 	},
 });
+
 const resize = obj(
 	{
 		maxWidth: opt(integer),
@@ -683,58 +727,58 @@ const modelInfo = obj(
 	},
 	{ open: true },
 );
-export const NekoModels = contract("neko.models", {
+
+export const NekoModels = remote("neko.models", {
 	version: 1,
-	input: obj({}),
-	variants: { ready: { methods: { list: rpc(nil, arr(modelInfo)) } } },
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
+	variants: { ready: { methods: { list: method(undefined, arr(modelInfo)) } } },
 });
+
 const imageChunk = obj({ data: text, total: integer, mimeType: text }, { open: true });
-export const NekoSubagent = contract("neko.subagent", {
+
+export const NekoSubagent = remote("neko.subagent", {
 	version: 1,
-	input: obj(
-		{
-			sessionId: text,
-			attachmentId: text,
-			taskId: opt(integer),
-			agentId: opt(text),
-		},
-		{ open: true },
-	),
+	params: {
+		sessionId: paramStr,
+		attachmentId: paramStr,
+		target: paramStr,
+	},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
 			state: { revision: integer },
 			methods: {
-				chunk: rpc(
-					obj(
-						{
-							kind: oneOf(["view", "history"]),
-							before: opt(integer),
-							token: opt(integer),
-							offset: integer,
-						},
-						{ open: true },
-					),
+				chunk: method(
+					obj({
+						kind: oneOf(["view", "history"]),
+						before: opt(integer),
+						token: opt(integer),
+						offset: integer,
+					}),
 					obj({ token: integer, data: text, next: union([integer, nil]) }, { open: true }),
 				),
-				getImage: rpc(obj({ entryId: integer, contentIndex: integer, offset: integer }, { open: true }), imageChunk),
-				decideApproval: rpc(
-					obj({ id: integer, version: text, decision: oneOf(["allowed", "denied"]) }, { open: true }),
+				getImage: method(obj({ entryId: integer, contentIndex: integer, offset: integer }), imageChunk),
+				decideApproval: method(
+					obj({ id: integer, version: text, decision: oneOf(["allowed", "denied"]) }),
 					oneOf(["pending", "allowed", "denied", "cancelled"]),
 				),
-				stop: rpc(union([nil, obj({ taskId: integer }, { open: true })]), nil),
+				stop: method(union([nil, obj({ taskId: integer })]), nil),
 			},
 		},
 	},
 });
-export type NekoSubagent = Ref<typeof NekoSubagent>;
-export const NekoChat = contract("neko.chat", {
+export type NekoSubagent = ClientHeld<typeof NekoSubagent>;
+
+export const NekoChat = remote("neko.chat", {
 	version: 1,
-	input: chatInput,
+	params: { sessionId: paramStr, attachmentId: paramStr },
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
 			state: { view: ChatViewSchema },
 			methods: {
-				submit: rpc(
+				submit: method(
 					obj({
 						content: text,
 						images: opt(arr(text, { maxItems: 4 })),
@@ -743,40 +787,41 @@ export const NekoChat = contract("neko.chat", {
 					}),
 					nil,
 				),
-				abort: rpc(nil, nil),
+				abort: method(),
 				/** Run again on the context as it is after a run that ended without an answer. */
-				continueRun: rpc(nil, nil),
-				withdraw: rpc(obj({ id: integer }), WithdrawResultSchema),
-				steer: rpc(obj({ id: integer }), SteerResultSchema),
-				questionGet: rpc(obj({ id: integer }), union([QuestionRecordSchema, nil])),
-				questionRespond: rpc(
+				continueRun: method(),
+				withdraw: method(obj({ id: integer }), WithdrawResultSchema),
+				steer: method(obj({ id: integer }), SteerResultSchema),
+				questionGet: method(obj({ id: integer }), union([QuestionRecordSchema, nil])),
+				questionRespond: method(
 					obj({ id: integer, version: text, response: QuestionResponseSchema }),
 					QuestionRecordSchema,
 				),
-				planGet: rpc(obj({ version: text }), union([PlanRecordSchema, nil])),
-				planRespond: rpc(obj({ version: text, decision: PlanDecisionSchema }), PlanRecordSchema),
-				planMode: rpc(obj({ mode: oneOf(["normal", "plan"]) }), PlanViewSchema),
-				usage: rpc(nil, usage),
-				workspaceDir: rpc(obj({ path: text }), WorkspaceDirSchema),
-				workspaceFile: rpc(obj({ path: text }), WorkspaceFileSchema),
-				changesList: rpc(nil, ChangeListSchema),
-				changeGet: rpc(obj({ path: text }), union([ChangeDetailSchema, nil])),
-				skills: rpc(nil, arr(obj({ name: text, description: text, location: text, level }, { open: true }))),
-				jobOutput: rpc(obj({ jobId: text, since: opt(integer) }), JobOutputSchema),
-				jobStop: rpc(obj({ jobId: text }), JobSummarySchema),
-				configure: rpc(change, nil),
-				compact: rpc(obj({ instructions: opt(text) }), nil),
-				importImage: rpc(text, obj({ id: text, name: text }, { open: true })),
-				draftImage: rpc(obj({ id: text, offset: integer }), imageChunk),
-				beginImage: rpc(obj({ name: text, mimeType: text, size: int({ minimum: 1, maximum: 20971520 }) }), text),
-				appendImage: rpc(obj({ id: text, offset: integer, data: str({ maxLength: 350000 }) }), nil),
-				finishImage: rpc(text, nil),
-				releaseImage: rpc(text, nil),
-				getImage: rpc(obj({ entryId: integer, contentIndex: integer, offset: integer }), imageChunk),
+				planGet: method(obj({ version: text }), union([PlanRecordSchema, nil])),
+				planRespond: method(obj({ version: text, decision: PlanDecisionSchema }), PlanRecordSchema),
+				planMode: method(obj({ mode: oneOf(["normal", "plan"]) }), PlanViewSchema),
+				usage: method(undefined, usage),
+				workspaceDir: method(obj({ path: text }), WorkspaceDirSchema),
+				workspaceFile: method(obj({ path: text }), WorkspaceFileSchema),
+				changesList: method(undefined, ChangeListSchema),
+				changeGet: method(obj({ path: text }), union([ChangeDetailSchema, nil])),
+				skills: method(undefined, arr(obj({ name: text, description: text, location: text, level }, { open: true }))),
+				jobOutput: method(obj({ jobId: text, since: opt(integer) }), JobOutputSchema),
+				jobStop: method(obj({ jobId: text }), JobSummarySchema),
+				configure: method(change, nil),
+				compact: method(obj({ instructions: opt(text) }), nil),
+				importImage: method(text, obj({ id: text, name: text }, { open: true })),
+				draftImage: method(obj({ id: text, offset: integer }), imageChunk),
+				beginImage: method(obj({ name: text, mimeType: text, size: int({ minimum: 1, maximum: 20971520 }) }), text),
+				appendImage: method(obj({ id: text, offset: integer, data: str({ maxLength: 350000 }) }), nil),
+				finishImage: method(text, nil),
+				releaseImage: method(text, nil),
+				getImage: method(obj({ entryId: integer, contentIndex: integer, offset: integer }), imageChunk),
 			},
 		},
 	},
 });
+
 const browse = obj({ path: text, query: opt(text), showHidden: opt(boolean), cursor: opt(text) });
 const page = obj(
 	{
@@ -787,35 +832,40 @@ const page = obj(
 	},
 	{ open: true },
 );
-export const NekoWorkspaces = contract("neko.workspaces", {
+
+export const NekoWorkspaces = remote("neko.workspaces", {
 	version: 2,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
-			state: { state: WorkspaceStateSchema },
+			state: { snapshot: WorkspaceStateSchema },
 			methods: {
-				add: rpc(obj({ path: text }), WorkspaceSummarySchema),
-				remove: rpc(obj({ path: text }), nul()),
-				browse: rpc(browse, page),
+				add: method(obj({ path: text }), WorkspaceSummarySchema),
+				remove: method(obj({ path: text }), nul()),
+				browse: method(browse, page),
 			},
 		},
 	},
 });
+
 const provider = str({ minLength: 1, maxLength: 64 });
-export const NekoCredentials = contract("neko.credentials", {
+export const NekoCredentials = remote("neko.credentials", {
 	version: 2,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
-			state: { state: CredentialStateSchema },
+			state: { snapshot: CredentialStateSchema },
 			methods: {
-				save: rpc(obj({ provider, key: str({ minLength: 1, maxLength: 8192 }) }), nil),
-				remove: rpc(obj({ provider }), nil),
-				setEnabled: rpc(obj({ provider, enabled: boolean }), nil),
+				save: method(obj({ provider, key: str({ minLength: 1, maxLength: 8192 }) }), nil),
+				remove: method(obj({ provider }), nil),
+				setEnabled: method(obj({ provider, enabled: boolean }), nil),
 			},
 		},
 	},
 });
+
 export const SearchSettingsStateSchema = obj(
 	{
 		revision: integer,
@@ -823,18 +873,20 @@ export const SearchSettingsStateSchema = obj(
 	},
 	{ open: true },
 );
-export const NekoSearchSettings = contract("neko.search-settings", {
+export const NekoSearchSettings = remote("neko.search-settings", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
-			state: { state: SearchSettingsStateSchema },
+			state: { snapshot: SearchSettingsStateSchema },
 			methods: {
-				set: rpc(obj({ provider: oneOf(["tavily", "deepseek"]) }), nil),
+				set: method(obj({ provider: oneOf(["tavily", "deepseek"]) }), nil),
 			},
 		},
 	},
 });
+
 const contextSource = oneOf(["default", "config", "saved"]);
 export const ContextSettingsStateSchema = obj(
 	{
@@ -903,19 +955,21 @@ const ContextSettingsPatchSchema = obj({
 		}),
 	),
 });
-export const NekoContextSettings = contract("neko.context-settings", {
+export const NekoContextSettings = remote("neko.context-settings", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
-			state: { state: ContextSettingsStateSchema },
+			state: { snapshot: ContextSettingsStateSchema },
 			methods: {
-				set: rpc(ContextSettingsPatchSchema, nil),
-				reset: rpc(obj({}), nil),
+				set: method(ContextSettingsPatchSchema, nil),
+				reset: method(obj({}), nil),
 			},
 		},
 	},
 });
+
 export const CodemodeSettingsStateSchema = obj(
 	{
 		revision: integer,
@@ -924,19 +978,21 @@ export const CodemodeSettingsStateSchema = obj(
 	},
 	{ open: true },
 );
-export const NekoCodemodeSettings = contract("neko.codemode-settings", {
+export const NekoCodemodeSettings = remote("neko.codemode-settings", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
-			state: { state: CodemodeSettingsStateSchema },
+			state: { snapshot: CodemodeSettingsStateSchema },
 			methods: {
-				set: rpc(obj({ mode: oneOf([...CODEMODE_MODES]) }), nil),
-				reset: rpc(obj({}), nil),
+				set: method(obj({ mode: oneOf([...CODEMODE_MODES]) }), nil),
+				reset: method(obj({}), nil),
 			},
 		},
 	},
 });
+
 const defaultModelSource = oneOf(["cli", "saved", "config", "default"]);
 export const DefaultModelStateSchema = obj(
 	{
@@ -945,19 +1001,21 @@ export const DefaultModelStateSchema = obj(
 	},
 	{ open: true },
 );
-export const NekoDefaultModel = contract("neko.default-model", {
+export const NekoDefaultModel = remote("neko.default-model", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
-			state: { state: DefaultModelStateSchema },
+			state: { snapshot: DefaultModelStateSchema },
 			methods: {
-				set: rpc(model, nil),
-				clear: rpc(nil, nil),
+				set: method(modelInput, nil),
+				clear: method(),
 			},
 		},
 	},
 });
+
 export const FileCandidatesSchema = obj(
 	{
 		entries: arr(obj({ name: text, path: text, kind: oneOf(["file", "directory"]) }, { open: true }), {
@@ -968,17 +1026,19 @@ export const FileCandidatesSchema = obj(
 	},
 	{ open: true },
 );
-export const NekoWorkspaceFiles = contract("neko.workspace-files", {
+export const NekoWorkspaceFiles = remote("neko.workspace-files", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
 			methods: {
-				search: rpc(obj({ workspaceRoot: text, query: text }), FileCandidatesSchema),
+				search: method(obj({ workspaceRoot: text, query: text }), FileCandidatesSchema),
 			},
 		},
 	},
 });
+
 const marketSkill = obj(
 	{
 		name: text,
@@ -998,25 +1058,27 @@ const marketSkill = obj(
 const preview = obj({ body: text, files: arr(text) }, { open: true });
 const scope = oneOf(["user", "project"]);
 const installResult = obj({ name: text, scope, path: text, shadowedBy: opt(scope) }, { open: true });
-export const NekoSkillMarket = contract("neko.skill-market", {
+export const NekoSkillMarket = remote("neko.skill-market", {
 	version: 1,
-	input: obj({}),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
 		ready: {
 			methods: {
-				list: rpc(obj({ query: opt(text), workspaceRoot: opt(text) }), arr(marketSkill)),
-				detail: rpc(obj({ name: text, workspaceRoot: opt(text) }), marketSkill),
-				preview: rpc(obj({ name: text }), preview),
-				install: rpc(obj({ name: text, scope, workspaceRoot: opt(text), overwrite: opt(boolean) }), installResult),
-				uninstall: rpc(obj({ name: text, scope, workspaceRoot: opt(text) }), nil),
+				list: method(obj({ query: opt(text), workspaceRoot: opt(text) }), arr(marketSkill)),
+				detail: method(obj({ name: text, workspaceRoot: opt(text) }), marketSkill),
+				preview: method(obj({ name: text }), preview),
+				install: method(obj({ name: text, scope, workspaceRoot: opt(text), overwrite: opt(boolean) }), installResult),
+				uninstall: method(obj({ name: text, scope, workspaceRoot: opt(text) }), nil),
 			},
 		},
 	},
 });
-export type NekoSessionDirectory = Ref<typeof NekoSessionDirectory>;
-export type NekoSessionManagement = Ref<typeof NekoSessionManagement>;
-export type NekoModels = Ref<typeof NekoModels>;
-export type NekoChat = Ref<typeof NekoChat>;
+
+export type NekoSessionDirectory = ClientHeld<typeof NekoSessionDirectory>;
+export type NekoSessionManagement = ClientHeld<typeof NekoSessionManagement>;
+export type NekoModels = ClientHeld<typeof NekoModels>;
+export type NekoChat = ClientHeld<typeof NekoChat>;
 export type WireJobSummary = Static<typeof JobSummarySchema>;
 export type WireJobOutput = Static<typeof JobOutputSchema>;
 export type WireQueuedInput = Static<typeof QueuedInputSchema>;
@@ -1037,16 +1099,16 @@ export type WireWorkspaceFile = Static<typeof WorkspaceFileSchema>;
 export type WireChangeSummary = Static<typeof ChangeSummarySchema>;
 export type WireChangeList = Static<typeof ChangeListSchema>;
 export type WireChangeDetail = Static<typeof ChangeDetailSchema>;
-export type NekoWorkspaces = Ref<typeof NekoWorkspaces>;
-export type NekoWorkspaceFiles = Ref<typeof NekoWorkspaceFiles>;
-export type NekoCredentials = Ref<typeof NekoCredentials>;
-export type NekoSearchSettings = Ref<typeof NekoSearchSettings>;
-export type NekoContextSettings = Ref<typeof NekoContextSettings>;
-export type NekoCodemodeSettings = Ref<typeof NekoCodemodeSettings>;
+export type NekoWorkspaces = ClientHeld<typeof NekoWorkspaces>;
+export type NekoWorkspaceFiles = ClientHeld<typeof NekoWorkspaceFiles>;
+export type NekoCredentials = ClientHeld<typeof NekoCredentials>;
+export type NekoSearchSettings = ClientHeld<typeof NekoSearchSettings>;
+export type NekoContextSettings = ClientHeld<typeof NekoContextSettings>;
+export type NekoCodemodeSettings = ClientHeld<typeof NekoCodemodeSettings>;
 export type NekoCodemodeSettingsState = Static<typeof CodemodeSettingsStateSchema>;
-export type NekoDefaultModel = Ref<typeof NekoDefaultModel>;
+export type NekoDefaultModel = ClientHeld<typeof NekoDefaultModel>;
 export type NekoDefaultModelState = Static<typeof DefaultModelStateSchema>;
-export type NekoSkillMarket = Ref<typeof NekoSkillMarket>;
+export type NekoSkillMarket = ClientHeld<typeof NekoSkillMarket>;
 export type NekoSessionSummary = Static<typeof SessionSummarySchema>;
 export type NekoDirectoryState = Static<typeof DirectoryStateSchema>;
 export type NekoWorkspaceSummary = Static<typeof WorkspaceSummarySchema>;
@@ -1092,11 +1154,12 @@ export const ApplicationInfoSchema = obj(
 	},
 	{ open: true },
 );
-export const NekoApplicationInfo = contract("neko.application-info", {
+export const NekoApplicationInfo = remote("neko.application-info", {
 	version: 1,
-	input: obj({}, { open: true }),
+	params: {},
+	hostAddress: () => GATEWAY_ADDRESS,
 	variants: {
-		ready: { state: { info: ApplicationInfoSchema }, methods: { check: rpc(nil, ApplicationInfoSchema) } },
+		ready: { state: { info: ApplicationInfoSchema }, methods: { check: method(undefined, ApplicationInfoSchema) } },
 	},
 });
-export type NekoApplicationInfo = Ref<typeof NekoApplicationInfo>;
+export type NekoApplicationInfo = ClientHeld<typeof NekoApplicationInfo>;

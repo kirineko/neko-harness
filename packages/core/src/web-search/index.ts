@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { arr, num, obj, opt, str } from "@earendil-works/pi-schema";
 import { truncate, WebToolError } from "./http.ts";

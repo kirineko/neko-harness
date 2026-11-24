@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ChordError, type Link } from "@earendil-works/chord";
+import { isChordError, type Link } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import {
 	assertGatewayIdentity,
 	createClientHost,
@@ -49,7 +50,7 @@ export const MOBILE_ADMIN_ENABLE_TIMEOUT_MS = 30_000;
 
 export type MobileAdminCallerOptions = { readonly callTimeoutMs?: number; readonly enableTimeoutMs?: number };
 
-/** 建立服务端专用调用方：每次调用临时连接并彻底释放，旧 gateway 的 unknown_type 归一为 GatewayUnsupportedError。 */
+/** 建立服务端专用调用方：每次调用临时连接并彻底释放，旧 gateway 的 undeclared 归一为 GatewayUnsupportedError。 */
 export function createMobileAdminCaller(
 	gateway: GatewayHandle,
 	nekoDir: string,
@@ -71,33 +72,48 @@ export function createMobileAdminCaller(
 		const link: Link =
 			gateway.socketPath !== undefined ? await createUnixLink(gateway.socketPath) : createWsLink(gateway.wsUrl);
 		const host = createClientHost(link);
+		const ctx = withAbortSignal(signal, BACKGROUND_CONTEXT);
 		const release = (): void => {
-			void host.close().catch(() => undefined);
-			link.close("aborted");
+			void host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+			link.close();
 		};
 		// 超时或取消时立即断开连接，避免悬挂调用占用资源。
 		signal.addEventListener("abort", release, { once: true });
 		try {
 			await assertGatewayIdentity(host, serverId, signal);
-			const admin = (await host.get(NekoMobileAdmin, { token }, { signal })) as unknown as Record<
-				string,
-				(params: unknown) => Promise<unknown>
-			>;
-			const call = admin[method];
-			if (call === undefined) throw new Error(`unknown mobile admin method: ${method}`);
+			let admin: Awaited<ReturnType<typeof host.get<typeof NekoMobileAdmin>>> | undefined;
 			try {
-				return await call.call(admin, params);
+				admin = await host.get(NekoMobileAdmin, { token }, ctx);
+				switch (method) {
+					case "status":
+					case "state":
+						return await admin.status(ctx);
+					case "enable":
+						return await admin.enable(params as { address: string; port?: number }, ctx);
+					case "disable":
+						return await admin.disable(ctx);
+					case "createPairing":
+						return await admin.createPairing(ctx);
+					case "cancelPairing":
+						return await admin.cancelPairing(ctx);
+					case "revoke":
+						return await admin.revoke(params as { deviceId: string }, ctx);
+					case "regenerateCertificate":
+						return await admin.regenerateCertificate(ctx);
+					default:
+						throw new Error(`unknown mobile admin method: ${method}`);
+				}
 			} catch (error) {
-				if (error instanceof ChordError && error.code === "unavailable" && error.reason === "unknown_type")
+				if (isChordError(error) && error.code === "unavailable" && error.reason === "undeclared")
 					throw new GatewayUnsupportedError();
 				throw error;
 			} finally {
-				(admin as { release?: () => void }).release?.();
+				admin?.release();
 			}
 		} finally {
 			signal.removeEventListener("abort", release);
-			await host.close().catch(() => undefined);
-			link.close("done");
+			await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+			link.close();
 		}
 	};
 
@@ -146,7 +162,7 @@ const WRITE_ROUTES: Readonly<Record<string, string>> = {
 };
 
 const READ_ROUTES: Readonly<Record<string, string>> = {
-	"/api/mobile/state": "state",
+	"/api/mobile/state": "status",
 };
 
 /**
@@ -180,7 +196,7 @@ export async function handleMobileAdminRequest(
 		}
 		let supported = true;
 		try {
-			await context.caller("state", null);
+			await context.caller("status", null);
 		} catch (error) {
 			if (error instanceof GatewayUnsupportedError) supported = false;
 			else return respondWithCaller(response, Promise.reject(error));
@@ -217,7 +233,7 @@ async function respondWithCaller(response: ServerResponse, result: Promise<unkno
 			writeJson(response, 501, { code: "gateway_unsupported", message: "gateway is too old for mobile admin" });
 			return true;
 		}
-		if (error instanceof ChordError) {
+		if (isChordError(error)) {
 			writeJson(response, 502, { code: error.code, message: error.message });
 			return true;
 		}

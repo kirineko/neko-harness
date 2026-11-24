@@ -1,5 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { getSupportedThinkingLevels, type Usage } from "@earendil-works/pi-ai";
 import {
 	type ConversationId,

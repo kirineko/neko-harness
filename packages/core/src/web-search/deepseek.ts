@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { type KeyResolver, postJson, record, truncate, type WebFetch, WebToolError } from "./http.ts";
 import type { ExtractOutcome, SearchHit, WebSearchProvider } from "./provider.ts";
 

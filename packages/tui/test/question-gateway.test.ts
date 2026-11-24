@@ -1,7 +1,7 @@
 import "./support/lang-en.ts";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
-import { questionsClient } from "@neko-harness/gateway/client-session";
+import { questionsClient, safeValue, subscribeState } from "@neko-harness/gateway/client-session";
 import { expect, it } from "vitest";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { QuestionDock } from "../src/question-dock.ts";
@@ -26,9 +26,8 @@ async function attach(target: Awaited<ReturnType<typeof makeGateway>>) {
 	const notices: string[] = [];
 	const dock = new QuestionDock({ changed: () => {}, notify: (message) => notices.push(message) });
 	dock.bind("root", questionsClient(chat));
-	const sync = () => dock.update(chat.view.value?.questions);
-	const stop = chat.view.subscribe(sync);
-	sync();
+	const sync = () => dock.update(safeValue(chat.view)?.questions);
+	const stop = subscribeState(chat.view, sync);
 	return { client, chat, dock, notices, stop };
 }
 
@@ -56,10 +55,10 @@ it("answers a real question end to end through the dock and keeps the directory 
 		expect(panel).not.toContain("(●)");
 
 		// The directory marks the blocked session and the transcript card follows the structured state.
-		await waitFor(() => client.directory.state.value.sessions[0]?.awaitingAnswer === true, "awaiting flag");
-		const workspace = client.directory.state.value.sessions[0]!.workspaceRoot;
-		const id = client.directory.state.value.sessions[0]!.id;
-		const blocked = sessionPickerItems(client.directory.state.value.sessions, workspace, "other")[0]!;
+		await waitFor(() => client.directory.snapshot.value.sessions[0]?.awaitingAnswer === true, "awaiting flag");
+		const workspace = client.directory.snapshot.value.sessions[0]!.workspaceRoot;
+		const id = client.directory.snapshot.value.sessions[0]!.id;
+		const blocked = sessionPickerItems(client.directory.snapshot.value.sessions, workspace, "other")[0]!;
 		expect(blocked.description).toContain("Awaiting answer");
 		expect(blocked.description).not.toContain("Running");
 		const card = chat.view.value?.items.find((i) => i.type === "tool" && i.name === "ask_user");
@@ -76,8 +75,10 @@ it("answers a real question end to end through the dock and keeps the directory 
 		expect(notices).toEqual(["Answered: PostgreSQL"]);
 		const answered = chat.view.value?.items.find((i) => i.type === "tool" && i.name === "ask_user");
 		expect(answered).toMatchObject({ interaction: { kind: "ask_user", status: "answered", labels: ["PostgreSQL"] } });
-		await waitFor(() => client.directory.state.value.sessions[0]?.awaitingAnswer === false, "flag cleared");
-		expect(sessionPickerItems(client.directory.state.value.sessions, workspace, id)[0]!.description).toContain("Idle");
+		await waitFor(() => client.directory.snapshot.value.sessions[0]?.awaitingAnswer === false, "flag cleared");
+		expect(sessionPickerItems(client.directory.snapshot.value.sessions, workspace, id)[0]!.description).toContain(
+			"Idle",
+		);
 	} finally {
 		stop();
 		await client.close();
@@ -116,7 +117,7 @@ it("shows the winner when another client answers first, and a cancelled question
 		await waitFor(() => first.dock.visible && first.dock.pendingCount === 1, "the second question");
 		first.dock.openPanel();
 		await waitFor(() => plain(first.dock.render(100)).includes("Second?"), "the second question loads");
-		await first.chat.abort(null);
+		await first.chat.abort();
 		await waitFor(() => plain(first.dock.render(100)).includes("Cancelled"), "the cancellation shows");
 		first.dock.handleInput("\r");
 		first.dock.handleInput(" ");

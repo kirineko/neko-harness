@@ -1,5 +1,6 @@
 import type { Link } from "@earendil-works/chord";
 import { createGatewayConnection, type NekoGatewayConnection } from "./client-session.ts";
+import { observableLink } from "./link.ts";
 import { createUnixLink } from "./unix-link.ts";
 import { createWsLink } from "./ws-listener.ts";
 export type NekoGatewayAddress =
@@ -23,12 +24,13 @@ export async function connectNekoGatewayLink(
 	signal?: AbortSignal,
 ): Promise<NekoGatewayClient> {
 	signal?.throwIfAborted();
-	const connection = createGatewayConnection(link, serverId);
+	const observed = observableLink(link);
+	const connection = createGatewayConnection(observed, serverId);
 	const controller = new AbortController();
 	const abort = () => controller.abort(signal?.reason);
 	signal?.addEventListener("abort", abort, { once: true });
 	if (signal?.aborted) abort();
-	link.onClose((reason) => controller.abort(new Error(`Gateway connection closed: ${reason}`)));
+	observed.onClose(() => controller.abort(new Error("Gateway connection closed")));
 	try {
 		await connection.ready(controller.signal);
 		return connection;

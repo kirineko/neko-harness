@@ -1,8 +1,10 @@
 // 多前端 attach（spec: 双前端同步 / attach 幂等）：
 // Unix socket 与 WebSocket 两个客户端 attach 同一会话，一方提交，双方收到流式状态与回答。
 
+import type { Watchable } from "@earendil-works/chord/watch";
 import type { ChatView } from "@neko-harness/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { subscribeState } from "../src/client-session.ts";
 import type { NekoGatewayClient } from "../src/index.ts";
 import { cleanup, connectTestClient, connectTestWsClient, makeGateway, type TestGateway, waitFor } from "./helpers.ts";
 
@@ -16,9 +18,9 @@ afterEach(async () => {
 	await cleanup(target);
 });
 
-function collect(view: { subscribe(listener: (value: ChatView | undefined) => void): () => void }): ChatView[] {
+function collect(view: Watchable<ChatView>): ChatView[] {
 	const values: ChatView[] = [];
-	view.subscribe((value) => {
+	subscribeState(view, (value) => {
 		if (value) values.push(value);
 	});
 	return values;
@@ -62,7 +64,7 @@ describe("multi-frontend attach", () => {
 			expect(finalWs?.items).toEqual(finalUnix?.items);
 
 			// usage 按会话统计。
-			const usage = await chatByWs.usage(null);
+			const usage = await chatByWs.usage();
 			expect(usage.output).toBeGreaterThan(0);
 		} finally {
 			await unix.close();

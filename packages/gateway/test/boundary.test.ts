@@ -1,3 +1,4 @@
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { MemoryStorage } from "@earendil-works/pi-durable";
 import { expect, it, vi } from "vitest";
 import { GatewayConnection } from "../../web/src/client/lib/gateway.ts";
@@ -15,7 +16,7 @@ it("closes malformed native Chord frames without affecting another client", asyn
 		});
 		socket.send(JSON.stringify({ t: "hello", name: "bad", kind: "client", epoch: "invalid" }));
 		await waitFor(() => socket.readyState === 3, "malformed frame closed", 2000);
-		expect((await peer.models.list(null)).length).toBeGreaterThan(0);
+		expect((await peer.models.list()).length).toBeGreaterThan(0);
 	} finally {
 		socket.close();
 		await peer.close();
@@ -30,7 +31,7 @@ it("rejects forged attachments and malformed calls before side effects, preservi
 	try {
 		const chat = await a.attach("1");
 		await b.attach("1");
-		await expect(b.host.get(NekoChat, a.attachment!)).rejects.toThrow("Attachment");
+		await expect(b.host.get(NekoChat, a.attachment!, BACKGROUND_CONTEXT)).rejects.toThrow("Attachment");
 		const before = await target.gateway.runtime.listConversations();
 		await expect(a.management.create({ cwd: 42 } as never)).rejects.toMatchObject({ code: "invalid" });
 		expect(await target.gateway.runtime.listConversations()).toHaveLength(before.length);
@@ -45,7 +46,7 @@ it("rejects forged attachments and malformed calls before side effects, preservi
 		expect(error.code).toBe("invalid");
 		await expect(
 			a.skillMarket.uninstall({ name: "missing-test-skill", scope: "project", workspaceRoot: target.dir }),
-		).rejects.toMatchObject({ code: "gone", reason: "skill_not_installed" });
+		).rejects.toMatchObject({ code: "gone", details: { reason: "skill_not_installed" } });
 		const id = (await a.management.create({})).id;
 		await chat.submit({ content: "valid after errors" });
 		await waitFor(
@@ -53,7 +54,7 @@ it("rejects forged attachments and malformed calls before side effects, preservi
 			"valid request",
 		);
 		await a.attach(id);
-		await expect(chat.usage(null)).rejects.toThrow();
+		await expect(chat.usage()).rejects.toThrow();
 	} finally {
 		await a.close();
 		await b.close();

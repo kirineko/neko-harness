@@ -9,7 +9,7 @@ import { UserMessageComponent } from "../src/components/user-message.ts";
 import { labels } from "../src/labels.ts";
 import { setActiveTheme, theme } from "../src/theme/index.ts";
 
-const plain = (lines: string[]) => lines.map((line) => stripTerminalSequences(line).trimEnd());
+const plain = (lines: readonly string[]) => lines.map((line) => stripTerminalSequences(line).trimEnd());
 
 it("user bubble carries a sakura left bar on every line, content inset by two cells", () => {
 	const bubble = new UserMessageComponent("first line\nsecond line");

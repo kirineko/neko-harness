@@ -6,6 +6,7 @@ import { PickerPanel } from "../src/components/picker.ts";
 import { contextItems, openContextPanel } from "../src/context-ui.ts";
 import { commands } from "../src/labels.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
+import { createFakeWatchable } from "./support/fake-watchable.ts";
 
 setActiveTheme("light");
 
@@ -36,17 +37,11 @@ function state(over: Partial<NekoContextSettingsState> = {}, revision = 1): Neko
 }
 
 function fakeClient(initial: NekoContextSettingsState) {
-	const listeners = new Set<(value: NekoContextSettingsState | undefined) => void>();
+	const snapshot = createFakeWatchable(initial);
 	const calls: unknown[] = [];
 	const client = {
 		contextSettings: {
-			state: {
-				value: initial as NekoContextSettingsState | undefined,
-				subscribe(listener: (value: NekoContextSettingsState | undefined) => void) {
-					listeners.add(listener);
-					return () => listeners.delete(listener);
-				},
-			},
+			snapshot: snapshot.watchable,
 			set: async (patch: NekoContextSettingsPatch) => {
 				calls.push(patch);
 			},
@@ -58,10 +53,9 @@ function fakeClient(initial: NekoContextSettingsState) {
 	return {
 		client,
 		calls,
-		listeners,
+		listeners: snapshot.listeners,
 		publish(value: NekoContextSettingsState) {
-			client.contextSettings.state.value = value;
-			for (const listener of listeners) listener(value);
+			snapshot.publish(value);
 		},
 	};
 }

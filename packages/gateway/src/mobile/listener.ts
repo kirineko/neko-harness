@@ -4,10 +4,20 @@ import { createServer, type Server as HttpsServer } from "node:https";
 import type { Socket } from "node:net";
 import { hostname, type NetworkInterfaceInfo } from "node:os";
 import { type Link, memoryLinkPair } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { type WebSocket, WebSocketServer } from "ws";
-import { NekoChat, NekoSessionDirectory, NekoSessionManagement, NekoSubagent, NekoWorkspaces } from "../contract.ts";
+import {
+	encodeSubagentTarget,
+	NekoChat,
+	NekoSessionDirectory,
+	NekoSessionManagement,
+	NekoSubagent,
+	NekoWorkspaces,
+	wrapClientHeld,
+} from "../contract.ts";
 import { createClientHost } from "../link.ts";
-import { type GatewayPrincipal, isMobilePrincipal } from "../principal.ts";
+import type { GatewayPrincipal, GatewayRevocation } from "../principal.ts";
+import { subscribeState } from "../watch.ts";
 import { MobileAdapter, type MobileRuntimeBridge, type MobileServices } from "./adapter.ts";
 import { MobileAuth } from "./auth.ts";
 import { MobileCertificate } from "./certificate.ts";
@@ -39,8 +49,8 @@ export type MobileListenerState =
 	| { readonly status: "stopping" };
 
 export type MobileChordBridge = {
-	accept(link: Link, options: { readonly principal: GatewayPrincipal; readonly kind: "client" }): void;
-	invalidatePrincipal(match: (principal: GatewayPrincipal) => boolean): Promise<void>;
+	accept(link: Link, options: { readonly principal: GatewayPrincipal }): void;
+	revoke(revocation: GatewayRevocation): void;
 };
 
 export type MobileGatewayOptions = {
@@ -336,7 +346,7 @@ export class MobileGateway {
 		await store.clearMobileAuthorizations();
 		this.certificate = certificate;
 		this.pairingValue?.invalidate();
-		await this.chord.invalidatePrincipal(isMobilePrincipal);
+		this.chord.revoke({ kind: "mobile-all" });
 		for (const connection of [...this.connections.values()]) connection.close(MOBILE_CLOSE_REVOKED, "revoked");
 		const current = this.stateValue;
 		if (current.status === "listening") {
@@ -372,9 +382,11 @@ export class MobileGateway {
 	}
 
 	private handleDevicePaired(device: MobileDeviceRecord): void {
-		this.invalidateConnections(device.deviceId, device.grantRevision).catch((error: unknown) =>
-			this.onError?.(toError(error)),
-		);
+		try {
+			this.invalidateConnections(device.deviceId, device.grantRevision);
+		} catch (error) {
+			this.onError?.(toError(error));
+		}
 	}
 
 	/** 撤销设备（design D7）：先持久删除，再释放 chord 记录并关闭该设备的移动 WS（4401）。 */
@@ -383,21 +395,25 @@ export class MobileGateway {
 		const existing = store.getState().devices.some((device) => device.deviceId === deviceId);
 		if (!existing) return false;
 		await store.removeDevice(deviceId);
-		await this.invalidateConnections(deviceId);
+		this.invalidateConnections(deviceId);
 		return true;
 	}
 
-	private async invalidateConnections(deviceId: string, exceptGrantRevision?: number): Promise<void> {
-		const match = (principal: unknown): boolean => {
-			if (typeof principal !== "object" || principal === null) return false;
-			const record = principal as Record<string, unknown>;
-			return (
-				record.kind === "mobile" &&
-				record.deviceId === deviceId &&
-				(exceptGrantRevision === undefined || record.grantRevision !== exceptGrantRevision)
-			);
-		};
-		await this.chord.invalidatePrincipal(match);
+	private invalidateConnections(deviceId: string, exceptGrantRevision?: number): void {
+		if (exceptGrantRevision === undefined) {
+			this.chord.revoke({ kind: "device", deviceId });
+		} else {
+			const oldRevisions = new Set<number>();
+			if (exceptGrantRevision > 1) oldRevisions.add(exceptGrantRevision - 1);
+			for (const connection of this.connections.values()) {
+				if (connection.deviceId === deviceId && connection.grantRevision !== exceptGrantRevision) {
+					oldRevisions.add(connection.grantRevision);
+				}
+			}
+			for (const grantRevision of oldRevisions) {
+				this.chord.revoke({ kind: "grant", deviceId, grantRevision });
+			}
+		}
 		for (const connection of [...this.connections.values()]) {
 			if (
 				connection.deviceId === deviceId &&
@@ -417,7 +433,6 @@ export class MobileGateway {
 		const [serverEnd, clientEnd] = memoryLinkPair();
 		this.chord.accept(serverEnd, {
 			principal: { connectionId, kind: "mobile", deviceId: auth.deviceId, grantRevision: auth.grantRevision },
-			kind: "client",
 		});
 		const store = this.storeHandle;
 		if (store?.getState().devices.some((device) => device.deviceId === auth.deviceId)) {
@@ -442,11 +457,22 @@ export class MobileGateway {
 			services: () => {
 				if (servicesValue === undefined) {
 					servicesValue = {
-						directory: clientHost.hold(NekoSessionDirectory, {}),
-						management: clientHost.hold(NekoSessionManagement, {}),
-						workspaces: clientHost.hold(NekoWorkspaces, {}),
-						openChat: (attachment) => clientHost.hold(NekoChat, attachment),
-						openSubagent: (input) => clientHost.hold(NekoSubagent, input),
+						directory: wrapClientHeld(clientHost.hold(NekoSessionDirectory, {}, BACKGROUND_CONTEXT)),
+						management: wrapClientHeld(clientHost.hold(NekoSessionManagement, {}, BACKGROUND_CONTEXT)),
+						workspaces: wrapClientHeld(clientHost.hold(NekoWorkspaces, {}, BACKGROUND_CONTEXT)),
+						openChat: (attachment) => wrapClientHeld(clientHost.hold(NekoChat, attachment, BACKGROUND_CONTEXT)),
+						openSubagent: (input) =>
+							wrapClientHeld(
+								clientHost.hold(
+									NekoSubagent,
+									{
+										sessionId: input.sessionId,
+										attachmentId: input.attachmentId,
+										target: encodeSubagentTarget(input.taskId !== undefined ? input.taskId : (input.agentId ?? "")),
+									},
+									BACKGROUND_CONTEXT,
+								),
+							),
 					};
 				}
 				return servicesValue;
@@ -459,7 +485,7 @@ export class MobileGateway {
 				false,
 			onClose: () => {
 				this.connections.delete(connectionId);
-				void clientHost.close().catch(() => undefined);
+				void clientHost.close(BACKGROUND_CONTEXT).catch(() => undefined);
 			},
 			onError: this.onError,
 		});
@@ -476,23 +502,20 @@ export class MobileGateway {
 		const [serverEnd, clientEnd] = memoryLinkPair();
 		this.chord.accept(serverEnd, {
 			principal: { kind: "local", connectionId: "mobile-notification-hub" },
-			kind: "client",
 		});
 		const host = createClientHost(clientEnd);
-		const directory = host.hold(NekoSessionDirectory, {});
-		const workspaces = host.hold(NekoWorkspaces, {});
+		const directory = wrapClientHeld(host.hold(NekoSessionDirectory, {}, BACKGROUND_CONTEXT));
+		const workspaces = wrapClientHeld(host.hold(NekoWorkspaces, {}, BACKGROUND_CONTEXT));
 		const last = { directory: -1, workspaces: -1 };
 		const unsubscribe = [
-			directory.state.subscribe(() => {
-				const value = directory.state.value;
-				if (value === undefined || value.revision === last.directory) return;
+			subscribeState(directory.snapshot, (value) => {
+				if (value.revision === last.directory) return;
 				const priming = last.directory === -1;
 				last.directory = value.revision;
 				if (!priming) this.broadcastNotification("sessions.changed", { revision: value.revision });
 			}),
-			workspaces.state.subscribe(() => {
-				const value = workspaces.state.value;
-				if (value === undefined || value.revision === last.workspaces) return;
+			subscribeState(workspaces.snapshot, (value) => {
+				if (value.revision === last.workspaces) return;
 				const priming = last.workspaces === -1;
 				last.workspaces = value.revision;
 				if (!priming) this.broadcastNotification("workspaces.changed", { revision: value.revision });
@@ -500,7 +523,9 @@ export class MobileGateway {
 		];
 		this.notificationCleanup = () => {
 			for (const off of unsubscribe) off();
-			void host.close().catch(() => undefined);
+			directory.release();
+			workspaces.release();
+			void host.close(BACKGROUND_CONTEXT).catch(() => undefined);
 		};
 	}
 

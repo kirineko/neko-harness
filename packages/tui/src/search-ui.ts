@@ -1,5 +1,11 @@
+import type { Watchable } from "@earendil-works/chord/watch";
 import { SEARCH_PROVIDERS, type SearchProviderId } from "@neko-harness/core/search-providers";
-import type { NekoCredentialState, NekoSearchSettingsState } from "@neko-harness/gateway";
+import {
+	type NekoCredentialState,
+	type NekoSearchSettingsState,
+	safeValue,
+	subscribeState,
+} from "@neko-harness/gateway";
 import type { PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
 import { t } from "./i18n/index.ts";
@@ -47,17 +53,11 @@ export function searchItems(
 
 type SearchClient = {
 	readonly searchSettings: {
-		readonly state: {
-			readonly value: NekoSearchSettingsState | undefined;
-			subscribe(listener: (value: NekoSearchSettingsState | undefined) => void): () => void;
-		};
+		readonly snapshot: Watchable<NekoSearchSettingsState>;
 		set(input: { provider: SearchProviderId }): Promise<unknown>;
 	};
 	readonly credentials: {
-		readonly state: {
-			readonly value: NekoCredentialState | undefined;
-			subscribe(listener: (value: NekoCredentialState | undefined) => void): () => void;
-		};
+		readonly snapshot: Watchable<NekoCredentialState>;
 	};
 };
 
@@ -72,9 +72,12 @@ export function openSearchPanel(
 	notify: (message: string) => void,
 	openKey?: (provider: SearchProviderId) => void,
 ): () => void {
-	const items = () => searchItems(client.searchSettings.state.value, client.credentials.state.value);
+	const items = () => searchItems(safeValue(client.searchSettings.snapshot), safeValue(client.credentials.snapshot));
 	const refresh = () => panel.update(items());
-	const stops = [client.searchSettings.state.subscribe(refresh), client.credentials.state.subscribe(refresh)];
+	const stops = [
+		subscribeState(client.searchSettings.snapshot, refresh),
+		subscribeState(client.credentials.snapshot, refresh),
+	];
 	panel.emptyText = searchEmpty();
 	if (openKey) {
 		panel.help = shortcutHints(

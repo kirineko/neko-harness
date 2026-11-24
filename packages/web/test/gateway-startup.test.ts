@@ -39,7 +39,7 @@ describe.skipIf(IS_WINDOWS)("POSIX Web gateway readiness", () => {
 					spawnTimeoutMs: 500,
 				}),
 			).rejects.toThrow("请正常退出原网关");
-			expect((await client.models.list(null)).length).toBeGreaterThan(0);
+			expect((await client.models.list()).length).toBeGreaterThan(0);
 			expect(existsSync(join(target.dir, "unused.sqlite"))).toBe(false);
 		} finally {
 			await client.close();
@@ -68,7 +68,7 @@ describe.skipIf(IS_WINDOWS)("POSIX Web gateway readiness", () => {
 			await expect(ensureNekoGateway({ ...options, port: Number(new URL(other.wsUrl).port) })).rejects.toThrow(
 				`WebSocket ${other.wsUrl} 不可用或身份不匹配`,
 			);
-			expect((await client.models.list(null)).length).toBeGreaterThan(0);
+			expect((await client.models.list()).length).toBeGreaterThan(0);
 			expect(existsSync(options.storagePath)).toBe(false);
 		} finally {
 			await client.close();

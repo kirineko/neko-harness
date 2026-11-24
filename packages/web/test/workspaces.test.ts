@@ -137,12 +137,12 @@ it("navigates, creates and archives only within the selected workspace", async (
 		await create;
 		const id = web.currentSessionId!;
 		expect(web.ready).toBe(true);
-		await waitFor(() => peer.directory.state.value?.sessions.some((s) => s.id === id) === true, "new session");
-		expect(peer.directory.state.value?.sessions.find((s) => s.id === id)?.workspaceRoot).toBe(b);
+		await waitFor(() => peer.directory.snapshot.value?.sessions.some((s) => s.id === id) === true, "new session");
+		expect(peer.directory.snapshot.value?.sessions.find((s) => s.id === id)?.workspaceRoot).toBe(b);
 		await web.createSession();
 		const newer = web.currentSessionId!;
 		await web.attachTo(id);
-		const root = peer.directory.state.value!.sessions.find((s) => s.id === "1")!;
+		const root = peer.directory.snapshot.value!.sessions.find((s) => s.id === "1")!;
 		await web.selectWorkspace(root.workspaceRoot);
 		await web.selectWorkspace(b);
 		expect(web.currentSessionId).toBe(id);
@@ -247,7 +247,7 @@ it("reconnects within the selected workspace and a fresh page uses the launch wo
 		await waitFor(() => phase === "ready" && web.ready, "reconnect");
 		expect(web.currentSessionId).toBe(first);
 		expect(web.workspaceRoot).toBe(b);
-		const root = peer.directory.state.value!.sessions.find((s) => s.id === "1")!;
+		const root = peer.directory.snapshot.value!.sessions.find((s) => s.id === "1")!;
 		await web.selectWorkspace(root.workspaceRoot);
 		web.dispose();
 		const fresh = new GatewayConnection(options);

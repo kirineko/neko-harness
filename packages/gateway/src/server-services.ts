@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { ChordError, type Context, type Ctx, type Host, local, method, type Self } from "@earendil-works/chord";
-import type { CommitPublication, ConversationId } from "@earendil-works/pi-durable";
-import { nul, obj } from "@earendil-works/pi-schema";
+import { ChordError, defineFacet, type Host, invalid } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
+import type { ConversationId } from "@earendil-works/pi-durable";
 import {
 	CREDENTIAL_PROVIDERS,
 	type CredentialProviderId,
@@ -12,55 +12,40 @@ import {
 import { UpdateChecker, type UpdateCheckerOptions } from "@neko-harness/core/application-updates";
 import type { UpdateState } from "@neko-harness/core/application-version";
 import {
-	ApplicationInfoSchema,
-	CodemodeSettingsStateSchema,
-	ContextSettingsStateSchema,
-	CredentialStateSchema,
-	DefaultModelStateSchema,
-	DirectoryStateSchema,
 	NekoApplicationInfo,
 	NekoCodemodeSettings,
+	type NekoCodemodeSettingsState,
 	NekoContextSettings,
+	type NekoContextSettingsState,
 	type NekoCredentialState,
 	NekoCredentials,
 	NekoDefaultModel,
+	type NekoDefaultModelState,
+	type NekoDirectoryState,
 	type NekoMarketSkill,
 	NekoModels,
 	NekoSearchSettings,
+	type NekoSearchSettingsState,
 	NekoSessionDirectory,
 	NekoSessionManagement,
 	type NekoSessionSummary,
 	NekoSkillMarket,
 	NekoWorkspaceFiles,
 	NekoWorkspaces,
-	SearchSettingsStateSchema,
-	WorkspaceStateSchema,
 } from "./contract.ts";
+import { createMobileAdminFactory, type MobileAdminDepsProvider, NekoMobileAdmin } from "./mobile/admin.ts";
 import type { GatewayPrincipal } from "./principal.ts";
-import { Owner, serveSessions } from "./session-host.ts";
+import { registerSessionServices, toConversationId } from "./session-host.ts";
 import { activeLevelOf, createSkillMarketClient, SkillMarketError } from "./skill-market.ts";
+import { createPrincipalAttachments, createStateHub, watchHub } from "./state-hub.ts";
 import { browseWorkspaces } from "./workspaces.ts";
 
-const ServerState = local("neko.server-state", {
-	version: 1,
-	input: obj({}, { open: true }),
-	members: {
-		directory: DirectoryStateSchema,
-		workspaces: WorkspaceStateSchema,
-		credentials: CredentialStateSchema,
-		searchSettings: SearchSettingsStateSchema,
-		contextSettings: ContextSettingsStateSchema,
-		codemodeSettings: CodemodeSettingsStateSchema,
-		defaultModel: DefaultModelStateSchema,
-		refreshCredentials: method(nul(), nul()),
-		refreshSearchSettings: method(nul(), nul()),
-		refreshContextSettings: method(nul(), nul()),
-		refreshCodemodeSettings: method(nul(), nul()),
-		refreshDefaultModel: method(nul(), nul()),
-	},
-});
-export async function createNekoServerServices(options: {
-	host: Host<GatewayPrincipal>;
+export { toConversationId };
+
+export async function createNekoServerServices<
+	R extends import("@earendil-works/chord/json").JsonValue = string,
+>(options: {
+	host: Host<GatewayPrincipal, R>;
 	runtime: NekoRuntime;
 	context: Context;
 	marketUrl: string;
@@ -68,48 +53,28 @@ export async function createNekoServerServices(options: {
 	promptHome?: string;
 	updates?: UpdateCheckerOptions;
 	updateIntervalMs?: number;
+	mobileAdmin?: MobileAdminDepsProvider;
 }) {
 	const { runtime, context, host } = options;
 	const updates = new UpdateChecker(options.updates);
 	await updates.local();
-	const updateListeners = new Set<(value: UpdateState) => void>();
 	// The Windows shell status rides along with the update state; only Windows runtimes report one.
 	const info = (value: UpdateState) => {
 		const shell = runtime.shellStatus();
 		return { ...value, serverId: options.serverId, ...(shell === undefined ? {} : { shell }) };
 	};
-	let published = JSON.stringify(info(updates.state)),
-		closed = false;
+	const appInfoHub = createStateHub(info(updates.state));
+	let published = JSON.stringify(appInfoHub.value);
+	let closed = false;
 	const publishUpdates = () => {
 		if (closed) return;
-		const next = JSON.stringify(info(updates.state));
+		const currentInfo = info(updates.state);
+		const next = JSON.stringify(currentInfo);
 		if (next === published) return;
 		published = next;
-		for (const listener of updateListeners) listener(updates.state);
+		appInfoHub.set(currentInfo);
 	};
-	host.serve(NekoApplicationInfo, (_input, _principal, self) => {
-		const current = self.state("info", ApplicationInfoSchema, info(updates.state));
-		self.on(
-			"updates",
-			{
-				subscribe: (fn: (value: UpdateState) => void) => {
-					updateListeners.add(fn);
-					return () => updateListeners.delete(fn);
-				},
-			},
-			(value, ctx) => current.replace(ctx, info(value)),
-		);
-		return {
-			variant: "ready",
-			info: current,
-			check: async () => {
-				runtime.shellStatus({ refresh: true });
-				await updates.check(true);
-				publishUpdates();
-				return info(updates.state);
-			},
-		};
-	});
+
 	const updateTimer = setInterval(() => {
 		void updates
 			.local()
@@ -126,11 +91,13 @@ export async function createNekoServerServices(options: {
 		marketUrl: options.marketUrl,
 		...(options.promptHome !== undefined ? { home: options.promptHome } : {}),
 	});
-	// Chord 的 reason 保留业务原因，前端无需解析格式化后的 message。
+	// ChordError details.reason 保留业务原因，前端无需解析格式化后的 message。
 	const toRemote = (error: unknown): never => {
 		if (error instanceof SkillMarketError) {
-			const code = error.code === "skill_not_found" || error.code === "skill_not_installed" ? "gone" : "invalid";
-			throw new ChordError(code, error.message, { reason: error.code });
+			if (error.code === "skill_not_found" || error.code === "skill_not_installed") {
+				throw new ChordError({ code: "gone", message: error.message, details: { reason: error.code } });
+			}
+			throw invalid("args", error.message, { reason: error.code });
 		}
 		throw error;
 	};
@@ -157,18 +124,18 @@ export async function createNekoServerServices(options: {
 		return { ...skill, installed, activeLevel: activeLevelOf(installed) };
 	};
 	const list = async (): Promise<NekoSessionSummary[]> =>
-		(await runtime.listConversations()).map((info) => ({
-			id: String(info.id),
-			workspaceRoot: info.workspaceRoot,
-			lastUsedAt: info.lastUsedAt,
-			title: info.title,
-			firstPromptPreview: info.firstPromptPreview,
-			createdAt: info.createdAt,
-			lastMessageAt: info.lastMessageAt,
-			model: info.model,
-			status: info.status,
-			awaitingAnswer: info.awaitingAnswer,
-			awaitingPlan: info.awaitingPlan,
+		(await runtime.listConversations()).map((item) => ({
+			id: String(item.id),
+			workspaceRoot: item.workspaceRoot,
+			lastUsedAt: item.lastUsedAt,
+			title: item.title,
+			firstPromptPreview: item.firstPromptPreview,
+			createdAt: item.createdAt,
+			lastMessageAt: item.lastMessageAt,
+			model: item.model,
+			status: item.status,
+			awaitingAnswer: item.awaitingAnswer,
+			awaitingPlan: item.awaitingPlan,
 		}));
 
 	const readStatuses = async (): Promise<NekoCredentialState["statuses"]> => {
@@ -192,6 +159,15 @@ export async function createNekoServerServices(options: {
 			runtime.codemodeSettings(),
 			runtime.defaultModel(),
 		]);
+
+	const directoryHub = createStateHub<NekoDirectoryState>({ revision: 1, sessions });
+	const workspacesHub = createStateHub({ revision: 1, workspaces });
+	const credentialsHub = createStateHub<NekoCredentialState>({ revision: 1, statuses });
+	const searchSettingsHub = createStateHub<NekoSearchSettingsState>({ revision: 1, ...search });
+	const contextSettingsHub = createStateHub<NekoContextSettingsState>({ revision: 1, ...contextSettings0 });
+	const codemodeSettingsHub = createStateHub<NekoCodemodeSettingsState>({ revision: 1, ...codemodeSettings0 });
+	const defaultModelHub = createStateHub<NekoDefaultModelState>(defaultModel0);
+
 	let mutationTail = Promise.resolve();
 	const serialize = <T>(fn: () => Promise<T>): Promise<T> => {
 		const result = mutationTail.catch(() => {}).then(fn);
@@ -201,293 +177,332 @@ export async function createNekoServerServices(options: {
 		);
 		return result;
 	};
-	host.serve(
-		ServerState,
-		(_input, _principal, self) => {
-			const directory = self.state("directory", DirectoryStateSchema, { revision: 1, sessions });
-			const workspaceState = self.state("workspaces", WorkspaceStateSchema, { revision: 1, workspaces });
-			const credentials = self.state("credentials", CredentialStateSchema, { revision: 1, statuses });
-			const searchSettings = self.state("searchSettings", SearchSettingsStateSchema, { revision: 1, ...search });
-			const contextSettings = self.state("contextSettings", ContextSettingsStateSchema, {
-				revision: 1,
-				...contextSettings0,
-			});
-			const codemodeSettings = self.state("codemodeSettings", CodemodeSettingsStateSchema, {
-				revision: 1,
-				...codemodeSettings0,
-			});
-			const defaultModel = self.state("defaultModel", DefaultModelStateSchema, defaultModel0);
-			const refreshContextSettings = async (_input: null, ctx: Ctx<GatewayPrincipal>) => {
-				const next = await runtime.contextSettings();
-				const { revision, ...current } = contextSettings.value;
-				if (JSON.stringify(next) !== JSON.stringify(current))
-					contextSettings.replace(ctx, { revision: revision + 1, ...next });
-				return null;
-			};
-			const refreshCodemodeSettings = async (_input: null, ctx: Ctx<GatewayPrincipal>) => {
-				const next = await runtime.codemodeSettings();
-				const { revision, ...current } = codemodeSettings.value;
-				if (JSON.stringify(next) !== JSON.stringify(current))
-					codemodeSettings.replace(ctx, { revision: revision + 1, ...next });
-				return null;
-			};
-			const refreshDefaultModel = async (_input: null, ctx: Ctx<GatewayPrincipal>) => {
-				const next = await runtime.defaultModel();
-				if (JSON.stringify(next) !== JSON.stringify(defaultModel.value)) defaultModel.replace(ctx, next);
-				return null;
-			};
-			const refreshSearchSettings = async (_input: null, ctx: Ctx<GatewayPrincipal>) => {
-				const next = await runtime.searchSettings();
-				const current = searchSettings.value;
-				if (next.selected !== current.selected)
-					searchSettings.replace(ctx, { revision: current.revision + 1, ...next });
-				return null;
-			};
-			self.on(
-				"directory",
-				{ subscribe: (listener: (publication: CommitPublication) => void) => onCommits(runtime.harness, listener) },
-				async (event, ctx) => {
-					if (
-						!event.changes.some(
-							(change) =>
-								change.type === "conversation" ||
-								(change.type === "document" &&
-									[
-										"app.neko.session-metadata",
-										"app.neko.activity",
-										"app.neko.conversation",
-										"app.neko.workspaces",
-										"app.neko.workspaces-removed",
-										"pi.agent",
-									].includes(change.record.kind)),
-						)
-					)
-						return;
-					await serialize(async () => {
-						const [items, roots] = await Promise.all([list(), runtime.listWorkspaces()]);
-						directory.replace(ctx, { revision: directory.value.revision + 1, sessions: items });
-						workspaceState.replace(ctx, { revision: workspaceState.value.revision + 1, workspaces: roots });
-					});
+
+	const refreshCredentials = async () => {
+		if (closed) return null;
+		credentialsHub.set({
+			revision: credentialsHub.value.revision + 1,
+			statuses: await readStatuses(),
+		});
+		return null;
+	};
+	const refreshSearchSettings = async () => {
+		if (closed) return null;
+		const next = await runtime.searchSettings();
+		const current = searchSettingsHub.value;
+		if (next.selected !== current.selected) {
+			searchSettingsHub.set({ revision: current.revision + 1, ...next });
+		}
+		return null;
+	};
+	const refreshContextSettings = async () => {
+		if (closed) return null;
+		const next = await runtime.contextSettings();
+		const { revision, ...current } = contextSettingsHub.value;
+		if (JSON.stringify(next) !== JSON.stringify(current)) {
+			contextSettingsHub.set({ revision: revision + 1, ...next });
+		}
+		return null;
+	};
+	const refreshCodemodeSettings = async () => {
+		if (closed) return null;
+		const next = await runtime.codemodeSettings();
+		const { revision, ...current } = codemodeSettingsHub.value;
+		if (JSON.stringify(next) !== JSON.stringify(current)) {
+			codemodeSettingsHub.set({ revision: revision + 1, ...next });
+		}
+		return null;
+	};
+	const refreshDefaultModel = async () => {
+		if (closed) return null;
+		const next = await runtime.defaultModel();
+		if (JSON.stringify(next) !== JSON.stringify(defaultModelHub.value)) {
+			defaultModelHub.set(next);
+		}
+		return null;
+	};
+
+	const stopDirectoryCommits = onCommits(runtime.harness, (event) => {
+		if (closed) return;
+		if (
+			!event.changes.some(
+				(change) =>
+					change.type === "conversation" ||
+					(change.type === "document" &&
+						[
+							"app.neko.session-metadata",
+							"app.neko.activity",
+							"app.neko.conversation",
+							"app.neko.workspaces",
+							"app.neko.workspaces-removed",
+							"pi.agent",
+						].includes(change.record.kind)),
+			)
+		)
+			return;
+		void serialize(async () => {
+			if (closed) return;
+			const [items, roots] = await Promise.all([list(), runtime.listWorkspaces()]);
+			if (closed) return;
+			directoryHub.set({ revision: directoryHub.value.revision + 1, sessions: items });
+			workspacesHub.set({ revision: workspacesHub.value.revision + 1, workspaces: roots });
+		});
+	});
+
+	const principals = createPrincipalAttachments();
+
+	const facet = defineFacet<GatewayPrincipal>((facetHost) => {
+		facetHost.serve(NekoApplicationInfo, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				info: watchHub(self, appInfoHub),
+				check: async () => {
+					runtime.shellStatus({ refresh: true });
+					await updates.check(true);
+					publishUpdates();
+					return info(updates.state);
 				},
+			},
+		}));
+
+		facetHost.serve(NekoSessionDirectory, (_input, _principal, self) => ({
+			variant: "ready",
+			members: { snapshot: watchHub(self, directoryHub) },
+		}));
+
+		facetHost.serve(NekoWorkspaces, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, workspacesHub),
+				browse: (input) => browseWorkspaces(input),
+				add: (input) => serialize(() => runtime.addWorkspace(input.path)),
+				remove: (input) =>
+					serialize(async () => {
+						await runtime.removeWorkspace(input.path);
+						return null;
+					}),
+			},
+		}));
+
+		facetHost.serve(NekoCredentials, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, credentialsHub),
+				save: async (input) => {
+					await runtime.saveCredential(input.provider as CredentialProviderId, input.key);
+					return refreshCredentials();
+				},
+				remove: async (input) => {
+					await runtime.removeCredential(input.provider as CredentialProviderId);
+					return refreshCredentials();
+				},
+				setEnabled: (input) =>
+					serialize(async () => {
+						if (!isModelProvider(input.provider)) throw invalid("args", "Unknown model provider.");
+						try {
+							await runtime.setProviderEnabled(input.provider, input.enabled);
+						} catch (error) {
+							throw invalid("args", error instanceof Error ? error.message : "Cannot change provider.");
+						}
+						return refreshCredentials();
+					}),
+			},
+		}));
+
+		facetHost.serve(NekoSearchSettings, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, searchSettingsHub),
+				set: (input) =>
+					serialize(async () => {
+						await runtime.setSearchProvider(input.provider);
+						return refreshSearchSettings();
+					}),
+			},
+		}));
+
+		facetHost.serve(NekoContextSettings, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, contextSettingsHub),
+				set: (input) =>
+					serialize(async () => {
+						await runtime.setContextSettings(input);
+						return refreshContextSettings();
+					}),
+				reset: () =>
+					serialize(async () => {
+						await runtime.resetContextSettings();
+						return refreshContextSettings();
+					}),
+			},
+		}));
+
+		facetHost.serve(NekoCodemodeSettings, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, codemodeSettingsHub),
+				set: (input) =>
+					serialize(async () => {
+						await runtime.setCodemodeMode(input.mode);
+						return refreshCodemodeSettings();
+					}),
+				reset: () =>
+					serialize(async () => {
+						await runtime.resetCodemodeMode();
+						return refreshCodemodeSettings();
+					}),
+			},
+		}));
+
+		facetHost.serve(NekoDefaultModel, (_input, _principal, self) => ({
+			variant: "ready",
+			members: {
+				snapshot: watchHub(self, defaultModelHub),
+				set: (input) =>
+					serialize(async () => {
+						await runtime.setDefaultModel(input);
+						return refreshDefaultModel();
+					}),
+				clear: () =>
+					serialize(async () => {
+						await runtime.setDefaultModel(null);
+						return refreshDefaultModel();
+					}),
+			},
+		}));
+
+		facetHost.serve(NekoModels, () => ({
+			variant: "ready",
+			members: {
+				list: async () =>
+					(await runtime.listSelectableModels()).map((value) => ({
+						...value,
+						input: [...value.input],
+						supportedThinkingLevels: [...value.supportedThinkingLevels],
+					})),
+			},
+		}));
+
+		facetHost.serve(NekoWorkspaceFiles, () => ({
+			variant: "ready",
+			members: {
+				search: async (input, ctx) => {
+					const roots = await runtime.listWorkspaces();
+					if (!roots.some((root) => root.path === input.workspaceRoot)) throw invalid("args", "Unknown workspace.");
+					return runtime.workspaceFiles.search(
+						input.workspaceRoot,
+						input.query,
+						ctx.abortSignal ?? new AbortController().signal,
+					);
+				},
+			},
+		}));
+
+		registerSessionServices(facetHost, runtime, context, principals);
+
+		facetHost.serve(NekoSessionManagement, (_input, principal, self) => {
+			self.open(
+				async () => principals.retain(principal),
+				(release) => release(),
 			);
-			return {
-				directory,
-				workspaces: workspaceState,
-				credentials,
-				searchSettings,
-				contextSettings,
-				codemodeSettings,
-				defaultModel,
-				async refreshCredentials(_input: null, ctx: Ctx<GatewayPrincipal>) {
-					credentials.replace(ctx, {
-						revision: credentials.value.revision + 1,
-						statuses: await readStatuses(),
-					});
-					return null;
-				},
-				refreshSearchSettings,
-				refreshContextSettings,
-				refreshCodemodeSettings,
-				refreshDefaultModel,
+			const summary = async (id: ConversationId) => {
+				const found = (await list()).find((item) => item.id === String(id));
+				if (!found) throw new ChordError({ code: "gone", message: "Session unavailable" });
+				return found;
 			};
-		},
-		{ lifetime: "host" },
-	);
-	const shared = (self: Self<GatewayPrincipal>) => self.get(ServerState, {});
-	host.serve(NekoSessionDirectory, (_input, _principal, self) => ({ variant: "ready", state: shared(self).directory }));
-	host.serve(NekoWorkspaces, (_input, _principal, self) => ({
-		variant: "ready",
-		state: shared(self).workspaces,
-		browse: (input) => browseWorkspaces(input),
-		add: (input) => serialize(() => runtime.addWorkspace(input.path)),
-		remove: (input) =>
-			serialize(async () => {
-				await runtime.removeWorkspace(input.path);
-				return null;
-			}),
-	}));
-	host.serve(NekoCredentials, (_input, _principal, self) => {
-		const hub = shared(self);
-		return {
+			return {
+				variant: "ready",
+				members: {
+					create: (input) => serialize(async () => summary((await runtime.createConversation(input)).id)),
+					fork: (id) => serialize(async () => summary((await runtime.forkConversation(toConversationId(id))).id)),
+					archive: async (id) => {
+						await runtime.archiveConversation(toConversationId(id));
+						return null;
+					},
+					attach: (id) =>
+						serialize(async () => {
+							if (!(await runtime.getConversation(toConversationId(id))))
+								throw new ChordError({ code: "gone", message: `Unknown session: ${id}` });
+							const current = principals.get(principal);
+							if (current?.sessionId !== id) {
+								const next = { sessionId: id, attachmentId: randomUUID() };
+								principals.set(principal, next);
+								await runtime.touchConversation(toConversationId(id));
+								return next;
+							}
+							return current;
+						}),
+					detach: async () => {
+						principals.set(principal, null);
+						return null;
+					},
+				},
+			};
+		});
+
+		facetHost.serve(NekoSkillMarket, () => ({
 			variant: "ready",
-			state: hub.credentials,
-			save: async (input, ctx) => {
-				await runtime.saveCredential(input.provider as CredentialProviderId, input.key);
-				return hub.refreshCredentials(null, ctx);
+			members: {
+				list: (input) =>
+					market
+						.list(input.query)
+						.then((skills) => Promise.all(skills.map((skill) => withInstallState(skill, input.workspaceRoot))))
+						.catch(toRemote),
+				detail: (input) =>
+					market
+						.detail(input.name)
+						.then((skill) => withInstallState(skill, input.workspaceRoot))
+						.catch(toRemote),
+				preview: (input) =>
+					market
+						.preview(input.name)
+						.then((value) => ({ ...value, files: [...value.files] }))
+						.catch(toRemote),
+				install: (input) =>
+					serialize(() =>
+						market
+							.install(input)
+							.then((result) => ({ ...result }))
+							.catch(toRemote),
+					),
+				uninstall: (input) =>
+					serialize(async () => {
+						await market.uninstall(input).catch(toRemote);
+						return null;
+					}),
 			},
-			remove: async (input, ctx) => {
-				await runtime.removeCredential(input.provider as CredentialProviderId);
-				return hub.refreshCredentials(null, ctx);
-			},
-			setEnabled: (input, ctx) =>
-				serialize(async () => {
-					if (!isModelProvider(input.provider)) throw new ChordError("invalid", "Unknown model provider.");
-					try {
-						await runtime.setProviderEnabled(input.provider, input.enabled);
-					} catch (error) {
-						throw new ChordError("invalid", error instanceof Error ? error.message : "Cannot change provider.");
-					}
-					return hub.refreshCredentials(null, ctx);
-				}),
-		};
+		}));
+
+		if (options.mobileAdmin !== undefined) {
+			facetHost.serve(NekoMobileAdmin, createMobileAdminFactory(options.mobileAdmin));
+		}
 	});
-	host.serve(NekoSearchSettings, (_input, _principal, self) => {
-		const hub = shared(self);
-		return {
-			variant: "ready",
-			state: hub.searchSettings,
-			set: (input, ctx) =>
-				serialize(async () => {
-					await runtime.setSearchProvider(input.provider);
-					return hub.refreshSearchSettings(null, ctx);
-				}),
-		};
-	});
-	host.serve(NekoContextSettings, (_input, _principal, self) => {
-		const hub = shared(self);
-		return {
-			variant: "ready",
-			state: hub.contextSettings,
-			set: (input, ctx) =>
-				serialize(async () => {
-					await runtime.setContextSettings(input);
-					return hub.refreshContextSettings(null, ctx);
-				}),
-			reset: (_input, ctx) =>
-				serialize(async () => {
-					await runtime.resetContextSettings();
-					return hub.refreshContextSettings(null, ctx);
-				}),
-		};
-	});
-	host.serve(NekoCodemodeSettings, (_input, _principal, self) => {
-		const hub = shared(self);
-		return {
-			variant: "ready",
-			state: hub.codemodeSettings,
-			set: (input, ctx) =>
-				serialize(async () => {
-					await runtime.setCodemodeMode(input.mode);
-					return hub.refreshCodemodeSettings(null, ctx);
-				}),
-			reset: (_input, ctx) =>
-				serialize(async () => {
-					await runtime.resetCodemodeMode();
-					return hub.refreshCodemodeSettings(null, ctx);
-				}),
-		};
-	});
-	host.serve(NekoDefaultModel, (_input, _principal, self) => {
-		const hub = shared(self);
-		return {
-			variant: "ready",
-			state: hub.defaultModel,
-			set: (input, ctx) =>
-				serialize(async () => {
-					await runtime.setDefaultModel(input);
-					return hub.refreshDefaultModel(null, ctx);
-				}),
-			clear: (_input, ctx) =>
-				serialize(async () => {
-					await runtime.setDefaultModel(null);
-					return hub.refreshDefaultModel(null, ctx);
-				}),
-		};
-	});
-	host.serve(NekoModels, () => ({
-		variant: "ready",
-		list: async () =>
-			(await runtime.listSelectableModels()).map((value) => ({
-				...value,
-				input: [...value.input],
-				supportedThinkingLevels: [...value.supportedThinkingLevels],
-			})),
-	}));
-	host.serve(NekoWorkspaceFiles, () => ({
-		variant: "ready",
-		search: async (input, ctx) => {
-			const roots = await runtime.listWorkspaces();
-			if (!roots.some((root) => root.path === input.workspaceRoot))
-				throw new ChordError("invalid", "Unknown workspace.");
-			return runtime.workspaceFiles.search(input.workspaceRoot, input.query, ctx.signal);
-		},
-	}));
-	serveSessions(host, runtime, context);
-	host.serve(NekoSessionManagement, (_input, principal, self) => {
-		const owner = self.get(Owner, {}, { principal });
-		const summary = async (id: ConversationId) => {
-			const found = (await list()).find((item) => item.id === String(id));
-			if (!found) throw new ChordError("gone", "Session unavailable");
-			return found;
-		};
-		return {
-			variant: "ready",
-			create: (input) => serialize(async () => summary((await runtime.createConversation(input)).id)),
-			fork: (id) => serialize(async () => summary((await runtime.forkConversation(toConversationId(id))).id)),
-			archive: async (id) => {
-				await runtime.archiveConversation(toConversationId(id));
-				return null;
-			},
-			attach: (id) =>
-				serialize(async () => {
-					if (!(await runtime.getConversation(toConversationId(id))))
-						throw new ChordError("gone", `Unknown session: ${id}`);
-					if (owner.owner!.active?.sessionId !== id) {
-						owner.owner!.active = { sessionId: id, attachmentId: randomUUID() };
-						await runtime.touchConversation(toConversationId(id));
-					}
-					return owner.owner!.active!;
-				}),
-			detach: async () => {
-				owner.owner!.active = null;
-				return null;
-			},
-		};
-	});
-	host.serve(NekoSkillMarket, () => ({
-		variant: "ready",
-		list: (input) =>
-			market
-				.list(input.query)
-				.then((skills) => Promise.all(skills.map((skill) => withInstallState(skill, input.workspaceRoot))))
-				.catch(toRemote),
-		detail: (input) =>
-			market
-				.detail(input.name)
-				.then((skill) => withInstallState(skill, input.workspaceRoot))
-				.catch(toRemote),
-		preview: (input) =>
-			market
-				.preview(input.name)
-				.then((value) => ({ ...value, files: [...value.files] }))
-				.catch(toRemote),
-		install: (input) =>
-			serialize(() =>
-				market
-					.install(input)
-					.then((result) => ({ ...result }))
-					.catch(toRemote),
-			),
-		uninstall: (input) =>
-			serialize(async () => {
-				await market.uninstall(input).catch(toRemote);
-				return null;
-			}),
-	}));
-	await host.ready();
+
+	const report = await host.load([{ name: "@neko-harness/gateway", facet }], context);
+	if (report.failed.length > 0) {
+		closed = true;
+		stopDirectoryCommits();
+		clearInterval(updateTimer);
+		updates.close();
+		throw report.failed[0]?.error ?? new Error("Failed to load gateway facet");
+	}
+
 	return {
 		async dispose() {
 			closed = true;
+			stopDirectoryCommits();
 			clearInterval(updateTimer);
 			updates.close();
-			updateListeners.clear();
+			appInfoHub.clear();
+			directoryHub.clear();
+			workspacesHub.clear();
+			credentialsHub.clear();
+			searchSettingsHub.clear();
+			contextSettingsHub.clear();
+			codemodeSettingsHub.clear();
+			defaultModelHub.clear();
 			await mutationTail;
 		},
 	};
-}
-export function toConversationId(sessionId: string): ConversationId {
-	const numeric = Number(sessionId);
-	if (!Number.isSafeInteger(numeric) || numeric < 1 || String(numeric) !== sessionId)
-		throw new ChordError("invalid", `Invalid neko session id: ${sessionId}`);
-	return numeric as ConversationId;
 }

@@ -7,7 +7,7 @@ import { PickerPanel } from "../src/components/picker.ts";
 import { WelcomeScreen } from "../src/components/welcome.ts";
 import { createAppLayout } from "../src/layout.ts";
 
-const plain = (lines: string[]) => lines.map(stripTerminalSequences).join("\n");
+const plain = (lines: readonly string[]) => lines.map(stripTerminalSequences).join("\n");
 
 const footer = () => {
 	const f = new StatusFooter();

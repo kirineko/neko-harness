@@ -16,7 +16,7 @@ import "./support/lang-en.ts";
 afterEach(() => setLanguage("en"));
 
 const CJK = /[\u4e00-\u9fff]/;
-const plain = (lines: string[]) => lines.map(stripTerminalSequences).join("\n");
+const plain = (lines: readonly string[]) => lines.map(stripTerminalSequences).join("\n");
 
 it("shows the help panel in Chinese while commands, keys and tool names stay as they are", () => {
 	setLanguage("zh");

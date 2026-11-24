@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
-import { planClient } from "@neko-harness/gateway/client-session";
+import { planClient, safeValue, subscribeState } from "@neko-harness/gateway/client-session";
 import { expect, it } from "vitest";
 import { cleanup, connectTestClient, makeGateway, waitFor } from "../../gateway/test/helpers.ts";
 import { PlanDock } from "../src/plan-dock.ts";
@@ -26,11 +26,10 @@ async function attach(target: Awaited<ReturnType<typeof makeGateway>>, autoOpen 
 	const dock = new PlanDock({ changed: () => {}, notify: (message) => notices.push(message) });
 	dock.bind("root", planClient(chat));
 	const sync = () => {
-		dock.update(chat.view.value?.plan);
+		dock.update(safeValue(chat.view)?.plan);
 		if (autoOpen) dock.autoOpen(true);
 	};
-	const stop = chat.view.subscribe(sync);
-	sync();
+	const stop = subscribeState(chat.view, sync);
 	return { client, chat, dock, notices, stop };
 }
 
@@ -55,8 +54,8 @@ it("plans, approves through the panel and then executes with write tools back", 
 		expect(existsSync(out)).toBe(false);
 		const waiting = chat.view.value?.items.find((i) => i.type === "tool" && i.name === "submit_plan");
 		expect(waiting).toMatchObject({ interaction: { kind: "submit_plan", title: "Create the marker" } });
-		await waitFor(() => client.directory.state.value.sessions[0]?.awaitingPlan === true, "awaiting flag");
-		const sessions = client.directory.state.value.sessions;
+		await waitFor(() => client.directory.snapshot.value.sessions[0]?.awaitingPlan === true, "awaiting flag");
+		const sessions = client.directory.snapshot.value.sessions;
 		const workspace = sessions[0]!.workspaceRoot;
 		const blocked = sessionPickerItems(sessions, workspace, "other")[0]!;
 		expect(blocked.description).toContain("Awaiting approval");
@@ -79,7 +78,7 @@ it("plans, approves through the panel and then executes with write tools back", 
 		expect(decision).toMatchObject({ planDecision: { kind: "approve" }, text: expect.stringContaining("approved") });
 		const write = chat.view.value?.items.find((i) => i.type === "tool" && i.name === "write");
 		expect(write).toMatchObject({ isError: false });
-		await waitFor(() => client.directory.state.value.sessions[0]?.awaitingPlan === false, "flag cleared");
+		await waitFor(() => client.directory.snapshot.value.sessions[0]?.awaitingPlan === false, "flag cleared");
 	} finally {
 		stop();
 		await client.close();
@@ -169,7 +168,7 @@ it("refuses to switch mode while running, with the PLAN_BUSY text for the notice
 		await waitFor(() => chat.view.value?.busy === true, "running");
 		await expect(planClient(chat).setMode("plan")).rejects.toThrow(/PLAN_BUSY/);
 		expect(dock.mode).toBe("normal");
-		await chat.abort(null);
+		await chat.abort();
 		await waitFor(() => chat.view.value?.busy === false, "stopped");
 	} finally {
 		stop();
@@ -194,7 +193,7 @@ it("cancels the waiting plan and leaves plan mode through the panel", async () =
 		expect(dock.awaiting).toBe(false);
 		expect(chat.view.value?.plan?.mode).toBe("normal");
 		expect((await planClient(chat).get(version))?.status).toBe("cancelled");
-		await waitFor(() => client.directory.state.value.sessions[0]?.awaitingPlan === false, "flag cleared");
+		await waitFor(() => client.directory.snapshot.value.sessions[0]?.awaitingPlan === false, "flag cleared");
 	} finally {
 		stop();
 		await client.close();

@@ -1,7 +1,8 @@
-// Chord 1.3 gives every new or re-holding subscriber the current value; server listeners must reconcile, not republish.
+// Chord v2 gives every new or re-holding subscriber the current value; server listeners must reconcile, not republish.
 
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
+import { subscribeState } from "../src/client-session.ts";
 import { cleanup, connectTestClient, makeGateway, type TestGateway } from "./helpers.ts";
 
 let target: TestGateway;
@@ -18,21 +19,21 @@ it("delivers the current server state to reconnecting clients without bumping re
 	const first = await connectTestClient(target);
 	try {
 		const initial = {
-			directory: first.directory.state.value.revision,
-			workspaces: first.workspaces.state.value.revision,
-			credentials: first.credentials.state.value.revision,
+			directory: first.directory.snapshot.value.revision,
+			workspaces: first.workspaces.snapshot.value.revision,
+			credentials: first.credentials.snapshot.value.revision,
 		};
 		const seen = { directory: [] as number[], workspaces: [] as number[], credentials: [] as number[] };
 		const stops = [
-			first.directory.state.subscribe((value) => seen.directory.push(value.revision)),
-			first.workspaces.state.subscribe((value) => seen.workspaces.push(value.revision)),
-			first.credentials.state.subscribe((value) => seen.credentials.push(value.revision)),
+			subscribeState(first.directory.snapshot, (value) => seen.directory.push(value.revision)),
+			subscribeState(first.workspaces.snapshot, (value) => seen.workspaces.push(value.revision)),
+			subscribeState(first.credentials.snapshot, (value) => seen.credentials.push(value.revision)),
 		];
 		for (let round = 0; round < 3; round++) {
 			const other = await connectTestClient(target);
-			expect(other.directory.state.value.revision).toBe(initial.directory);
-			expect(other.workspaces.state.value.revision).toBe(initial.workspaces);
-			expect(other.credentials.state.value.revision).toBe(initial.credentials);
+			expect(other.directory.snapshot.value.revision).toBe(initial.directory);
+			expect(other.workspaces.snapshot.value.revision).toBe(initial.workspaces);
+			expect(other.credentials.snapshot.value.revision).toBe(initial.credentials);
 			await other.close();
 		}
 		await sleep(50);

@@ -14,7 +14,7 @@ export class ThemedText extends Text {
 		this.#raw = text;
 		this.invalidate();
 	}
-	override render(width: number): string[] {
+	override render(width: number): readonly string[] {
 		super.setText(this.#color(this.#raw));
 		return super.render(width);
 	}
@@ -30,7 +30,7 @@ export class ThemedTruncatedText implements Component {
 		this.#paddingY = paddingY;
 	}
 	invalidate(): void {}
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		return new TruncatedText(this.#content(), this.#paddingX, this.#paddingY).render(width);
 	}
 }
@@ -42,7 +42,7 @@ export class ThemedWrappedText implements Component {
 		this.#content = content;
 	}
 	invalidate(): void {}
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		return new Text(this.#content(), 1, 0).render(width);
 	}
 }

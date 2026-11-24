@@ -5,7 +5,7 @@ import { setLanguage } from "../src/i18n/index.ts";
 import { continueCommand, RunFailureRow } from "../src/run-failure-ui.ts";
 import "./support/lang-en.ts";
 
-const plain = (lines: string[]) => lines.map((line) => stripVTControlCharacters(line));
+const plain = (lines: readonly string[]) => lines.map((line) => stripVTControlCharacters(line));
 
 afterEach(() => setLanguage("en"));
 

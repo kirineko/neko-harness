@@ -1,5 +1,6 @@
+import type { Watchable } from "@earendil-works/chord/watch";
 import { CODEMODE_MODES, type CodemodeMode, isCodemodeMode } from "@neko-harness/core/codemode-mode";
-import type { NekoCodemodeSettingsState } from "@neko-harness/gateway";
+import { type NekoCodemodeSettingsState, safeValue, subscribeState } from "@neko-harness/gateway";
 import type { PickerItem, PickerPanel } from "./components/picker.ts";
 import { type PlainKey, t } from "./i18n/index.ts";
 
@@ -39,10 +40,7 @@ export function codemodeItems(state: NekoCodemodeSettingsState | undefined): Pic
 
 export type CodemodeClient = {
 	readonly codemodeSettings: {
-		readonly state: {
-			readonly value: NekoCodemodeSettingsState | undefined;
-			subscribe(listener: (value: NekoCodemodeSettingsState | undefined) => void): () => void;
-		};
+		readonly snapshot: Watchable<NekoCodemodeSettingsState>;
 		set(input: { mode: CodemodeMode }): Promise<unknown>;
 		reset(input: Record<string, never>): Promise<unknown>;
 	};
@@ -54,8 +52,8 @@ export function openCodemodePanel(
 	client: CodemodeClient,
 	notify: (message: string) => void,
 ): () => void {
-	const items = () => codemodeItems(client.codemodeSettings.state.value);
-	const stop = client.codemodeSettings.state.subscribe(() => panel.update(items()));
+	const items = () => codemodeItems(safeValue(client.codemodeSettings.snapshot));
+	const stop = subscribeState(client.codemodeSettings.snapshot, () => panel.update(items()));
 	panel.emptyText = codemodeEmpty();
 	void panel.show(
 		t("codemode.title"),

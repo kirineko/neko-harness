@@ -20,9 +20,9 @@
 		"dev": "vite"
 	},
 	"dependencies": {
-		"@earendil-works/chord": "1.5.0",
-		"@earendil-works/pi-ai": "1.5.0",
-		"@earendil-works/pi-schema": "1.5.0",
+		"@earendil-works/chord": "1.6.0",
+		"@earendil-works/pi-ai": "1.6.0",
+		"@earendil-works/pi-schema": "1.6.0",
 		"@floating-ui/react": "0.27.20",
 		"@neko-harness/core": "workspace:*",
 		"@neko-harness/gateway": "workspace:*",

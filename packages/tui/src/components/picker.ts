@@ -292,7 +292,7 @@ export class PickerPanel implements Component {
 		this.changed();
 		return { handled: true };
 	}
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		this.#pointerRows.clear();
 		const height = Math.max(1, this.height);
 		const w = Math.max(1, width - 2);

@@ -162,7 +162,7 @@ describe("mobile adapter connections", () => {
 			const revokedClient = await connectPaired(port, revoked);
 			const survivorClient = await connectPaired(port, survivor);
 			const desktop = await connectTestClient(gateway);
-			const desktopModels = await desktop.models.list(null);
+			const desktopModels = await desktop.models.list();
 
 			expect(await gateway.mobile.revoke(revoked.deviceId)).toBe(true);
 			const close = await revokedClient.waitForClose();
@@ -172,7 +172,7 @@ describe("mobile adapter connections", () => {
 			survivorClient.send({ jsonrpc: "2.0", id: 5, method: "another.unknown", params: {} });
 			const reply = (await survivorClient.nextMessage()) as { error: { data: { code: string } } };
 			expect(reply.error.data.code).toBe("not_found");
-			expect((await desktop.models.list(null)).length).toBe(desktopModels.length);
+			expect((await desktop.models.list()).length).toBe(desktopModels.length);
 
 			const store = await MobileStore.open(dir);
 			const state = store.getState();
@@ -187,7 +187,7 @@ describe("mobile adapter connections", () => {
 		}
 	});
 
-	it("revoke invokes invalidatePrincipal with a device-only match", async () => {
+	it("revoke invokes chord.revoke with a device-only revocation", async () => {
 		const store = await MobileStore.open(dir);
 		const deviceId = randomUUID();
 		const secret = credential();
@@ -199,28 +199,21 @@ describe("mobile adapter connections", () => {
 			pairedAt: Date.now(),
 			lastSeenAt: Date.now(),
 		});
-		const matches: unknown[] = [];
+		const revocations: unknown[] = [];
 		const gateway = await MobileGateway.create({
 			nekoDir: dir,
 			serverId: randomUUID(),
 			chord: {
 				accept: () => undefined,
-				invalidatePrincipal: (match) => {
-					matches.push(match);
-					return Promise.resolve();
+				revoke: (revocation) => {
+					revocations.push(revocation);
 				},
 			},
 		});
 		try {
 			expect(await gateway.revoke(deviceId)).toBe(true);
 			expect(await gateway.revoke(deviceId)).toBe(false);
-			expect(matches).toHaveLength(1);
-			const match = matches[0];
-			expect(typeof match).toBe("function");
-			if (typeof match !== "function") return;
-			expect(match({ kind: "mobile", deviceId, grantRevision: 1, connectionId: "c-1" })).toBe(true);
-			expect(match({ kind: "mobile", deviceId: "other", grantRevision: 1, connectionId: "c-1" })).toBe(false);
-			expect(match({ connectionId: "desktop-1" })).toBe(false);
+			expect(revocations).toEqual([{ kind: "device", deviceId }]);
 			expect((await MobileStore.open(dir)).getState().devices).toEqual([]);
 		} finally {
 			await gateway.close();

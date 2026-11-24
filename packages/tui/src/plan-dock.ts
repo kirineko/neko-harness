@@ -486,7 +486,7 @@ export class PlanDock implements Component, Focusable {
 
 	invalidate(): void {}
 
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		this.#rows.clear();
 		if (!this.#open || !this.#shown) return [];
 		const rows = this.#panel(width).map((line) => truncateToWidth(line, width));
@@ -502,10 +502,11 @@ export class PlanDock implements Component, Focusable {
 		const cached = this.#bodyCache.get(cacheKey);
 		if (cached) return cached;
 		const lines: string[] = [];
-		const markdown = (text: string, indent: number): string[] => {
+		const markdown = (text: string, indent: number): readonly string[] => {
 			const rows = new Markdown(plainText(text), 0, 0, getMarkdownTheme()).render(Math.max(1, width - indent));
-			while (rows.length > 0 && visibleWidth(rows[rows.length - 1] ?? "") === 0) rows.pop();
-			return rows;
+			let end = rows.length;
+			while (end > 0 && visibleWidth(rows[end - 1] ?? "") === 0) end--;
+			return end === rows.length ? rows : rows.slice(0, end);
 		};
 		const title = plainLine(record.title, PLAN_LIMITS.titleChars);
 		for (const row of wrapTextWithAnsi(title, Math.max(1, width))) lines.push(style.bold(row));

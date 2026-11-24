@@ -28,8 +28,8 @@ it("publishes plan mode as an optional supported field and keeps the schemas val
 		expect(planClient(chat).supported).toBe(true);
 		const { plan: _plan, ...old } = chat.view.value!;
 		expect(compile(ChatViewSchema).check(old)).toBe(true);
-		expect(compile(DirectoryStateSchema).check(client.directory.state.value)).toBe(true);
-		expect(client.directory.state.value?.sessions[0]?.awaitingPlan).toBe(false);
+		expect(compile(DirectoryStateSchema).check(client.directory.snapshot.value)).toBe(true);
+		expect(client.directory.snapshot.value?.sessions[0]?.awaitingPlan).toBe(false);
 	} finally {
 		await client.close();
 		await cleanup(target);
@@ -56,8 +56,11 @@ it("shares mode and plan with every client, settles competing decisions once and
 		await waitFor(() => chatA.view.value?.busy === false, "run ended");
 		const summary = current(chatA)!;
 		expect(summary).toMatchObject({ ...plan, feedback: null });
-		await waitFor(() => a.directory.state.value?.sessions[0]?.awaitingPlan === true, "awaitingPlan in the directory");
-		expect(a.directory.state.value?.sessions[0]?.status).toBe("idle");
+		await waitFor(
+			() => a.directory.snapshot.value?.sessions[0]?.awaitingPlan === true,
+			"awaitingPlan in the directory",
+		);
+		expect(a.directory.snapshot.value?.sessions[0]?.status).toBe("idle");
 		const tool = chatA.view.value!.items.find((i) => i.type === "tool" && i.name === "submit_plan");
 		expect(tool).toMatchObject({ interaction: { kind: "submit_plan", version: summary.version, steps: plan.steps } });
 		const record = await chatB.planGet({ version: summary.version });
@@ -76,7 +79,7 @@ it("shares mode and plan with every client, settles competing decisions once and
 		);
 		expect(users(chatA)).toEqual(["add a flag"]);
 		expect(chatB.view.value?.plan?.mode).toBe(winner === "approved" ? "normal" : "plan");
-		await waitFor(() => a.directory.state.value?.sessions[0]?.awaitingPlan === false, "awaitingPlan cleared");
+		await waitFor(() => a.directory.snapshot.value?.sessions[0]?.awaitingPlan === false, "awaitingPlan cleared");
 	} finally {
 		await a.close();
 		await b.close();
@@ -103,7 +106,7 @@ it("cancels a waiting plan on stop and rejects wrong identities, versions and bu
 		);
 		const again = await client.attach(id);
 		await expect(again.planRespond({ version: "stale", decision: { kind: "approve" } })).rejects.toThrow(/not found/);
-		await again.abort(null);
+		await again.abort();
 		const late = await again.planRespond({ version: summary.version, decision: { kind: "approve" } });
 		expect(late.status).toBe("cancelled");
 		expect(again.view.value?.plan?.mode).toBe("plan");
@@ -145,7 +148,7 @@ it("keeps plan mode and a waiting plan across a gateway restart, then approves a
 	await eventually(() => current(chat)?.version === before.version, "plan after restart");
 	expect(chat.view.value?.plan).toMatchObject({ mode: "plan", current: { status: "awaiting_approval" } });
 	await eventually(
-		() => desktop.directory.state.value?.sessions.find((s) => s.id === sessionId)?.awaitingPlan === true,
+		() => desktop.directory.snapshot.value?.sessions.find((s) => s.id === sessionId)?.awaitingPlan === true,
 		"awaitingPlan after restart",
 	);
 

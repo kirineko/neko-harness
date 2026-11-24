@@ -1,5 +1,6 @@
 import type { ChatView } from "@neko-harness/core";
 import type { NekoSubagent } from "./contract.ts";
+import { subscribeNative, subscribeState } from "./watch.ts";
 
 export type SubagentClient = {
 	readonly error: string | undefined;
@@ -18,10 +19,14 @@ export function subagentClient(connect: () => NekoSubagent): SubagentClient {
 	const acquire = () => {
 		if (!remote) {
 			remote = connect();
-			stopStatus = remote.onStatus((status, reason) => {
-				if (status !== "gone") return;
-				error = String(reason ?? "Subagent unavailable");
-				for (const fn of listeners) fn(value);
+			stopStatus = subscribeNative(remote.state, (state) => {
+				if (state.kind === "failed" && (state.cause.kind === "broken" || state.cause.kind === "denied")) {
+					error = state.cause.error.message;
+					for (const fn of listeners) fn(value);
+				} else if (state.kind === "ended") {
+					error = state.error.message;
+					for (const fn of listeners) fn(value);
+				}
 			});
 		}
 		return remote;
@@ -91,7 +96,7 @@ export function subagentClient(connect: () => NekoSubagent): SubagentClient {
 				listeners.add(fn);
 				fn(value);
 				if (!unsubscribe)
-					unsubscribe = acquire().revision.subscribe((revision) => {
+					unsubscribe = subscribeState(acquire().revision, (revision) => {
 						wanted = revision ?? 0;
 						void refresh();
 					});

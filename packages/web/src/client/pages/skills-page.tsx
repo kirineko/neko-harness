@@ -1,4 +1,4 @@
-import { ChordError } from "@earendil-works/chord";
+import { isChordError } from "@earendil-works/chord";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -34,8 +34,11 @@ const formatSize = (bytes: number): string =>
 
 const formatDate = (iso: string): string => (iso === "" ? "" : iso.slice(0, 10));
 
-const marketErrorCode = (error: unknown): string | null =>
-	error instanceof ChordError ? (error.reason ?? null) : null;
+const marketErrorCode = (error: unknown): string | null => {
+	if (!isChordError(error)) return null;
+	const detail = (error.details as { reason?: unknown } | undefined)?.reason;
+	return typeof detail === "string" ? detail : (error.reason ?? null);
+};
 
 type GroupBy = "category" | "source";
 

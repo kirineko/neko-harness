@@ -78,7 +78,7 @@ function relayHarness(plan: Array<RelayError | "ok"> = ["ok"]) {
 describe("mobile gateway in WSL", () => {
 	let dir: string;
 	let gateway: MobileGateway | undefined;
-	const chord = { accept() {}, async invalidatePrincipal() {} };
+	const chord = { accept() {}, revoke() {} };
 
 	beforeEach(async () => {
 		dir = await mkdtemp(join(tmpdir(), "neko-mobile-wsl-"));

@@ -43,7 +43,7 @@ it("removes workspaces: other, current, rejected and removed by another client",
 		await web.removeWorkspace(c);
 		expect(web.workspaceRoot).toBe(b);
 		expect(web.currentSessionId).toBe(inB);
-		await waitFor(() => peer.directory.state.value?.sessions.every((s) => s.id !== inC) === true, "C hidden");
+		await waitFor(() => peer.directory.snapshot.value?.sessions.every((s) => s.id !== inC) === true, "C hidden");
 
 		// Removing the current workspace moves to another one.
 		await web.addWorkspace(c);
@@ -54,7 +54,9 @@ it("removes workspaces: other, current, rejected and removed by another client",
 
 		// Another client removes the current workspace.
 		const current = web.workspaceRoot;
-		const other = (peer.workspaces.state.value?.workspaces ?? []).map((w) => w.path).find((path) => path !== current)!;
+		const other = (peer.workspaces.snapshot.value?.workspaces ?? [])
+			.map((w) => w.path)
+			.find((path) => path !== current)!;
 		await peer.workspaces.remove({ path: current });
 		await waitFor(() => web.workspaceRoot === other, "automatic switch after external removal");
 		expect(web.managementReady).toBe(true);

@@ -133,7 +133,7 @@ it("clears the queue on stop and bounds previews", async () => {
 		await chat.submit({ content: "y".repeat(50_000) });
 		await waitFor(() => chat.view.value?.queued?.length === 1, "queued");
 		expect(JSON.stringify(chat.view.value!.queued).length).toBeLessThan(1000);
-		await chat.abort(null);
+		await chat.abort();
 		await waitFor(() => chat.view.value?.queued?.length === 0 && chat.view.value.busy === false, "stopped");
 	} finally {
 		await client.close();

@@ -62,7 +62,7 @@ it("creates in the caller workspace only when no session matches", async () => {
 	const gateway = {
 		client: {
 			directory: {
-				state: {
+				snapshot: {
 					value: {
 						sessions: [
 							{

@@ -6,6 +6,7 @@ import { PickerPanel } from "../src/components/picker.ts";
 import { commands } from "../src/labels.ts";
 import { openSearchPanel, searchItems } from "../src/search-ui.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
+import { createFakeWatchable } from "./support/fake-watchable.ts";
 
 setActiveTheme("light");
 
@@ -27,43 +28,29 @@ const settings = (selected: NekoSearchSettingsState["selected"], revision = 1): 
 });
 
 function fakeClient(initialSettings: NekoSearchSettingsState, initialCredentials: NekoCredentialState) {
-	const settingsListeners = new Set<(value: NekoSearchSettingsState) => void>();
-	const credentialListeners = new Set<(value: NekoCredentialState) => void>();
+	const settingsSnapshot = createFakeWatchable(initialSettings);
+	const credentialsSnapshot = createFakeWatchable(initialCredentials);
 	const sets: string[] = [];
 	const client = {
 		searchSettings: {
-			state: {
-				value: initialSettings as NekoSearchSettingsState | undefined,
-				subscribe(listener: (value: NekoSearchSettingsState | undefined) => void) {
-					settingsListeners.add(listener as never);
-					return () => settingsListeners.delete(listener as never);
-				},
-			},
+			snapshot: settingsSnapshot.watchable,
 			set: async (input: { provider: string }) => {
 				sets.push(input.provider);
 			},
 		},
 		credentials: {
-			state: {
-				value: initialCredentials as NekoCredentialState | undefined,
-				subscribe(listener: (value: NekoCredentialState | undefined) => void) {
-					credentialListeners.add(listener as never);
-					return () => credentialListeners.delete(listener as never);
-				},
-			},
+			snapshot: credentialsSnapshot.watchable,
 		},
 	};
 	return {
 		client,
 		sets,
-		listeners: { settings: settingsListeners, credentials: credentialListeners },
+		listeners: { settings: settingsSnapshot.listeners, credentials: credentialsSnapshot.listeners },
 		publishSettings(value: NekoSearchSettingsState) {
-			client.searchSettings.state.value = value;
-			for (const listener of settingsListeners) listener(value);
+			settingsSnapshot.publish(value);
 		},
 		publishCredentials(value: NekoCredentialState) {
-			client.credentials.state.value = value;
-			for (const listener of credentialListeners) listener(value);
+			credentialsSnapshot.publish(value);
 		},
 	};
 }
@@ -125,7 +112,7 @@ it("keeps the panel open with a retryable error when saving fails", async () => 
 	await tick();
 	expect(panel.open).toBe(true);
 	expect(text(panel)).toContain("Cannot save search provider.");
-	expect(fake.client.searchSettings.state.value!.selected).toBe("tavily");
+	expect(fake.client.searchSettings.snapshot.value.selected).toBe("tavily");
 });
 
 it("refreshes while open when another client changes the provider or the DeepSeek key", async () => {

@@ -1,3 +1,4 @@
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import {
 	Container,
@@ -31,6 +32,8 @@ import {
 	QUESTIONS_UNSUPPORTED,
 	questionsClient,
 	queueClient,
+	safeValue,
+	subscribeState,
 } from "@neko-harness/gateway/client-session";
 import type { NekoChat } from "@neko-harness/gateway/contract";
 import { ApprovalDock } from "./approval-dock.ts";
@@ -305,7 +308,7 @@ class NekoTuiApp {
 							{ workspaceRoot: this.#lastView?.cwd ?? options.cwd ?? process.cwd(), query },
 							ctx,
 						),
-					{ signal },
+					withAbortSignal(signal, BACKGROUND_CONTEXT),
 				),
 		);
 		const original = complete.applyCompletion.bind(complete);
@@ -446,24 +449,24 @@ class NekoTuiApp {
 		);
 		this.#ui.setFocus(this.#editor);
 
-		this.#directoryUnsubscribe = this.#gateway.client.directory.state.subscribe(() => {
+		this.#directoryUnsubscribe = subscribeState(this.#gateway.client.directory.snapshot, () => {
 			if (this.#sessionPanelTimer) this.#panel.update(this.sessionItems());
 			this.#ui.requestRender();
 		});
 		const refreshVersion = async () => {
 			const installed = await installedVersion();
 			if (this.#exitStarted) return;
-			const notice = versionNotice(this.#gateway.client.application.info.value, installed);
+			const notice = versionNotice(safeValue(this.#gateway.client.application.info) ?? null, installed);
 			this.#versionNotice.clear();
 			if (notice) this.#versionNotice.addChild(new ThemedTruncatedText(() => formatNotice(notice, "info"), 1, 0));
 			this.#ui.requestRender();
 		};
 		this.#refreshVersion = () => void refreshVersion();
 		this.#languageStop = onLanguageChange(() => this.#onLanguageChanged());
-		this.#versionStop = this.#gateway.client.application.info.subscribe(() => void refreshVersion());
+		this.#versionStop = subscribeState(this.#gateway.client.application.info, () => void refreshVersion());
 		const notifyShell = createShellNotifier((text) => this.addNotice(text, "warning", { wrap: true, ttlMs: 20_000 }));
-		const checkShell = () => notifyShell(this.#gateway.client.application.info.value?.shell);
-		this.#shellStop = this.#gateway.client.application.info.subscribe(checkShell);
+		const checkShell = () => notifyShell(safeValue(this.#gateway.client.application.info)?.shell);
+		this.#shellStop = subscribeState(this.#gateway.client.application.info, checkShell);
 		this.#versionTimer = setInterval(() => void refreshVersion(), 30000);
 		void refreshVersion();
 		await this.switchSession(initialSessionId);
@@ -598,10 +601,10 @@ class NekoTuiApp {
 				void openVersion(
 					this.#panel,
 					async () => ({
-						state: this.#gateway.client.application.info.value,
+						state: safeValue(this.#gateway.client.application.info) ?? null,
 						installed: await installedVersion(),
 					}),
-					() => this.#gateway.client.application.check(null),
+					() => this.#gateway.client.application.check(),
 				);
 				this.#ui.setFocus(this.#panel);
 			}
@@ -633,7 +636,10 @@ class NekoTuiApp {
 		}
 		const chat = this.#chat;
 		if (chat === undefined) return;
-		const blocked = providerSendBlock(this.#lastView?.agent.model, this.#gateway.client.credentials.state.value);
+		const blocked = providerSendBlock(
+			this.#lastView?.agent.model,
+			safeValue(this.#gateway.client.credentials.snapshot),
+		);
 		if (blocked) {
 			this.#editor.setText(text);
 			this.addNotice(blocked, "warning");
@@ -706,7 +712,7 @@ class NekoTuiApp {
 		const requestId = old?.text === text ? old.id : crypto.randomUUID();
 		this.#retryRequests.set(session, { text, id: requestId });
 		try {
-			const models = await this.#gateway.client.models.list(null);
+			const models = await this.#gateway.client.models.list();
 			const model = models.find((m) => m.provider === modelRef?.provider && m.modelId === modelRef?.modelId);
 			if (refs.length && !model?.input.includes("image")) throw new Error(t("image.unsupported"));
 			if (refs.length > 4) throw new Error(t("image.tooMany"));
@@ -765,7 +771,7 @@ class NekoTuiApp {
 			this.addNotice(messageOf(error), "warning", { wrap: true });
 			return;
 		}
-		const summary = this.#gateway.client.directory.state.value.sessions.find((s) => s.id === sessionId);
+		const summary = this.#gateway.client.directory.snapshot.value.sessions.find((s) => s.id === sessionId);
 		const title = summary ? sessionName(summary, "") : "";
 		this.addNotice(t("export.exporting"));
 		try {
@@ -789,7 +795,7 @@ class NekoTuiApp {
 	abort(): void {
 		const chat = this.#chat;
 		if (chat === undefined) return;
-		chat.abort(null).catch((error: unknown) => this.addNotice(messageOf(error), "error"));
+		chat.abort().catch((error: unknown) => this.addNotice(messageOf(error), "error"));
 	}
 
 	exit(): void {
@@ -836,7 +842,7 @@ class NekoTuiApp {
 			this.#switching = false;
 		}
 		setImmediate(() => this.#autoOpenQuestion());
-		this.#viewUnsubscribe = view.subscribe(() => {
+		this.#viewUnsubscribe = subscribeState(view, () => {
 			this.scheduleApply();
 		});
 		this.#syncEditorBorder();
@@ -848,7 +854,7 @@ class NekoTuiApp {
 		this.#skills = [];
 		this.#syncCommands(this.#lastView);
 		try {
-			const skills = await handle.skills(null);
+			const skills = await handle.skills();
 			if (handle !== this.#chat) return;
 			this.#skills = skills.map((skill) => ({ name: skill.name, description: skill.description }));
 			this.#syncCommands(this.#lastView);
@@ -899,7 +905,7 @@ class NekoTuiApp {
 	async archiveSession(): Promise<void> {
 		const current = this.#sessionId;
 		await this.#gateway.client.management.archive(current);
-		const next = recentlyVisited(this.#gateway.client.directory.state.value.sessions, this.#options.cwd!).find(
+		const next = recentlyVisited(this.#gateway.client.directory.snapshot.value.sessions, this.#options.cwd!).find(
 			(s) => s.id !== current,
 		);
 		if (next) await this.switchSession(next.id);
@@ -911,7 +917,11 @@ class NekoTuiApp {
 	private sessionItems() {
 		return [
 			{ value: NEW_SESSION_VALUE, label: t("session.new"), description: this.#options.cwd },
-			...sessionPickerItems(this.#gateway.client.directory.state.value.sessions, this.#options.cwd!, this.#sessionId),
+			...sessionPickerItems(
+				this.#gateway.client.directory.snapshot.value.sessions,
+				this.#options.cwd!,
+				this.#sessionId,
+			),
 		];
 	}
 	openSessionsOverlay(): void {
@@ -1025,7 +1035,7 @@ class NekoTuiApp {
 		const ref = this.#lastView?.agent.model;
 		if (!chat || !ref) return;
 		try {
-			const model = (await this.#gateway.client.models.list(null)).find(
+			const model = (await this.#gateway.client.models.list()).find(
 				(m) => m.provider === ref.provider && m.modelId === ref.modelId,
 			);
 			if (chat !== this.#chat || this.#exitStarted || this.#panel.open || this.#login.open) return;
@@ -1242,14 +1252,7 @@ class NekoTuiApp {
 	#showLogin(initial?: { provider: CredentialProviderId; group: "model" | "search" }): void {
 		if (this.#panel.open || this.#login.open) return;
 		const service = this.#gateway.client.credentials;
-		this.#login.show(
-			service.state.value,
-			(fn) =>
-				service.state.subscribe((value) => {
-					if (value) fn(value);
-				}),
-			initial,
-		);
+		this.#login.show(safeValue(service.snapshot), (fn) => subscribeState(service.snapshot, fn), initial);
 		this.#ui.setFocus(this.#login);
 	}
 	#showSearch(): void {
@@ -1325,7 +1328,7 @@ class NekoTuiApp {
 			if (this.#exitStarted) return;
 			const again = this.#applyQueued;
 			this.#applyQueued = false;
-			const view = this.#chat?.view.value;
+			const view = this.#chat ? safeValue(this.#chat.view) : undefined;
 			if (view !== undefined) this.applyView(view);
 			if (again) this.scheduleApply();
 		});
@@ -1369,7 +1372,7 @@ class NekoTuiApp {
 		) {
 			this.#imageWarningModel = imageModel;
 			void this.#gateway.client.models
-				.list(null)
+				.list()
 				.then((models) => {
 					const model = models.find(
 						(m) => m.provider === view.agent.model?.provider && m.modelId === view.agent.model?.modelId,
@@ -1793,7 +1796,7 @@ export async function runTui(options: NekoTuiOptions = {}): Promise<void> {
 
 /** 初始会话：目录里最早创建的（root 最小 id）；目录为空则新建。 */
 export async function initialSessionId(gateway: NekoTuiGateway, cwd: string): Promise<string> {
-	const sessions = gateway.client.directory.state.value.sessions;
+	const sessions = gateway.client.directory.snapshot.value.sessions;
 	const first = recentlyVisited(sessions, cwd)[0];
 	if (first !== undefined) return first.id;
 	return (await gateway.client.management.create({ ...(cwd !== undefined ? { cwd } : {}) })).id;

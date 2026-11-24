@@ -35,8 +35,8 @@ it("publishes todos and questions as optional supported fields and keeps the vie
 		// A view from a gateway built before these fields is still valid.
 		const { todos: _t, questions: _q, ...old } = chat.view.value!;
 		expect(compile(ChatViewSchema).check(old)).toBe(true);
-		expect(compile(DirectoryStateSchema).check(client.directory.state.value)).toBe(true);
-		expect(client.directory.state.value?.sessions[0]?.awaitingAnswer).toBe(false);
+		expect(compile(DirectoryStateSchema).check(client.directory.snapshot.value)).toBe(true);
+		expect(client.directory.snapshot.value?.sessions[0]?.awaitingAnswer).toBe(false);
 	} finally {
 		await client.close();
 		await cleanup(target);
@@ -73,10 +73,10 @@ it("shares todos and a pending question with every client and settles it once", 
 		const interaction = toolItems(chatA).find((t) => t.type === "tool" && t.name === "ask_user");
 		expect(interaction).toMatchObject({ interaction: { kind: "ask_user", status: "pending" } });
 		await waitFor(
-			() => a.directory.state.value?.sessions[0]?.awaitingAnswer === true,
+			() => a.directory.snapshot.value?.sessions[0]?.awaitingAnswer === true,
 			"awaiting flag in the directory",
 		);
-		expect(a.directory.state.value?.sessions[0]?.status).toBe("running");
+		expect(a.directory.snapshot.value?.sessions[0]?.status).toBe("running");
 
 		const record = await chatB.questionGet({ id: summary.id });
 		expect(compile(QuestionRecordSchema).check(record)).toBe(true);
@@ -106,7 +106,7 @@ it("shares todos and a pending question with every client and settles it once", 
 			isError: false,
 			interaction: { kind: "ask_user", status: "answered", optionIds: outcomes[0].answer!.optionIds },
 		});
-		await waitFor(() => a.directory.state.value?.sessions[0]?.awaitingAnswer === false, "awaiting flag cleared");
+		await waitFor(() => a.directory.snapshot.value?.sessions[0]?.awaitingAnswer === false, "awaiting flag cleared");
 		expect(toolItems(chatA).find((t) => t.type === "tool" && t.name === "todo")).toMatchObject({
 			interaction: { kind: "todo", revision: 1, completed: 0, total: 1 },
 		});
@@ -206,12 +206,12 @@ it("cancels a question when the run is stopped and reports it to every client", 
 		await chat.submit({ content: "go" });
 		await waitFor(() => !!pendingId(chat), "pending question");
 		const summary = pendingId(chat)!;
-		await chat.abort(null);
+		await chat.abort();
 		await waitFor(() => !pendingId(chat) && chat.view.value?.busy === false, "cancelled and idle");
 		const late = await chat.questionRespond({ id: summary.id, version: summary.version, response: { kind: "skip" } });
 		expect(late.status).toBe("cancelled");
 		expect(users(chat)).toEqual(["go"]);
-		await waitFor(() => client.directory.state.value?.sessions[0]?.awaitingAnswer === false, "flag cleared");
+		await waitFor(() => client.directory.snapshot.value?.sessions[0]?.awaitingAnswer === false, "flag cleared");
 	} finally {
 		await client.close();
 		await cleanup(target);

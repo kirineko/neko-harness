@@ -1,5 +1,6 @@
+import type { Watchable } from "@earendil-works/chord/watch";
 import { CREDENTIAL_PROVIDERS, MODEL_PROVIDERS, type NekoModelRef, type NekoSelectableModel } from "@neko-harness/core";
-import type { NekoCredentialState, NekoDefaultModelState } from "@neko-harness/gateway";
+import { type NekoCredentialState, type NekoDefaultModelState, safeValue, subscribeState } from "@neko-harness/gateway";
 import type { PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
 import { formatTokens } from "./format.ts";
@@ -85,15 +86,12 @@ export function modelItems(
 
 export type ModelPanelClient = {
 	readonly models: {
-		list(input: null): Promise<readonly NekoSelectableModel[]>;
+		list(): Promise<readonly NekoSelectableModel[]>;
 	};
 	readonly defaultModel: {
-		readonly state: {
-			readonly value: NekoDefaultModelState | undefined;
-			subscribe(listener: (value: NekoDefaultModelState | undefined) => void): () => void;
-		};
+		readonly snapshot: Watchable<NekoDefaultModelState>;
 		set(input: NekoModelRef): Promise<unknown>;
-		clear(input: null): Promise<unknown>;
+		clear(): Promise<unknown>;
 	};
 };
 
@@ -112,9 +110,9 @@ export function openModelPanel(
 ): () => void {
 	let models: readonly NekoSelectableModel[] = [];
 	const currentKey = current ? modelKey(current) : null;
-	const effectiveDefault = () => client.defaultModel.state.value?.effective ?? null;
+	const effectiveDefault = () => safeValue(client.defaultModel.snapshot)?.effective ?? null;
 	const items = () => modelItems(models, current, effectiveDefault());
-	const stop = client.defaultModel.state.subscribe(() => panel.update(items()));
+	const stop = subscribeState(client.defaultModel.snapshot, () => panel.update(items()));
 	panel.groupedFilter = true;
 	panel.help = shortcutHints(
 		["↑↓", t("action.select")],
@@ -133,7 +131,7 @@ export function openModelPanel(
 		const effective = effectiveDefault();
 		const toggle =
 			effective !== null && modelKey(effective) === value
-				? client.defaultModel.clear(null)
+				? client.defaultModel.clear()
 				: client.defaultModel.set({ provider: model.provider, modelId: model.modelId });
 		void toggle.catch((error) => notify(error instanceof Error ? error.message : String(error)));
 		return true;
@@ -141,7 +139,7 @@ export function openModelPanel(
 	void panel.show(
 		t("provider.title"),
 		async () => {
-			models = await client.models.list(null);
+			models = await client.models.list();
 			return items();
 		},
 		async (value) => {

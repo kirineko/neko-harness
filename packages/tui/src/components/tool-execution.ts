@@ -141,7 +141,7 @@ export class ToolExecutionComponent extends Container {
 		this.rebuild();
 	}
 
-	override render(width: number): string[] {
+	override render(width: number): readonly string[] {
 		if (this.#renderTheme !== getActiveThemeMode() || this.#renderLanguage !== getLanguage()) {
 			this.#renderTheme = getActiveThemeMode();
 			this.#renderLanguage = getLanguage();

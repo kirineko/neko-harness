@@ -90,7 +90,7 @@ it("re-evaluates the shell on every application-info check and publishes the cha
 	const client = await connectTestClient(gateway);
 	try {
 		expect(client.application.info.value.shell?.status).toBe("missing");
-		const checked = await client.application.check(null);
+		const checked = await client.application.check();
 		expect(checked.shell).toEqual({ status: "ready", path: FOUND.path, source: "auto" });
 		await waitFor(() => client.application.info.value.shell?.status === "ready", "published ready shell");
 	} finally {

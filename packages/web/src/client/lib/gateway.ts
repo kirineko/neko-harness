@@ -1,3 +1,4 @@
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import type {
 	ChatView,
 	NekoConversationChange,
@@ -17,6 +18,8 @@ import {
 	planClient,
 	questionsClient,
 	queueClient,
+	safeValue,
+	subscribeState,
 	workspaceClient,
 } from "@neko-harness/gateway/client-session";
 import { boundedWebSocketLink } from "@neko-harness/gateway/link";
@@ -181,7 +184,7 @@ export class GatewayConnection {
 	}
 	async clearDefaultModel(): Promise<void> {
 		if (!this.#connected || !this.#defaultModel) throw new Error(getT()("gw.notConnected"));
-		await this.#defaultModel.clear(null);
+		await this.#defaultModel.clear();
 	}
 	async start(): Promise<void> {
 		this.#options.events.onPhase("connecting");
@@ -224,7 +227,7 @@ export class GatewayConnection {
 	}
 	async selectWorkspace(path: string): Promise<void> {
 		await this.#operate(async (epoch) => {
-			if (!this.#workspaces?.state.value.workspaces.some((w) => w.path === path))
+			if (!this.#workspaces || !safeValue(this.#workspaces.snapshot)?.workspaces.some((w) => w.path === path))
 				throw new Error(getT()("gw.workspaceMissing"));
 			await this.#select(path, undefined, epoch);
 		});
@@ -239,7 +242,7 @@ export class GatewayConnection {
 	/** Removing the current workspace moves to the next one only after the server accepted; a rejection changes nothing. */
 	async removeWorkspace(path: string): Promise<void> {
 		await this.#operate(async (epoch) => {
-			const next = this.#workspaces!.state.value.workspaces.find((w) => w.path !== path);
+			const next = safeValue(this.#workspaces!.snapshot)?.workspaces.find((w) => w.path !== path);
 			await this.#workspaces!.remove({ path });
 			this.#assert(epoch);
 			if (path !== this.#workspace) return;
@@ -281,7 +284,9 @@ export class GatewayConnection {
 			else await this.#clear(epoch);
 			this.#assert(epoch);
 			this.#workspace = path;
-			this.#workspaceListed = this.#workspaces?.state.value.workspaces.some((w) => w.path === path) === true;
+			this.#workspaceListed =
+				(this.#workspaces ? safeValue(this.#workspaces.snapshot)?.workspaces.some((w) => w.path === path) : false) ===
+				true;
 			this.#options.events.onWorkspace(path);
 		} catch (error) {
 			// A failed attach cannot leave an old chat eligible for submissions.
@@ -310,8 +315,7 @@ export class GatewayConnection {
 			if (!view) return;
 			if (epoch === this.#epoch && generation === this.#viewEpoch) this.#options.events.onView(view);
 		};
-		if (chat.view.value) publish(chat.view.value);
-		this.#unsubView = chat.view.subscribe(publish);
+		this.#unsubView = subscribeState(chat.view, publish);
 	}
 	async #clear(epoch: number): Promise<void> {
 		this.#dropView();
@@ -323,7 +327,7 @@ export class GatewayConnection {
 	#reconcile(): void {
 		if (!this.managementReady) return;
 		if (this.#workspaceGone) {
-			const listed = this.#workspaces?.state.value.workspaces ?? [];
+			const listed = (this.#workspaces ? safeValue(this.#workspaces.snapshot)?.workspaces : undefined) ?? [];
 			const next = listed[0];
 			if (listed.some((w) => w.path === this.#workspace)) this.#workspaceGone = false;
 			else if (next) {
@@ -368,7 +372,10 @@ export class GatewayConnection {
 	async searchFiles(query: string, workspaceRoot: string, signal: AbortSignal) {
 		if (!this.managementReady || !this.#workspaceFiles || workspaceRoot !== this.#workspace)
 			throw new Error(getT()("gw.workspaceNotReady"));
-		return this.#client!.host.root((ctx) => this.#workspaceFiles!.search({ workspaceRoot, query }, ctx), { signal });
+		return this.#client!.host.root(
+			(ctx) => this.#workspaceFiles!.search({ workspaceRoot, query }, ctx),
+			withAbortSignal(signal, BACKGROUND_CONTEXT),
+		);
 	}
 	async workspaceImage(path: string, sessionId: string, signal: AbortSignal): Promise<ImageFile> {
 		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionChangedDraft"));
@@ -383,7 +390,7 @@ export class GatewayConnection {
 					await chat.releaseImage(image.id).catch(() => {});
 				}
 			},
-			{ signal },
+			withAbortSignal(signal, BACKGROUND_CONTEXT),
 		);
 	}
 	async compact(instructions: string, sessionId?: string): Promise<void> {
@@ -458,14 +465,14 @@ export class GatewayConnection {
 		return downloadImage((offset) => chat.getImage({ entryId, contentIndex, offset }));
 	}
 	abort(): void {
-		if (this.ready) void this.#chat!.abort(null).catch((e: unknown) => this.#error(e));
+		if (this.ready) void this.#chat!.abort().catch((e: unknown) => this.#error(e));
 	}
 	async listSkills(sessionId: string, signal: AbortSignal): Promise<readonly NekoSkillInfo[]> {
 		if (!this.ready || sessionId !== this.#currentSessionId) throw new Error(getT()("gw.sessionNotReady"));
-		return this.#client!.host.root((ctx) => this.#chat!.skills(null, ctx), { signal });
+		return this.#client!.host.root((ctx) => this.#chat!.skills(ctx), withAbortSignal(signal, BACKGROUND_CONTEXT));
 	}
 	async listModels(): Promise<readonly NekoSelectableModel[]> {
-		return this.#models?.list(null) ?? [];
+		return this.#models?.list() ?? [];
 	}
 	/** 技能市场：读操作直发；工作区缺省用当前工作区（项目级状态判定的依据）。 */
 	marketList(query?: string): Promise<readonly NekoMarketSkill[]> {
@@ -519,14 +526,12 @@ export class GatewayConnection {
 		}
 		this.#assert(epoch);
 		this.#unsub.push(
-			client.application.info.subscribe((value) => {
+			subscribeState(client.application.info, (value) => {
 				if (epoch !== this.#epoch) return;
 				this.#options.events.onUpdates?.(value);
 				this.#options.events.onShell?.(value.shell ?? null);
 			}),
 		);
-		this.#options.events.onUpdates?.(client.application.info.value);
-		this.#options.events.onShell?.(client.application.info.value.shell ?? null);
 		this.#management = client.management;
 		this.#workspaces = client.workspaces;
 		this.#workspaceFiles = client.workspaceFiles;
@@ -538,9 +543,9 @@ export class GatewayConnection {
 		this.#defaultModel = client.defaultModel;
 		this.#skillMarket = client.skillMarket;
 
-		let credentialRevision = this.#credentials.state.value?.revision;
+		let credentialRevision = safeValue(this.#credentials.snapshot)?.revision;
 		this.#unsub.push(
-			this.#credentials.state.subscribe((value) => {
+			subscribeState(this.#credentials.snapshot, (value) => {
 				if (epoch !== this.#epoch) return;
 				this.#options.events.onCredentials?.(value);
 				// Enablement and keys decide which models are selectable, so a changed state refetches the list.
@@ -548,34 +553,29 @@ export class GatewayConnection {
 				credentialRevision = value.revision;
 			}),
 		);
-		this.#options.events.onCredentials?.(this.#credentials.state.value);
 		this.#unsub.push(
-			this.#searchSettings.state.subscribe((value) => {
+			subscribeState(this.#searchSettings.snapshot, (value) => {
 				if (epoch === this.#epoch) this.#options.events.onSearchSettings?.(value);
 			}),
 		);
-		this.#options.events.onSearchSettings?.(this.#searchSettings.state.value);
 		const contextSettings = this.#contextSettings;
 		this.#unsub.push(
-			contextSettings.state.subscribe((value) => {
+			subscribeState(contextSettings.snapshot, (value) => {
 				if (epoch === this.#epoch) this.#options.events.onContextSettings?.(value);
 			}),
 		);
-		this.#options.events.onContextSettings?.(contextSettings.state.value);
 		const codemodeSettings = this.#codemodeSettings;
 		this.#unsub.push(
-			codemodeSettings.state.subscribe((value) => {
+			subscribeState(codemodeSettings.snapshot, (value) => {
 				if (epoch === this.#epoch) this.#options.events.onCodemodeSettings?.(value);
 			}),
 		);
-		this.#options.events.onCodemodeSettings?.(codemodeSettings.state.value);
 		const defaultModel = this.#defaultModel;
 		this.#unsub.push(
-			defaultModel.state.subscribe((value) => {
+			subscribeState(defaultModel.snapshot, (value) => {
 				if (epoch === this.#epoch) this.#options.events.onDefaultModel?.(value);
 			}),
 		);
-		this.#options.events.onDefaultModel?.(defaultModel.state.value);
 		const directory = client.directory;
 		const publish = (value: NekoDirectoryState) => {
 			if (epoch !== this.#epoch) return;
@@ -583,9 +583,9 @@ export class GatewayConnection {
 			this.#options.events.onDirectory(value);
 			this.#reconcile();
 		};
-		this.#unsub.push(directory.state.subscribe(publish));
+		this.#unsub.push(subscribeState(directory.snapshot, publish));
 		this.#unsub.push(
-			this.#workspaces.state.subscribe((value) => {
+			subscribeState(this.#workspaces.snapshot, (value) => {
 				if (epoch !== this.#epoch) return;
 				this.#options.events.onWorkspaces(value);
 				const listed = value.workspaces.some((w) => w.path === this.#workspace);
@@ -601,8 +601,8 @@ export class GatewayConnection {
 			this.#assert(epoch);
 			this.#initialized = true;
 		}
-		publish(directory.state.value);
-		this.#options.events.onWorkspaces(this.#workspaces.state.value);
+		publish(directory.snapshot.value);
+		this.#options.events.onWorkspaces(this.#workspaces.snapshot.value);
 		await this.#select(this.#workspace, this.#currentSessionId, epoch);
 		this.#assert(epoch);
 		this.#connected = true;
@@ -614,7 +614,7 @@ export class GatewayConnection {
 	#refreshModels(epoch: number): void {
 		const request = ++this.#modelRequest;
 		void this.#models
-			?.list(null)
+			?.list()
 			.then((models) => {
 				if (epoch === this.#epoch && request === this.#modelRequest) this.#options.events.onModels(models);
 			})
@@ -622,7 +622,7 @@ export class GatewayConnection {
 	}
 	async checkUpdates(): Promise<UpdateState> {
 		if (!this.#client) throw new Error(getT()("gw.notConnected"));
-		return this.#client.application.check(null);
+		return this.#client.application.check();
 	}
 	#scheduleReconnect(): void {
 		if (this.#disposed || this.#incompatible || this.#timer) return;

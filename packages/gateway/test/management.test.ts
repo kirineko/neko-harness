@@ -6,10 +6,12 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Watchable } from "@earendil-works/chord/watch";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import type { ChatItem, ChatView } from "@neko-harness/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
+import { subscribeState } from "../src/client-session.ts";
 import type { NekoGatewayClient } from "../src/index.ts";
 import { cleanup, connectTestClient, makeGateway, type TestGateway, waitFor } from "./helpers.ts";
 
@@ -23,9 +25,9 @@ afterEach(async () => {
 	await cleanup(target);
 });
 
-function collect(view: { subscribe(listener: (value: ChatView | undefined) => void): () => void }): ChatView[] {
+function collect(view: Watchable<ChatView>): ChatView[] {
 	const values: ChatView[] = [];
-	view.subscribe((value) => {
+	subscribeState(view, (value) => {
 		if (value) values.push(value);
 	});
 	return values;
@@ -116,10 +118,10 @@ describe("fork", () => {
 			const forked = await client.management.fork("1");
 			expect(forked.id).not.toBe("1");
 			await waitFor(
-				() => client.directory.state.value?.sessions.some((session) => session.id === forked.id) === true,
+				() => client.directory.snapshot.value?.sessions.some((session) => session.id === forked.id) === true,
 				"fork 出现在目录",
 			);
-			const directory = client.directory.state.value?.sessions.map((session) => session.id) ?? [];
+			const directory = client.directory.snapshot.value?.sessions.map((session) => session.id) ?? [];
 			expect(directory).toContain("1");
 			expect(directory).toContain(forked.id);
 

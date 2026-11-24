@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../../test/temp-dir.ts";
-import { type NekoGateway, startGateway } from "../../src/index.ts";
+import { type NekoGateway, safeValue, startGateway } from "../../src/index.ts";
 import { connectTestClient, testSocketPath, waitFor } from "../helpers.ts";
 import { connectMobileWs, type MobileWsClient } from "./ws-client.ts";
 
@@ -218,12 +218,12 @@ describe("mobile api v1 workspaces and sessions", () => {
 		try {
 			const desktop = await connectTestClient(gateway);
 			await desktop.workspaces.add({ path: workspaceA });
-			const before = desktop.directory.state.value?.sessions.length ?? 0;
+			const before = safeValue(desktop.directory.snapshot)?.sessions.length ?? 0;
 			const device = await pairDevice(gateway, port);
 			const client = await connectMobileHello(port, device);
 			await expect(rpc(client, "sessions.list", { workspace: "/nonexistent" })).rejects.toThrow("invalid_params");
 			await expect(rpc(client, "sessions.create", { workspace: "/nonexistent" })).rejects.toThrow("invalid_params");
-			expect(desktop.directory.state.value?.sessions.length ?? 0).toBe(before);
+			expect(safeValue(desktop.directory.snapshot)?.sessions.length ?? 0).toBe(before);
 			client.close(1000, "done");
 			await client.waitForClose();
 			await desktop.close();
@@ -246,7 +246,9 @@ describe("mobile api v1 workspaces and sessions", () => {
 			expect(created.workspace).toBe(workspaceB);
 			const start = Date.now();
 			for (;;) {
-				const visible = (desktop.directory.state.value?.sessions ?? []).some((session) => session.id === created.id);
+				const visible = (safeValue(desktop.directory.snapshot)?.sessions ?? []).some(
+					(session) => session.id === created.id,
+				);
 				if (visible) break;
 				if (Date.now() - start > 5_000) throw new Error("desktop directory did not show the mobile-created session");
 				await new Promise((resolve) => setTimeout(resolve, 25));

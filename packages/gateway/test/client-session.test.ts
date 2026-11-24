@@ -1,38 +1,42 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { createHost, type Frame, type Link, memoryLinkPair } from "@earendil-works/chord";
+import { createHost, type Link, memoryLinkPair } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import { createNekoRuntime } from "@neko-harness/core";
 import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { createGatewayConnection, GatewayIdentityError } from "../src/client-session.ts";
-import { GATEWAY_HOST } from "../src/contract.ts";
-import { type GatewayPrincipal, HOST_PRINCIPAL } from "../src/principal.ts";
+import { GATEWAY_ADDRESS } from "../src/contract.ts";
+import {
+	type GatewayPrincipal,
+	type GatewayRevocation,
+	gatewayPrincipalKey,
+	gatewayRevokedBy,
+	HOST_PRINCIPAL,
+} from "../src/principal.ts";
 import { createNekoServerServices } from "../src/server-services.ts";
 
 class HeldLink implements Link {
 	private link: Link;
-	private receiver?: (frame: Frame) => void;
-	frames: Frame[] = [];
+	private receiver?: (bytes: Uint8Array) => void;
+	frames: Uint8Array[] = [];
 	hold = true;
 	constructor(link: Link) {
 		this.link = link;
 	}
-	get closed() {
-		return this.link.closed;
+	send(bytes: Uint8Array) {
+		this.link.send(bytes);
 	}
-	send(frame: Frame) {
-		return this.link.send(frame);
-	}
-	onClose(handler: (reason: string) => void) {
+	onClose(handler: () => void) {
 		this.link.onClose(handler);
 	}
-	close(reason?: string) {
-		this.link.close(reason);
+	close() {
+		this.link.close();
 	}
-	receive(handler: (frame: Frame) => void) {
+	onMessage(handler: (bytes: Uint8Array) => void) {
 		this.receiver = handler;
-		this.link.receive((frame) => {
-			if (this.hold) this.frames.push(frame);
-			else handler(frame);
+		this.link.onMessage((bytes) => {
+			if (this.hold) this.frames.push(bytes);
+			else handler(bytes);
 		});
 	}
 	flush() {
@@ -48,7 +52,13 @@ it("waits for delayed initial state and returns native handles through async bou
 		providers: [faux.provider],
 		model: { provider: "faux", modelId: "faux-1" },
 	});
-	const server = createHost<GatewayPrincipal>({ name: GATEWAY_HOST, self: HOST_PRINCIPAL, dev: true, onError() {} });
+	const server = createHost<GatewayPrincipal, GatewayRevocation>({
+		address: GATEWAY_ADDRESS,
+		principal: HOST_PRINCIPAL,
+		principalKey: gatewayPrincipalKey,
+		revokedBy: gatewayRevokedBy,
+		onError() {},
+	});
 	const services = await createNekoServerServices({
 		host: server,
 		runtime,
@@ -57,7 +67,7 @@ it("waits for delayed initial state and returns native handles through async bou
 		marketUrl: "https://unused.invalid",
 	});
 	const [clientLink, serverLink] = memoryLinkPair();
-	server.accept(serverLink, { principal: { kind: "local", connectionId: "test" } });
+	server.accept(serverLink, { principal: { kind: "local", connectionId: "test" } }, BACKGROUND_CONTEXT);
 	const link = new HeldLink(clientLink);
 	const client = createGatewayConnection(link, "session-test");
 	try {
@@ -67,20 +77,23 @@ it("waits for delayed initial state and returns native handles through async bou
 		});
 		await sleep(10);
 		expect(ready).toBe(false);
-		expect(client.application.status).toBe("loading");
+		expect(client.application.state.value.kind).toBe("loading");
 		expect(() => client.directory).toThrow("Gateway protocol not checked");
 		link.flush();
 		await pending;
-		expect(client.directory.state.value.sessions[0]?.id).toBe("1");
+		expect(client.directory.snapshot.value.sessions[0]?.id).toBe("1");
 		const chat = await (async () => client.attach("1"))();
 		expect("then" in chat).toBe(false);
 		expect(chat.view.value.cwd).toBeDefined();
-		expect((await client.models.list(null)).length).toBeGreaterThan(0);
+		expect((await client.models.list()).length).toBeGreaterThan(0);
 		await Promise.all([client.detach(), client.detach()]);
-		await expect(chat.usage(null)).rejects.toThrow();
+		await expect(chat.usage()).rejects.toThrow();
 		link.hold = true;
 		const controller = new AbortController();
-		const cancelled = client.host.root((ctx) => client.attach("1", ctx), { signal: controller.signal });
+		const cancelled = client.host.root(
+			(ctx) => client.attach("1", ctx),
+			withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
+		);
 		await sleep(10);
 		controller.abort();
 		await expect(cancelled).rejects.toThrow();
@@ -88,7 +101,7 @@ it("waits for delayed initial state and returns native handles through async bou
 		expect((await client.attach("1")).view.value).toBeDefined();
 	} finally {
 		await Promise.all([client.close(), client.close()]);
-		await server.close();
+		await server.close(BACKGROUND_CONTEXT);
 		await services.dispose();
 		await runtime.close();
 	}
@@ -112,7 +125,13 @@ it("rejects a gateway whose server id differs before binding any business servic
 		providers: [faux.provider],
 		model: { provider: "faux", modelId: "faux-1" },
 	});
-	const server = createHost<GatewayPrincipal>({ name: GATEWAY_HOST, self: HOST_PRINCIPAL, dev: true, onError() {} });
+	const server = createHost<GatewayPrincipal, GatewayRevocation>({
+		address: GATEWAY_ADDRESS,
+		principal: HOST_PRINCIPAL,
+		principalKey: gatewayPrincipalKey,
+		revokedBy: gatewayRevokedBy,
+		onError() {},
+	});
 	const services = await createNekoServerServices({
 		host: server,
 		runtime,
@@ -121,14 +140,14 @@ it("rejects a gateway whose server id differs before binding any business servic
 		marketUrl: "https://unused.invalid",
 	});
 	const [clientLink, serverLink] = memoryLinkPair();
-	server.accept(serverLink, { principal: { kind: "local", connectionId: "test" } });
+	server.accept(serverLink, { principal: { kind: "local", connectionId: "test" } }, BACKGROUND_CONTEXT);
 	const client = createGatewayConnection(clientLink, "expected");
 	try {
 		await expect(client.ready()).rejects.toBeInstanceOf(GatewayIdentityError);
 		expect(() => client.directory).toThrow("Gateway protocol not checked");
 	} finally {
 		await client.close();
-		await server.close();
+		await server.close(BACKGROUND_CONTEXT);
 		await services.dispose();
 		await runtime.close();
 	}

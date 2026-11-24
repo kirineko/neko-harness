@@ -64,14 +64,14 @@ describe("Source gateway startup", () => {
 						const created = (await terminal.client.management.create({ cwd: dir })).id;
 						const terminalChat = await terminal.client.attach(created);
 						const browserChat = await browser.attach(created);
-						expect(browser.directory.state.value?.sessions.some((session) => session.id === created)).toBe(true);
+						expect(browser.directory.snapshot.value?.sessions.some((session) => session.id === created)).toBe(true);
 						expect(browserChat.view.value).toEqual(terminalChat.view.value);
 					} finally {
 						await browser.close();
 					}
 					if (first === "TUI") {
 						await web.close();
-						expect((await terminal.client.models.list(null)).length).toBeGreaterThan(0);
+						expect((await terminal.client.models.list()).length).toBeGreaterThan(0);
 					} else {
 						await terminal.close();
 						const reconnected = await connectNekoGateway({ transport: "ws", url: web.wsUrl, serverId: web.serverId });
@@ -110,7 +110,7 @@ describe("Source gateway startup", () => {
 			const reused = await connectToGateway(options);
 			expect(reused.spawned).toBe(false);
 			await reused.close();
-			expect((await owner.client.models.list(null)).length).toBeGreaterThan(0);
+			expect((await owner.client.models.list()).length).toBeGreaterThan(0);
 		} finally {
 			await owner.close();
 		}
@@ -151,7 +151,7 @@ describe("Source gateway startup", () => {
 			}
 			const reconnected = await connectNekoGateway(address);
 			try {
-				expect(reconnected.directory.state.value?.sessions.some((session) => session.id === created)).toBe(true);
+				expect(reconnected.directory.snapshot.value?.sessions.some((session) => session.id === created)).toBe(true);
 			} finally {
 				await reconnected.close();
 			}

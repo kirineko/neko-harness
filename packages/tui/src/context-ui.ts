@@ -1,5 +1,11 @@
+import type { Watchable } from "@earendil-works/chord/watch";
 import { matchesKey } from "@earendil-works/pi-tui";
-import type { NekoContextSettingsPatch, NekoContextSettingsState } from "@neko-harness/gateway";
+import {
+	type NekoContextSettingsPatch,
+	type NekoContextSettingsState,
+	safeValue,
+	subscribeState,
+} from "@neko-harness/gateway";
 import type { PickerDetail, PickerItem, PickerPanel } from "./components/picker.ts";
 import { shortcutHints } from "./components/shortcut-hints.ts";
 import { type PlainKey, t } from "./i18n/index.ts";
@@ -155,10 +161,7 @@ export function contextItems(state: NekoContextSettingsState | undefined): Picke
 
 export type ContextClient = {
 	readonly contextSettings: {
-		readonly state: {
-			readonly value: NekoContextSettingsState | undefined;
-			subscribe(listener: (value: NekoContextSettingsState | undefined) => void): () => void;
-		};
+		readonly snapshot: Watchable<NekoContextSettingsState>;
 		set(patch: NekoContextSettingsPatch): Promise<unknown>;
 		reset(input: Record<string, never>): Promise<unknown>;
 	};
@@ -194,7 +197,7 @@ class PresetDetail implements PickerDetail {
 		this.#panel = panel;
 		this.#notify = notify;
 		this.#changed = changed;
-		const state = client.contextSettings.state.value;
+		const state = safeValue(client.contextSettings.snapshot);
 		const current = state ? read(state, row) : { value: null, source: "default" as const };
 		const options: (boolean | number | null)[] = [null, ...row.presets];
 		const custom = current.source !== "default" && current.value !== null && !row.presets.includes(current.value);
@@ -204,7 +207,7 @@ class PresetDetail implements PickerDetail {
 	}
 
 	lines(_width: number, height: number): readonly string[] {
-		const state = this.#client.contextSettings.state.value;
+		const state = safeValue(this.#client.contextSettings.snapshot);
 		const current = state ? read(state, this.#row) : undefined;
 		const head = [theme.accent(t(this.#row.label)), theme.dim(t(this.#row.description))];
 		if (this.#saving) head.push(t("common.saving"));
@@ -253,8 +256,8 @@ export function openContextPanel(
 	client: ContextClient,
 	notify: (message: string) => void,
 ): () => void {
-	const items = () => contextItems(client.contextSettings.state.value);
-	const stop = client.contextSettings.state.subscribe(() => panel.update(items()));
+	const items = () => contextItems(safeValue(client.contextSettings.snapshot));
+	const stop = subscribeState(client.contextSettings.snapshot, () => panel.update(items()));
 	panel.emptyText = contextEmpty();
 	void panel.show(
 		t("context.title"),

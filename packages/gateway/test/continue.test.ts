@@ -29,7 +29,7 @@ it("shares a run failure with every client and continues it once", async () => {
 		await expect(continueClient(chatA).continueRun()).rejects.toThrow(/CONTINUE_UNAVAILABLE/);
 		await chatA.submit({ content: "question" });
 		await waitFor(() => chatB.view.value?.busy === true, "run on both clients");
-		await chatB.abort(null);
+		await chatB.abort();
 		await waitFor(
 			() =>
 				continueClient(chatA).failure()?.reason === "aborted" && continueClient(chatB).failure()?.reason === "aborted",

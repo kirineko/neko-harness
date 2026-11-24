@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { ContextEdit, ConversationId, EntryRecord, Harness } from "@earendil-works/pi-durable";
 import { onCommits } from "./commits.ts";

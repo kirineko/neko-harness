@@ -30,7 +30,7 @@ export class JobReportNotice extends Container {
 		this.#expanded = !this.#expanded;
 		return { handled: true };
 	}
-	override render(width: number): string[] {
+	override render(width: number): readonly string[] {
 		const { head, command, output } = splitJobReport(this.#raw);
 		let text = theme.dim(sanitizeOutput(head));
 		if (output === undefined) {

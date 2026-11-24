@@ -69,7 +69,7 @@ export class StatusFooter implements Component {
 		return s.busy ? (s.questionCount ? "warning" : "accent") : "ok";
 	}
 
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		const s = this.#stats;
 		if (!s) return [labels.connecting, ""].map((x) => truncateToWidth(x, width));
 		const space = Math.max(1, width - 2);

@@ -114,6 +114,13 @@ it("renders PNG/JPEG/WebP through Pi Kitty protocol only when visible and falls 
 				},
 			);
 			setCapabilities({ ...original, images: "kitty" });
+			expect(preview.measure(60).length).toBe(8);
+			expect(preview.render(60).length).toBe(8);
+			// Fallback Text caches its rendered array; HistoryImage must not mutate that cached array in place.
+			setCapabilities({ ...original, images: null });
+			expect(preview.measure(60).length).toBe(1);
+			expect(preview.render(60).length).toBe(1);
+			setCapabilities({ ...original, images: "kitty" });
 			preview.render(60);
 			expect(calls).toBe(0);
 			preview.setVisible(true);

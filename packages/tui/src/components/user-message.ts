@@ -32,7 +32,7 @@ export class UserMessageComponent extends Container {
 	}
 
 	/** 每行加 `▍` accent 左缘（底色 userBg 贯通）；内容宽度 -1，间距由内容自身 padding 提供。 */
-	override render(width: number): string[] {
+	override render(width: number): readonly string[] {
 		if (this.#renderTheme !== getActiveThemeMode() || this.#renderLanguage !== getLanguage()) {
 			this.#renderTheme = getActiveThemeMode();
 			this.#renderLanguage = getLanguage();

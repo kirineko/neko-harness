@@ -1,8 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { Socket } from "node:net";
-import type { Frame, WebSocketLike } from "@earendil-works/chord";
 import { expect, it } from "vitest";
-import { boundedWebSocketLink, MAX_LINK_BYTES } from "../src/link.ts";
+import { type BoundedSocket, boundedWebSocketLink, MAX_LINK_BYTES } from "../src/link.ts";
 import { UnixLink } from "../src/unix-link.ts";
 
 class FakeSocket extends EventEmitter {
@@ -19,72 +18,81 @@ class FakeSocket extends EventEmitter {
 		this.emit("close");
 	}
 }
-const encoded = (frame: Frame) => {
-	const data = Buffer.from(JSON.stringify(frame));
+
+const encodeFrame = (payload: Uint8Array) => {
 	const header = Buffer.alloc(4);
-	header.writeUInt32BE(data.length);
-	return Buffer.concat([header, data]);
+	header.writeUInt32BE(payload.byteLength, 0);
+	return Buffer.concat([header, payload]);
 };
-it("decodes split and joined Unix frames in FIFO order, including Unicode", () => {
+
+it("decodes split and joined binary Unix frames in FIFO order, including arbitrary byte sequences", () => {
 	const socket = new FakeSocket();
 	const link = new UnixLink(socket as unknown as Socket);
-	const seen: Frame[] = [];
-	link.receive((frame) => seen.push(frame));
-	const frames: Frame[] = [
-		{ t: "hello", name: "中文 host", kind: "client", codeVersion: 0 },
-		{ t: "ping", n: 2 },
-		{ t: "pong", n: 3 },
+	const seen: Uint8Array[] = [];
+	const frames = [
+		new TextEncoder().encode("中文 host 🌸"),
+		new Uint8Array([0x00, 0xff, 0x80, 0x01, 0x02]),
+		new Uint8Array([0x42]),
 	];
-	const bytes = Buffer.concat(frames.map(encoded));
-	socket.emit("data", bytes.subarray(0, 2));
-	socket.emit("data", bytes.subarray(2, 9));
-	socket.emit("data", bytes.subarray(9));
+	const bytes = Buffer.concat(frames.map(encodeFrame));
+	// Queue one frame before `onMessage` is attached, then deliver split chunks after.
+	socket.emit("data", bytes.subarray(0, 6));
+	link.onMessage((frame) => seen.push(frame));
+	socket.emit("data", bytes.subarray(6, 17));
+	socket.emit("data", bytes.subarray(17));
 	expect(seen).toEqual(frames);
+
 	link.send(frames[0]!);
-	expect(socket.sent[0]).toEqual(encoded(frames[0]!));
-	let closes = 0;
-	link.onClose(() => closes++);
+	expect(socket.sent[0]).toEqual(encodeFrame(frames[0]!));
+
+	let closesA = 0;
+	let closesB = 0;
+	link.onClose(() => closesA++);
+	link.onClose(() => closesB++);
 	link.close();
 	link.close();
 	socket.emit("close");
-	expect(closes).toBe(1);
+	expect(closesA).toBe(1);
+	expect(closesB).toBe(1);
 	expect(link.closed).toBe(true);
 });
-for (const payload of [Buffer.from("not json"), Buffer.from('{"t":3}'), Buffer.from([0xff])])
-	it("closes malformed Unix frames before delivery", () => {
-		const socket = new FakeSocket();
-		const link = new UnixLink(socket as unknown as Socket);
-		let count = 0;
-		link.receive(() => count++);
-		const header = Buffer.alloc(4);
-		header.writeUInt32BE(payload.length);
-		socket.emit("data", Buffer.concat([header, payload]));
-		expect(link.closed).toBe(true);
-		expect(count).toBe(0);
-	});
-it("rejects oversized Unix lengths and write queues", () => {
+
+it("rejects zero-length, oversized Unix lengths, receive queue overflow, and write queue overflow", () => {
+	const zeroSocket = new FakeSocket();
+	const zeroLink = new UnixLink(zeroSocket as unknown as Socket);
+	const zeroHeader = Buffer.alloc(4);
+	zeroHeader.writeUInt32BE(0, 0);
+	zeroSocket.emit("data", zeroHeader);
+	expect(zeroLink.closed).toBe(true);
+
 	const socket = new FakeSocket();
 	const link = new UnixLink(socket as unknown as Socket);
 	const header = Buffer.alloc(4);
-	header.writeUInt32BE(MAX_LINK_BYTES + 1);
+	header.writeUInt32BE(MAX_LINK_BYTES + 1, 0);
 	socket.emit("data", header);
 	expect(link.closed).toBe(true);
+
 	const other = new FakeSocket();
 	const second = new UnixLink(other as unknown as Socket);
 	other.writableLength = MAX_LINK_BYTES;
-	expect(() => second.send({ t: "ping", n: 1 })).toThrow("limit");
+	expect(() => second.send(new Uint8Array([1, 2, 3]))).toThrow("limit");
 	expect(second.closed).toBe(true);
 });
-class FakeWs implements WebSocketLike {
+
+class FakeWs implements BoundedSocket {
 	readyState = 0;
 	bufferedAmount = 0;
-	sent: string[] = [];
+	binaryType = "blob";
+	sent: Uint8Array[] = [];
 	events = new EventEmitter();
 	addEventListener(type: string, handler: ((event: { readonly data: unknown }) => void) | (() => void)) {
 		this.events.on(type, handler);
 	}
-	send(data: string) {
-		this.sent.push(data);
+	removeEventListener(type: string, handler: ((event: { readonly data: unknown }) => void) | (() => void)) {
+		this.events.off(type, handler);
+	}
+	send(data: Uint8Array<ArrayBuffer>) {
+		this.sent.push(new Uint8Array(data));
 	}
 	close() {
 		this.readyState = 3;
@@ -94,48 +102,75 @@ class FakeWs implements WebSocketLike {
 		this.readyState = 1;
 		this.events.emit("open");
 	}
-	message(data: string) {
-		this.events.emit("message", { data });
+	binaryMessage(bytes: Uint8Array) {
+		const copy = new Uint8Array(bytes);
+		this.events.emit("message", { data: copy.buffer });
+	}
+	textMessage(text: string) {
+		this.events.emit("message", { data: text });
 	}
 }
 
-it("preserves a long Unicode frame and ignores late sends after normal WS closure", () => {
+it("preserves large binary payloads and ignores late sends after normal WS closure", () => {
 	const socket = new FakeWs();
 	const link = boundedWebSocketLink(socket);
-	const frame: Frame = { t: "hello", name: "长文本🌸".repeat(100000), kind: "host", codeVersion: 0 };
-	const received: Frame[] = [];
-	link.receive((value) => received.push(value));
+	expect(socket.binaryType).toBe("arraybuffer");
+	const payload = new TextEncoder().encode("长文本🌸".repeat(100_000));
+	const received: Uint8Array[] = [];
+	link.onMessage((value) => received.push(value));
 	socket.open();
-	link.send(frame);
-	socket.events.emit("message", { data: JSON.stringify(frame) });
-	expect(received).toEqual([frame]);
-	expect(JSON.parse(socket.sent[0]!)).toEqual(frame);
+	link.send(payload);
+	socket.binaryMessage(payload);
+	expect(received).toEqual([payload]);
+	expect(socket.sent[0]).toEqual(payload);
 	socket.close();
-	expect(() => link.send({ t: "ping", n: 2 })).not.toThrow();
+	expect(() => link.send(new Uint8Array([1, 2]))).not.toThrow();
 });
-it("uses native WS buffering before open with bounded outbound and inbound queues", () => {
+
+it("closes immediately and flags protocolError on text WebSocket frames", () => {
+	const socket = new FakeWs();
+	const link = boundedWebSocketLink(socket);
+	let protocolMismatch = 0;
+	link.onProtocolError?.(() => protocolMismatch++);
+	const received: Uint8Array[] = [];
+	link.onMessage((value) => received.push(value));
+	socket.open();
+	socket.textMessage('{"t":"hello","name":"legacy","kind":"host","codeVersion":0}');
+	expect(link.closed).toBe(true);
+	expect(link.protocolError).toBe(true);
+	expect(protocolMismatch).toBe(1);
+	expect(received).toEqual([]);
+});
+
+it("buffers binary sends before open with bounded outbound and inbound queues", () => {
 	const socket = new FakeWs();
 	const link = boundedWebSocketLink(socket, 200);
-	link.send({ t: "ping", n: 1 });
+	const ping = new Uint8Array([1, 2, 3, 4]);
+	link.send(ping);
 	expect(socket.sent).toEqual([]);
 	socket.open();
-	expect(socket.sent.map((data) => JSON.parse(data))).toEqual([{ t: "ping", n: 1 }]);
-	const seen: Frame[] = [];
-	link.receive((frame) => seen.push(frame));
-	socket.message('{"t":"pong","n":1}');
-	expect(seen).toEqual([{ t: "pong", n: 1 }]);
-	socket.message("x".repeat(201));
+	expect(socket.sent).toEqual([ping]);
+
+	const seen: Uint8Array[] = [];
+	link.onMessage((frame) => seen.push(frame));
+	const pong = new Uint8Array([9, 8, 7]);
+	socket.binaryMessage(pong);
+	expect(seen).toEqual([pong]);
+
+	socket.binaryMessage(new Uint8Array(201));
 	expect(link.closed).toBe(true);
 	expect(seen).toHaveLength(1);
+
 	const slow = new FakeWs();
 	const other = boundedWebSocketLink(slow, 100);
-	for (let n = 0; n < 3; n++) other.send({ t: "ping", n });
-	expect(() => other.send({ t: "hello", name: "x".repeat(70), kind: "client", codeVersion: 0 })).toThrow();
+	for (let n = 0; n < 3; n++) other.send(new Uint8Array(30));
+	expect(() => other.send(new Uint8Array(20))).toThrow("limit");
 	expect(other.closed).toBe(true);
+
 	const blocked = new FakeWs();
 	blocked.open();
-	blocked.bufferedAmount = 100;
+	blocked.bufferedAmount = 95;
 	const third = boundedWebSocketLink(blocked, 100);
-	expect(() => third.send({ t: "ping", n: 1 })).toThrow();
+	expect(() => third.send(new Uint8Array(10))).toThrow("limit");
 	expect(third.closed).toBe(true);
 });

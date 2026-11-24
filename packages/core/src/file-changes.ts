@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { ConversationId, Cursor, EntryId, EntryRecord, Harness } from "@earendil-works/pi-durable";
 import { CHANGE_LIMITS, clipDiff } from "./change-limits.ts";
 import { CODEMODE_NAME } from "./codemode-mode.ts";

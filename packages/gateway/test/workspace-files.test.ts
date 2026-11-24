@@ -1,6 +1,7 @@
 import { mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 import { downloadImage } from "@neko-harness/core/image-transfer";
 import sharp from "sharp";
 import { expect, it } from "vitest";
@@ -58,7 +59,10 @@ it("queries a registered workspace and imports images with attachment ownership"
 		const abort = new AbortController();
 		abort.abort();
 		await expect(
-			a.host.root((ctx) => a.workspaceFiles.search({ workspaceRoot: root, query: "" }, ctx), { signal: abort.signal }),
+			a.host.root(
+				(ctx) => a.workspaceFiles.search({ workspaceRoot: root, query: "" }, ctx),
+				withAbortSignal(abort.signal, BACKGROUND_CONTEXT),
+			),
 		).rejects.toThrow();
 		const session = await a.management.create({ cwd: root });
 		const chat = await a.attach(session.id);

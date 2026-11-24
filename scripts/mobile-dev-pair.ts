@@ -5,9 +5,11 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import qrcode from "qrcode-generator";
 import { DEFAULT_STORAGE_PATH } from "../packages/core/src/runtime.ts";
 import { assertGatewayIdentity } from "../packages/gateway/src/client-session.ts";
+import { wrapClientRef } from "../packages/gateway/src/contract.ts";
 import { createClientHost } from "../packages/gateway/src/link.ts";
 import { NekoMobileAdmin } from "../packages/gateway/src/mobile/admin.ts";
 import { MobileStore } from "../packages/gateway/src/mobile/store.ts";
@@ -164,10 +166,10 @@ export async function main(argv: readonly string[]): Promise<void> {
 	const host = createClientHost(link);
 	try {
 		await assertGatewayIdentity(host, serverId);
-		const admin = await host.get(NekoMobileAdmin, { token });
+		const admin = wrapClientRef(await host.get(NekoMobileAdmin, { token }, BACKGROUND_CONTEXT));
 		try {
 			const state = await admin.enable({ address: options.address, port: options.port });
-			const { pairingText, expiresAt } = await admin.createPairing(null);
+			const { pairingText, expiresAt } = await admin.createPairing();
 			console.log(`移动入口已监听：https://${state.address}:${state.port}`);
 			console.log(`配对信息将在 ${new Date(expiresAt).toLocaleString()} 过期，刷新请重跑本脚本。`);
 			console.log();
@@ -179,8 +181,8 @@ export async function main(argv: readonly string[]): Promise<void> {
 			admin.release();
 		}
 	} finally {
-		await host.close().catch(() => undefined);
-		link.close("done");
+		await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+		link.close();
 	}
 }
 

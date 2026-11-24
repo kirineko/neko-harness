@@ -2,7 +2,7 @@
  * TUI 技能市场面板（/skills）：分组列表 → 详情 → 预览/确认，逐层 Esc 回退。
  * 全部操作经 gateway 的 neko.skill-market 服务；安装/卸载结果提示下一次发送生效。
  */
-import { ChordError } from "@earendil-works/chord";
+import { isChordError } from "@earendil-works/chord";
 import { Markdown, matchesKey, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { NekoGatewayClient, NekoMarketSkill } from "@neko-harness/gateway";
 import type { PickerDetail, PickerItem, PickerPanel } from "./components/picker.ts";
@@ -16,8 +16,11 @@ const scopeLabel = (scope: "user" | "project"): string =>
 const formatSize = (bytes: number): string =>
 	bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
 
-const marketErrorCode = (error: unknown): string | null =>
-	error instanceof ChordError ? (error.reason ?? null) : null;
+const marketErrorCode = (error: unknown): string | null => {
+	if (!isChordError(error)) return null;
+	const detail = (error.details as { reason?: unknown } | undefined)?.reason;
+	return typeof detail === "string" ? detail : (error.reason ?? null);
+};
 
 const stateMarks = (skill: NekoMarketSkill): string =>
 	`${skill.installed.user ? "[u]" : ""}${skill.installed.project ? "[p]" : ""}${skill.installed.builtin ? "[b]" : ""}`;

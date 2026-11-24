@@ -63,11 +63,11 @@ it("runs a todo and a multi-choice question across desktop and phone, restart, c
 			.items.map((i) => i.status),
 	).toEqual(["in_progress", "pending"]);
 	await eventually(
-		() => desktop.directory.state.value?.sessions.find((s) => s.id === sessionId)?.awaitingAnswer === true,
+		() => desktop.directory.snapshot.value?.sessions.find((s) => s.id === sessionId)?.awaitingAnswer === true,
 		"directory flag",
 	);
 	// Another session is not affected by it.
-	expect(desktop.directory.state.value?.sessions.find((s) => s.id === other.id)).toMatchObject({
+	expect(desktop.directory.snapshot.value?.sessions.find((s) => s.id === other.id)).toMatchObject({
 		status: "idle",
 		awaitingAnswer: false,
 	});
@@ -127,7 +127,7 @@ it("runs a todo and a multi-choice question across desktop and phone, restart, c
 	expect(chat.view.value?.queued).toEqual([]);
 	expect(questionsClient(chat).pending()).toEqual([]);
 	await eventually(
-		() => desktop.directory.state.value?.sessions.find((s) => s.id === sessionId)?.awaitingAnswer === false,
+		() => desktop.directory.snapshot.value?.sessions.find((s) => s.id === sessionId)?.awaitingAnswer === false,
 		"directory flag cleared",
 	);
 }, 60_000);
@@ -156,7 +156,7 @@ it("continues after a skip and fails a late answer after stop without starting a
 	await chat.submit({ content: "second" });
 	await eventually(() => questionsClient(chat).pending().length === 1, "second question");
 	const open = questionsClient(chat).pending()[0]!;
-	await chat.abort(null);
+	await chat.abort();
 	await eventually(() => chat.view.value?.busy === false && questionsClient(chat).pending().length === 0, "stopped");
 	const late = await questionsClient(chat).respond({ id: open.id, version: open.version, response: { kind: "skip" } });
 	expect(late.status).toBe("cancelled");
@@ -164,7 +164,7 @@ it("continues after a skip and fails a late answer after stop without starting a
 	expect(chat.view.value?.busy).toBe(false);
 	expect(userTexts(chat)).toEqual(["first", "second"]);
 	await eventually(
-		() => desktop.directory.state.value?.sessions.find((s) => s.id === sessionId)?.awaitingAnswer === false,
+		() => desktop.directory.snapshot.value?.sessions.find((s) => s.id === sessionId)?.awaitingAnswer === false,
 		"flag cleared after stop",
 	);
 }, 60_000);

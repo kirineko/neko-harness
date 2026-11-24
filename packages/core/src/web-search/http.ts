@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 
 export const REQUEST_TIMEOUT_MS = 30_000;
 export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;

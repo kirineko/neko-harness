@@ -21,7 +21,7 @@ export class WelcomeScreen implements Component {
 
 	invalidate(): void {}
 
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		const side = (art: string, text: string) =>
 			`${MARGIN}${theme.accent(art)}${" ".repeat(Math.max(1, SIDE_AT - art.length))}${text}`;
 		const lines = [

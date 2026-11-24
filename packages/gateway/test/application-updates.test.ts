@@ -8,6 +8,7 @@ import { rm } from "../../../test/temp-dir.ts";
 import { APPLICATION_PROTOCOL, ApplicationProtocolError } from "../../core/src/application-version.ts";
 import { connectToGateway } from "../../tui/src/gateway.ts";
 import { ensureNekoGateway } from "../../web/src/gateway-spawn.ts";
+import { subscribeState } from "../src/client-session.ts";
 import { startGateway } from "../src/gateway.ts";
 import { connectTestClient, connectTestWsClient, waitFor } from "./helpers.ts";
 
@@ -45,11 +46,11 @@ it("publishes install changes consistently without attaching or waiting for regi
 		);
 		expect(ws.application.info.value).toEqual(unix.application.info.value);
 		let events = 0;
-		const stop = ws.application.info.subscribe(() => events++);
+		const stop = subscribeState(ws.application.info, () => events++);
 		await sleep(65);
 		expect(events).toBe(1);
 		stop();
-		expect((await ws.application.check(null)).checkState).toBe("failed");
+		expect((await ws.application.check()).checkState).toBe("failed");
 		expect(faux.state.callCount).toBe(0);
 	} finally {
 		await ws.close();

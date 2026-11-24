@@ -5,14 +5,18 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
-import { MODEL_PROVIDERS } from "../src/credential-providers.ts";
+import { MODEL_PROVIDERS, providerEnvVars } from "../src/credential-providers.ts";
 import { createNekoRuntime, DEFAULT_MODEL, type NekoModelRef } from "../src/runtime.ts";
 
 const dirs: string[] = [];
 const saved = new Map<string, string | undefined>();
 beforeEach(() => {
-	for (const spec of MODEL_PROVIDERS) saved.set(spec.envVar, process.env[spec.envVar]);
-	for (const spec of MODEL_PROVIDERS) delete process.env[spec.envVar];
+	for (const spec of MODEL_PROVIDERS) {
+		for (const name of providerEnvVars(spec)) {
+			saved.set(name, process.env[name]);
+			delete process.env[name];
+		}
+	}
 });
 afterEach(async () => {
 	for (const [name, value] of saved) {

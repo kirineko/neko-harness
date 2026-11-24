@@ -25,7 +25,7 @@ export class RunFailureRow implements Component {
 		return this.#failure !== undefined;
 	}
 
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		const failure = this.#failure;
 		if (!failure) return [];
 		const detail = failure.detail ? `: ${failure.detail.replace(/\s+/g, " ").trim()}` : "";

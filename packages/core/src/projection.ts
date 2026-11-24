@@ -557,6 +557,13 @@ export function projectChatView(
 		for (const message of entry.model ?? []) {
 			if (message.role !== "toolResult") continue;
 			const diagnostics = (entry.data as { diagnostics?: ToolDiagnostic[] } | undefined)?.diagnostics ?? [];
+			// Pi 1.6 moved read's non-vision notice out of persisted diagnostics into UI-only `details.imageUnsupportedByModel`.
+			const unsupportedBy =
+				message.toolName === "read" &&
+				typeof (message.details as { imageUnsupportedByModel?: unknown } | undefined)?.imageUnsupportedByModel ===
+					"string"
+					? (message.details as { imageUnsupportedByModel: string }).imageUnsupportedByModel
+					: undefined;
 			const diff = message.toolName === "edit" ? editResultDiff(message.details) : null;
 			const counts = diff === null ? null : countDiffLines(diff);
 			results.set(message.toolCallId, {
@@ -572,6 +579,7 @@ export function projectChatView(
 				result: [
 					toolResultText(diagnostics.length ? message.content.slice(0, -1) : message.content),
 					...diagnostics.map((d) => `[${d.severity}] ${d.message}`),
+					unsupportedBy ? `[info] ${unsupportedBy} does not support images; it saw a placeholder instead.` : "",
 				]
 					.filter(Boolean)
 					.join("\n"),
@@ -687,6 +695,7 @@ export function projectChatView(
 					const summary = summarizeToolCall(block.name, block.arguments);
 					const slot = live.tools?.find((s) => s.callId === block.id);
 					const synthesized = block.name === "write" ? synthesizedWriteDiff(block.arguments) : null;
+					const phase = slot === undefined ? "done" : slotPhase(slot.status);
 					items.push({
 						type: "tool",
 						key: `t${block.id}`,
@@ -694,7 +703,7 @@ export function projectChatView(
 						name: block.name,
 						summary: summary.args,
 						detail: summary.detail ?? null,
-						phase: slot?.status ?? "done",
+						phase,
 						isError: false,
 						output: slot?.output ?? null,
 						result: null,
@@ -705,7 +714,7 @@ export function projectChatView(
 						diffRemoved: synthesized?.removed ?? null,
 						diffTruncated: synthesized?.truncated ?? false,
 						...interactionField(block.name, (slot as { details?: unknown } | undefined)?.details),
-						...codemodeField(block.name, slot?.status === "running" ? liveCodemodeView(live, block.id) : undefined),
+						...codemodeField(block.name, phase === "running" ? liveCodemodeView(live, block.id) : undefined),
 					});
 				}
 			}
@@ -719,7 +728,7 @@ export function projectChatView(
 		}
 	}
 
-	const runningTool = live.tools?.find((slot) => slot.status === "running");
+	const runningTool = live.tools?.find((slot) => slotPhase(slot.status) === "running");
 	const status =
 		live.run === undefined
 			? null
@@ -829,6 +838,10 @@ function assistantItem(message: AssistantMessage, id: number): Extract<ChatItem,
 	};
 }
 
+function slotPhase(status: ToolSlot["status"]): "pending" | "running" | "done" {
+	return status === "sleeping" || status === "waiting" ? "running" : status;
+}
+
 function projectStreaming(live: LiveState): StreamingView | null {
 	const message = live.generation?.message as AssistantMessage | undefined;
 	if (message === undefined) return null;
@@ -848,18 +861,19 @@ function projectStreaming(live: LiveState): StreamingView | null {
 			const slot = live.tools?.find((candidate) => candidate.callId === block.id) as ToolSlot | undefined;
 			const summary = summarizeToolCall(block.name, block.arguments);
 			const synthesized = block.name === "write" ? synthesizedWriteDiff(block.arguments) : null;
+			const phase = slot === undefined ? "pending" : slotPhase(slot.status);
 			toolCalls.push({
 				callId: block.id,
 				name: block.name,
 				summary: summary.args,
 				detail: summary.detail ?? null,
-				phase: slot === undefined || slot.status === "pending" ? "pending" : slot.status,
-				output: slot?.status === "running" ? (slot.output ?? null) : null,
+				phase,
+				output: phase === "running" ? (slot?.output ?? null) : null,
 				diff: synthesized?.diff ?? null,
 				diffAdded: synthesized?.added ?? null,
 				diffRemoved: synthesized?.removed ?? null,
 				diffTruncated: synthesized?.truncated ?? false,
-				...codemodeField(block.name, slot?.status === "running" ? liveCodemodeView(live, block.id) : undefined),
+				...codemodeField(block.name, phase === "running" ? liveCodemodeView(live, block.id) : undefined),
 			});
 		}
 	}

@@ -1,4 +1,4 @@
-import { ChordError, type Ref } from "@earendil-works/chord";
+import { type ChordError, isChordError } from "@earendil-works/chord";
 import type { Schema } from "@earendil-works/pi-schema";
 import { agentIdFor } from "@neko-harness/core";
 import { byMessage, messageTime } from "@neko-harness/core/session-display";
@@ -12,6 +12,7 @@ import type {
 	NekoWorkspaces,
 } from "../contract.ts";
 import { type SubagentClient, subagentClient } from "../subagent-client.ts";
+import { safeValue, subscribeState, waitForLive } from "../watch.ts";
 import { MobileChatProjection, ProjectionError, type ProjectionNotice, type ProjectionSource } from "./projection.ts";
 import {
 	asJsonRpcRequest,
@@ -65,13 +66,13 @@ export type MobileAdapterOptions = {
 
 /** per-phone 复用的桌面服务句柄（白名单：目录/管理/工作区/聊天/子 agent，见 design D6）。 */
 export type MobileServices = {
-	readonly directory: Ref<typeof NekoSessionDirectory>;
-	readonly management: Ref<typeof NekoSessionManagement>;
-	readonly workspaces: Ref<typeof NekoWorkspaces>;
-	readonly openChat?: (attachment: NekoAttachment) => Ref<typeof NekoChat>;
+	readonly directory: NekoSessionDirectory;
+	readonly management: NekoSessionManagement;
+	readonly workspaces: NekoWorkspaces;
+	readonly openChat?: (attachment: NekoAttachment) => NekoChat;
 	readonly openSubagent?: (
 		input: NekoAttachment & { readonly taskId?: number; readonly agentId?: string },
-	) => Ref<typeof NekoSubagent>;
+	) => NekoSubagent;
 };
 
 const CLOSE_INVALID_JSON = 1003;
@@ -108,7 +109,7 @@ async function remote<T>(work: () => Promise<T>, invalidAs: MobileErrorCode = "i
 		return await work();
 	} catch (error) {
 		if (error instanceof MobileMethodError) throw error;
-		if (error instanceof ChordError) {
+		if (isChordError(error)) {
 			const code = chordToMobileCode(error);
 			throw new MobileMethodError(code === "invalid_params" ? invalidAs : code, error.message);
 		}
@@ -133,7 +134,7 @@ type ChatState = {
 	readonly subscriptionId: string;
 	readonly sessionId: string;
 	readonly attachment: NekoAttachment;
-	readonly chat: Ref<typeof NekoChat>;
+	readonly chat: NekoChat;
 	readonly projection: MobileChatProjection;
 	/** 释放视图与审批订阅；快照同步建立后赋值。 */
 	cleanup: () => void;
@@ -267,7 +268,7 @@ export class MobileAdapter {
 					this.sendError(request.id, -32_000, error.message, { code: error.code });
 					return;
 				}
-				if (error instanceof ChordError) {
+				if (isChordError(error)) {
 					this.sendError(request.id, -32_000, error.message, { code: chordToMobileCode(error) });
 					return;
 				}
@@ -377,8 +378,8 @@ export class MobileAdapter {
 
 	private async workspacesList(): Promise<unknown> {
 		const { workspaces } = this.services();
-		await workspaces.ready;
-		const state = workspaces.state.value;
+		await remote(() => waitForLive(workspaces));
+		const state = workspaces.snapshot.value;
 		return {
 			workspaces: state.workspaces.map((workspace) => ({ root: workspace.path, name: baseName(workspace.path) })),
 		};
@@ -386,8 +387,8 @@ export class MobileAdapter {
 
 	private async registeredWorkspaceRoots(): Promise<string[]> {
 		const { workspaces } = this.services();
-		await workspaces.ready;
-		return workspaces.state.value.workspaces.map((workspace) => workspace.path);
+		await remote(() => waitForLive(workspaces));
+		return workspaces.snapshot.value.workspaces.map((workspace) => workspace.path);
 	}
 
 	private async sessionsList(params: { workspace: string; query?: string; cursor?: string }): Promise<unknown> {
@@ -397,8 +398,8 @@ export class MobileAdapter {
 		const offset = params.cursor === undefined ? 0 : Number.parseInt(params.cursor, 10);
 		if (!Number.isInteger(offset) || offset < 0) throw new MobileMethodError("invalid_params", "invalid cursor");
 		const { directory: directoryRef } = this.services();
-		await directoryRef.ready;
-		const directory = directoryRef.state.value;
+		await remote(() => waitForLive(directoryRef));
+		const directory = directoryRef.snapshot.value;
 		let sessions = directory.sessions.filter((session) => session.workspaceRoot === params.workspace);
 		if (params.query !== undefined) {
 			const query = params.query.toLowerCase();
@@ -477,9 +478,9 @@ export class MobileAdapter {
 		if (generation !== this.attachGeneration || this.disposed)
 			throw new MobileMethodError("gone", "superseded by a newer attach");
 		const chat = services.openChat(attachment);
-		const stopView = chat.view.subscribe(() => {});
+		const stopView = subscribeState(chat.view, () => {});
 		try {
-			await remote(() => chat.ready);
+			await remote(() => waitForLive(chat));
 		} catch (error) {
 			stopView();
 			chat.release();
@@ -500,9 +501,9 @@ export class MobileAdapter {
 		const subscriptionId = this.nextId("chat");
 		const source: ProjectionSource = {
 			get value() {
-				return chat.view.value;
+				return safeValue(chat.view);
 			},
-			subscribe: (listener) => chat.view.subscribe(() => listener()),
+			subscribe: (listener) => subscribeState(chat.view, () => listener()),
 		};
 		const projection = new MobileChatProjection({
 			subscriptionId,
@@ -510,6 +511,7 @@ export class MobileAdapter {
 			source,
 			onNotice: (notice) => this.forwardNotice("chat", subscriptionId, notice),
 		});
+		const initialView = safeValue(chat.view);
 		const state: ChatState = {
 			subscriptionId,
 			sessionId: attachment.sessionId,
@@ -521,14 +523,14 @@ export class MobileAdapter {
 			approvalsRevision: 0,
 			approvalsRunning: false,
 			approvalsDirty: false,
-			todosRevision: chat.view.value?.todos?.revision ?? 0,
-			questionsRevision: chat.view.value?.questions?.revision ?? 0,
-			planRevision: chat.view.value?.plan?.revision ?? 0,
+			todosRevision: initialView?.todos?.revision ?? 0,
+			questionsRevision: initialView?.questions?.revision ?? 0,
+			planRevision: initialView?.plan?.revision ?? 0,
 		};
 		this.chatState = state;
 		const snapshot = projection.snapshot();
-		const stopApprovals = chat.view.subscribe(() => this.refreshApprovals(state));
-		const stopInteractions = chat.view.subscribe(() => this.refreshInteractions(state));
+		const stopApprovals = subscribeState(chat.view, () => this.refreshApprovals(state));
+		const stopInteractions = subscribeState(chat.view, () => this.refreshInteractions(state));
 		state.cleanup = () => {
 			stopApprovals();
 			stopInteractions();
@@ -548,7 +550,7 @@ export class MobileAdapter {
 		this.attachGeneration += 1;
 		this.closeSubagent();
 		this.releaseChat();
-		await remote(() => this.services().management.detach(null)).catch(() => undefined);
+		await remote(() => this.services().management.detach()).catch(() => undefined);
 		return null;
 	}
 
@@ -585,7 +587,7 @@ export class MobileAdapter {
 		mode?: "steer";
 	}): Promise<unknown> {
 		const state = this.requireChat(params);
-		const busy = state.chat.view.value?.busy ?? false;
+		const busy = safeValue(state.chat.view)?.busy ?? false;
 		this.assertAuthorized();
 		await remote(
 			() =>
@@ -621,7 +623,7 @@ export class MobileAdapter {
 	private async chatAbort(params: { subscriptionId: string }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		await remote(() => state.chat.abort(null));
+		await remote(() => state.chat.abort());
 		return { accepted: true };
 	}
 
@@ -634,7 +636,7 @@ export class MobileAdapter {
 
 	private async pendingApprovals(state: ChatState): Promise<Record<string, unknown>[]> {
 		const records = (await this.approvalRecords(state)).filter((record) => record.status === "pending");
-		const rounds = state.chat.view.value?.subagents ?? [];
+		const rounds = safeValue(state.chat.view)?.subagents ?? [];
 		return records.map((record) => {
 			const round = rounds.find((candidate) => candidate.taskId === record.delegationTaskId);
 			return {
@@ -734,7 +736,7 @@ export class MobileAdapter {
 	/** The snapshot's revision is taken with the status in one step, so a later change always sends a notice. */
 	private refreshInteractions(state: ChatState): void {
 		if (this.chatState !== state) return;
-		const view = state.chat.view.value;
+		const view = safeValue(state.chat.view);
 		const todos = view?.todos?.revision;
 		if (todos !== undefined && todos > state.todosRevision) {
 			state.todosRevision = todos;
@@ -755,7 +757,7 @@ export class MobileAdapter {
 	private async todosGet(params: { subscriptionId: string }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		const todos = state.chat.view.value?.todos;
+		const todos = safeValue(state.chat.view)?.todos;
 		if (todos === undefined) throw new MobileMethodError("not_found", "todos are not available");
 		return todos;
 	}
@@ -763,7 +765,7 @@ export class MobileAdapter {
 	private async questionsList(params: { subscriptionId: string }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		const questions = state.chat.view.value?.questions;
+		const questions = safeValue(state.chat.view)?.questions;
 		if (questions === undefined) throw new MobileMethodError("not_found", "questions are not available");
 		return questions;
 	}
@@ -771,7 +773,7 @@ export class MobileAdapter {
 	private async questionsGet(params: { subscriptionId: string; id: number }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		if (state.chat.view.value?.questions === undefined)
+		if (safeValue(state.chat.view)?.questions === undefined)
 			throw new MobileMethodError("not_found", "questions are not available");
 		const record = await remote(() => state.chat.questionGet({ id: params.id }));
 		if (record === null) throw new MobileMethodError("not_found", "question not found in this session");
@@ -786,7 +788,7 @@ export class MobileAdapter {
 	}): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		if (state.chat.view.value?.questions === undefined)
+		if (safeValue(state.chat.view)?.questions === undefined)
 			throw new MobileMethodError("not_found", "questions are not available");
 		return remote(
 			() =>
@@ -802,7 +804,7 @@ export class MobileAdapter {
 	private async planGet(params: { subscriptionId: string; version: string }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		if (state.chat.view.value?.plan === undefined)
+		if (safeValue(state.chat.view)?.plan === undefined)
 			throw new MobileMethodError("not_found", "plan mode is not available");
 		const record = await remote(() => state.chat.planGet({ version: params.version }));
 		if (record === null) throw new MobileMethodError("not_found", "plan not found in this session");
@@ -813,7 +815,7 @@ export class MobileAdapter {
 	private async planExit(params: { subscriptionId: string }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		if (state.chat.view.value?.plan === undefined)
+		if (safeValue(state.chat.view)?.plan === undefined)
 			throw new MobileMethodError("not_found", "plan mode is not available");
 		const view = await remote(() => state.chat.planMode({ mode: "normal" }), "rejected");
 		return { mode: "normal", revision: view.revision };
@@ -823,7 +825,7 @@ export class MobileAdapter {
 	private async planRespond(params: { subscriptionId: string; version: string; decision: unknown }): Promise<unknown> {
 		const state = this.requireChat(params);
 		this.assertAuthorized();
-		if (state.chat.view.value?.plan === undefined)
+		if (safeValue(state.chat.view)?.plan === undefined)
 			throw new MobileMethodError("not_found", "plan mode is not available");
 		return remote(
 			() => state.chat.planRespond({ version: params.version, decision: params.decision as never }),
@@ -859,7 +861,7 @@ export class MobileAdapter {
 			throw new MobileMethodError("invalid_params", "specify exactly one of agentId or taskId");
 		const openSubagent = this.services().openSubagent;
 		if (openSubagent === undefined) throw new MobileMethodError("not_found", "subagents are not available");
-		const rounds = chat.chat.view.value?.subagents ?? [];
+		const rounds = safeValue(chat.chat.view)?.subagents ?? [];
 		const round =
 			params.taskId !== undefined
 				? rounds.find((candidate) => candidate.taskId === params.taskId)
@@ -936,7 +938,7 @@ export class MobileAdapter {
 
 	private async subagentsStop(params: { subscriptionId: string; taskId: number }): Promise<unknown> {
 		const chat = this.requireChat(params);
-		const round = (chat.chat.view.value?.subagents ?? []).find((candidate) => candidate.taskId === params.taskId);
+		const round = (safeValue(chat.chat.view)?.subagents ?? []).find((candidate) => candidate.taskId === params.taskId);
 		if (round === undefined) throw new MobileMethodError("not_found", "round does not belong to this session");
 		if (round.historyThrough !== undefined) throw new MobileMethodError("invalid_params", "fork history is read-only");
 		if (!ACTIVE_ROUND.has(round.status)) throw new MobileMethodError("gone", "round is no longer active");

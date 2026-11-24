@@ -1,35 +1,89 @@
-import { createHost } from "@earendil-works/chord";
+import { createHost, defineFacet } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { compile } from "@earendil-works/pi-schema";
 import { expect, it } from "vitest";
 import {
 	ChatViewSchema,
 	DefaultModelStateSchema,
 	DirectoryStateSchema,
-	GATEWAY_HOST,
+	decodeSubagentTarget,
+	encodeSubagentTarget,
+	GATEWAY_ADDRESS,
+	NekoChat,
 	NekoDefaultModel,
-	NekoModels,
 	NekoSessionDirectory,
+	NekoSubagent,
 } from "../src/contract.ts";
+import { NekoMobileAdmin } from "../src/mobile/admin.ts";
 
-it("validates shared contract results and state before publishing them", async () => {
-	const host = createHost({ name: GATEWAY_HOST, self: { kind: "host" }, dev: true, onError() {} });
-	host.serve(NekoModels, () => ({ variant: "ready", list: async () => [{ provider: "invalid" }] as never }));
-	let invalidState = () => Promise.resolve();
-	host.serve(NekoSessionDirectory, (_input, _principal, self) => {
-		const state = self.state("state", DirectoryStateSchema, { revision: 1, sessions: [] });
-		invalidState = () => host.root((ctx) => state.replace(ctx, { revision: 1, sessions: [{ id: 42 }] } as never));
-		return { variant: "ready", state };
+it("validates Chord v2 contract params, closed method arguments, and snapshot delivery", async () => {
+	const facet = defineFacet((host) => {
+		host.serve(NekoDefaultModel, (_params, _principal, self) => {
+			const w = self.writable<import("../src/contract.ts").NekoDefaultModelState>({
+				effective: { provider: "deepseek", modelId: "deepseek-flash" },
+				source: "default",
+			});
+			return {
+				variant: "ready",
+				members: {
+					snapshot: self.derive([w], ([v]) => v),
+					set: async (next) => {
+						w.set({ effective: next, source: "saved" });
+						return null;
+					},
+					clear: async () => null,
+				},
+			};
+		});
+		host.serve(NekoSessionDirectory, (_params, _principal, self) => {
+			const w = self.writable({ revision: 1, sessions: [] });
+			return {
+				variant: "ready",
+				members: {
+					snapshot: self.derive([w], ([v]) => v),
+				},
+			};
+		});
 	});
+	const host = createHost({ address: GATEWAY_ADDRESS, principal: { kind: "host" }, onError() {} });
+	await host.load([{ name: "@neko-harness/gateway-test", facet }], BACKGROUND_CONTEXT);
 	try {
-		const [models, directory] = await Promise.all([host.get(NekoModels, {}), host.get(NekoSessionDirectory, {})]);
-		const stop = directory.state.subscribe(() => {});
-		await expect(models.list(null)).rejects.toMatchObject({ code: "invalid", reason: "result" });
-		await expect(invalidState()).rejects.toMatchObject({ code: "invalid", reason: "state" });
-		expect(directory.state.value).toEqual({ revision: 1, sessions: [] });
-		stop();
+		const [defaultModel, directory] = await Promise.all([
+			host.get(NekoDefaultModel, {}, BACKGROUND_CONTEXT),
+			host.get(NekoSessionDirectory, {}, BACKGROUND_CONTEXT),
+		]);
+		expect(directory.snapshot.value).toEqual({ revision: 1, sessions: [] });
+		expect(defaultModel.snapshot.value).toEqual({
+			effective: { provider: "deepseek", modelId: "deepseek-flash" },
+			source: "default",
+		});
+		// Closed argument objects reject extra unknown fields and wrong types with invalid/args.
+		await expect(
+			defaultModel.set({ provider: "deepseek", modelId: "deepseek-chat", extra: true } as never, BACKGROUND_CONTEXT),
+		).rejects.toMatchObject({ code: "invalid", reason: "args" });
+		await expect(
+			defaultModel.set({ provider: 123, modelId: "deepseek-chat" } as never, BACKGROUND_CONTEXT),
+		).rejects.toMatchObject({ code: "invalid", reason: "args" });
+		// Params are checked synchronously on get/hold with invalid/params.
+		await expect(
+			host.get(NekoChat, { sessionId: 42, attachmentId: "a1" } as never, BACKGROUND_CONTEXT),
+		).rejects.toMatchObject({ code: "invalid", reason: "params" });
+		expect(NekoMobileAdmin.name).toBe("neko.mobile-admin");
+		expect(NekoSubagent.name).toBe("neko.subagent");
 	} finally {
-		await host.close();
+		await host.close(BACKGROUND_CONTEXT);
 	}
+});
+
+it("encodes and decodes flat NekoSubagent target params round-trip", () => {
+	expect(encodeSubagentTarget(42)).toBe("round:42");
+	expect(encodeSubagentTarget("explore-1")).toBe("agent:explore-1");
+	expect(decodeSubagentTarget("round:42")).toEqual({ kind: "round", taskId: 42 });
+	expect(decodeSubagentTarget("agent:explore-1")).toEqual({ kind: "agent", agentId: "explore-1" });
+	expect(decodeSubagentTarget("round:notanumber")).toBeUndefined();
+	expect(decodeSubagentTarget("agent:")).toBeUndefined();
+	expect(decodeSubagentTarget("other:1")).toBeUndefined();
+	expect(compile(DirectoryStateSchema).check({ revision: 1, sessions: [{ id: 42 }] })).toBe(false);
 });
 
 it("accepts only known default-model sources in states", () => {

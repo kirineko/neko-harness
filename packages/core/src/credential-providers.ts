@@ -10,16 +10,26 @@ export type CredentialProviderSpec = {
 	readonly kind: CredentialProviderKind;
 	/** Display name shown by frontends. */
 	readonly name: string;
-	/** Environment variable probed for status display and request auth; the DeepSeek key serves both the model and web search. */
+	/** Primary environment variable surfaced by frontends and probed first for status display and request auth; the DeepSeek key serves both the model and web search. */
 	readonly envVar: string;
+	/** Additional upstream fallback environment variables accepted for request auth and environment status. */
+	readonly fallbackEnvVars?: readonly string[];
 	/** Where users obtain a key; surfaced by frontends. */
 	readonly signupUrl: string;
 	/** True when the provider works without any key in a rate-limited keyless mode. */
 	readonly keyless: boolean;
 };
 
-const model = (id: string, name: string, envVar: string, signupUrl: string) =>
-	({ id, kind: "model", name, envVar, signupUrl, keyless: false }) as const;
+const model = (id: string, name: string, envVar: string, signupUrl: string, fallbackEnvVars?: readonly string[]) =>
+	({
+		id,
+		kind: "model",
+		name,
+		envVar,
+		...(fallbackEnvVars ? { fallbackEnvVars } : {}),
+		signupUrl,
+		keyless: false,
+	}) as const;
 
 /**
  * Closed catalog of pure API-key providers from the pinned pi-ai build. Environment variables are
@@ -49,16 +59,31 @@ export const MODEL_PROVIDERS = [
 	model("zai-coding-cn", "Z.AI Coding CN", "ZAI_CODING_CN_API_KEY", "https://bigmodel.cn/usercenter/proj-mgmt/apikeys"),
 	model(
 		"qwen-token-plan",
-		"Qwen Token Plan",
-		"QWEN_TOKEN_PLAN_API_KEY",
+		"Qwen Token Plan Team",
+		"QWEN_TOKEN_PLAN_TEAM_API_KEY",
 		"https://modelstudio.console.alibabacloud.com",
+		["QWEN_TOKEN_PLAN_API_KEY"],
 	),
-	model("qwen-token-plan-cn", "Qwen Token Plan CN", "QWEN_TOKEN_PLAN_CN_API_KEY", "https://bailian.console.aliyun.com"),
+	model(
+		"qwen-token-plan-cn",
+		"Qwen Token Plan Team CN",
+		"QWEN_TOKEN_PLAN_TEAM_CN_API_KEY",
+		"https://bailian.console.aliyun.com",
+		["QWEN_TOKEN_PLAN_CN_API_KEY"],
+	),
 	model(
 		"qwen-token-plan-individual",
 		"Qwen Token Plan Individual",
-		"QWEN_TOKEN_PLAN_API_KEY",
+		"QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY",
 		"https://modelstudio.console.alibabacloud.com",
+		["QWEN_TOKEN_PLAN_API_KEY"],
+	),
+	model(
+		"qwen-token-plan-individual-cn",
+		"Qwen Token Plan Individual CN",
+		"QWEN_TOKEN_PLAN_INDIVIDUAL_CN_API_KEY",
+		"https://bailian.console.aliyun.com",
+		["QWEN_TOKEN_PLAN_CN_API_KEY"],
 	),
 	model("xiaomi", "Xiaomi MiMo", "XIAOMI_API_KEY", "https://platform.xiaomimimo.com"),
 	model(
@@ -113,6 +138,10 @@ export const LOCKED_PROVIDERS: readonly ModelProviderId[] = ["deepseek"];
 
 export function isModelProvider(id: string): id is ModelProviderId {
 	return MODEL_PROVIDERS.some((item) => item.id === id);
+}
+
+export function providerEnvVars(spec: CredentialProviderSpec): readonly string[] {
+	return spec.fallbackEnvVars ? [spec.envVar, ...spec.fallbackEnvVars] : [spec.envVar];
 }
 
 export function isCredentialProvider(id: string): id is CredentialProviderId {

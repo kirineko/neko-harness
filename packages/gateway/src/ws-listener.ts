@@ -1,23 +1,26 @@
 import type { Link } from "@earendil-works/chord";
 import { WebSocket, WebSocketServer } from "ws";
-import { boundedWebSocketLink, MAX_LINK_BYTES } from "./link.ts";
+import { boundedWebSocketLink, type GatewayLink, MAX_LINK_BYTES } from "./link.ts";
+
 export type WsListenerOptions = {
 	readonly host: string;
 	readonly port: number;
 	readonly maxPendingBytes?: number;
 	readonly onError?: (error: Error) => void;
 };
+
 export type WsListener = {
 	readonly port: number;
 	start(accept: (link: Link) => void): Promise<void>;
 	close(): Promise<void>;
 };
-export function createWsLink(url: string, signal?: AbortSignal): Link {
+
+export function createWsLink(url: string, signal?: AbortSignal): GatewayLink {
 	signal?.throwIfAborted();
-	const socket = new WebSocket(url, { maxPayload: MAX_LINK_BYTES });
+	const socket = new WebSocket(url, { maxPayload: MAX_LINK_BYTES, perMessageDeflate: false });
 	const link = boundedWebSocketLink(socket);
 	const abort = () => {
-		link.close("cancelled");
+		link.close();
 		// 握手或关闭握手停滞时也立即释放底层 socket。
 		socket.terminate();
 	};
@@ -26,6 +29,7 @@ export function createWsLink(url: string, signal?: AbortSignal): Link {
 	if (signal?.aborted) abort();
 	return link;
 }
+
 export function createWsListener(options: WsListenerOptions): WsListener {
 	let server: WebSocketServer | undefined;
 	let port = options.port;
@@ -38,6 +42,8 @@ export function createWsListener(options: WsListenerOptions): WsListener {
 				host: options.host,
 				port: options.port,
 				maxPayload: options.maxPendingBytes ?? MAX_LINK_BYTES,
+				// 拒绝压缩帧：字节上限必须在原始帧上生效，客户端不可信。
+				perMessageDeflate: false,
 			});
 			await new Promise<void>((resolve, reject) => {
 				server!.once("error", reject);
@@ -48,8 +54,9 @@ export function createWsListener(options: WsListenerOptions): WsListener {
 			server.on("error", (error) => options.onError?.(error));
 			server.on("connection", (socket) => {
 				socket.on("error", (error) => options.onError?.(error));
-				// 拒绝打包（压缩）帧：字节上限在解压之前生效，客户端不可信。
-				accept(boundedWebSocketLink(socket, options.maxPendingBytes, { acceptPacked: false }));
+				const link = boundedWebSocketLink(socket, options.maxPendingBytes);
+				link.onProtocolError?.(() => options.onError?.(new Error("WebSocket peer sent a non-binary frame")));
+				accept(link);
 			});
 		},
 		async close() {

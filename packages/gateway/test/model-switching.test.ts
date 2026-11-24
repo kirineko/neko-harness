@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ChordError } from "@earendil-works/chord";
+import { isChordError } from "@earendil-works/chord";
 import {
 	type FauxProviderHandle,
 	type FauxResponseFactory,
@@ -17,6 +17,7 @@ import {
 import type { ChatView } from "@neko-harness/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rm } from "../../../test/temp-dir.ts";
+import { subscribeState } from "../src/client-session.ts";
 import { type NekoGateway, startGateway } from "../src/index.ts";
 import { connectTestClient, testSocketPath, waitFor } from "./helpers.ts";
 
@@ -66,7 +67,7 @@ describe("per-conversation model switching over the gateway", () => {
 	it("serves the global model list from the server-level models service", async () => {
 		const client = await connectTestClient(gateway);
 		try {
-			const models = await client.models.list(null);
+			const models = await client.models.list();
 			// Models registry 是全集（内置 deepseek + 注入的 faux），faux 双模型必须在列。
 			const ids = models.map((model) => `${model.provider}/${model.modelId}`);
 			expect(ids).toContain("faux/faux-1");
@@ -85,7 +86,7 @@ describe("per-conversation model switching over the gateway", () => {
 		try {
 			const chat = await client.attach("1");
 			const seen: ChatView[] = [];
-			chat.view.subscribe((value) => {
+			subscribeState(chat.view, (value) => {
 				if (value) seen.push(value);
 			});
 			// 初始投影：宿主默认模型。
@@ -120,7 +121,7 @@ describe("per-conversation model switching over the gateway", () => {
 			const created = await client.management.create({});
 			const second = await client.attach(created.id);
 			const seen: ChatView[] = [];
-			second.view.subscribe((value) => {
+			subscribeState(second.view, (value) => {
 				if (value) seen.push(value);
 			});
 			expect(second.view.value?.agent.model).toEqual({ provider: "faux", modelId: "faux-1" });
@@ -145,8 +146,8 @@ describe("per-conversation model switching over the gateway", () => {
 				() => undefined,
 				(error: unknown) => error,
 			);
-			expect(failure).toBeInstanceOf(ChordError);
-			expect((failure as ChordError).code).toBe("gone");
+			expect(isChordError(failure)).toBe(true);
+			if (isChordError(failure)) expect(failure.code).toBe("gone");
 		} finally {
 			await client.close();
 		}

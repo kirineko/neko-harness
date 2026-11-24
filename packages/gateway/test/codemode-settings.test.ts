@@ -31,24 +31,24 @@ it("synchronizes the codemode mode across clients, restores the default and reje
 	const unix = await connectTestClient(gateway);
 	const web = await connectTestWsClient(gateway);
 	try {
-		await waitFor(() => !!web.codemodeSettings.state.value && !!unix.codemodeSettings.state.value);
-		const initial = web.codemodeSettings.state.value!;
+		await waitFor(() => !!web.codemodeSettings.snapshot.value && !!unix.codemodeSettings.snapshot.value);
+		const initial = web.codemodeSettings.snapshot.value!;
 		expect(initial).toMatchObject({ effective: { mode: "off" }, source: "default" });
 
 		await unix.codemodeSettings.set({ mode: "only" });
-		await waitFor(() => web.codemodeSettings.state.value?.effective.mode === "only");
-		expect(unix.codemodeSettings.state.value).toEqual(web.codemodeSettings.state.value);
-		expect(web.codemodeSettings.state.value).toMatchObject({ source: "saved" });
-		expect(web.codemodeSettings.state.value!.revision).toBeGreaterThan(initial.revision);
+		await waitFor(() => web.codemodeSettings.snapshot.value?.effective.mode === "only");
+		expect(unix.codemodeSettings.snapshot.value).toEqual(web.codemodeSettings.snapshot.value);
+		expect(web.codemodeSettings.snapshot.value).toMatchObject({ source: "saved" });
+		expect(web.codemodeSettings.snapshot.value!.revision).toBeGreaterThan(initial.revision);
 
-		const revision = web.codemodeSettings.state.value!.revision;
+		const revision = web.codemodeSettings.snapshot.value!.revision;
 		await expect(web.codemodeSettings.set({ mode: "bogus" as never })).rejects.toThrow();
 		await sleep(50);
-		expect(web.codemodeSettings.state.value!.revision).toBe(revision);
+		expect(web.codemodeSettings.snapshot.value!.revision).toBe(revision);
 
 		await web.codemodeSettings.reset({});
-		await waitFor(() => unix.codemodeSettings.state.value?.source === "default");
-		expect(unix.codemodeSettings.state.value!.effective.mode).toBe("off");
+		await waitFor(() => unix.codemodeSettings.snapshot.value?.source === "default");
+		expect(unix.codemodeSettings.snapshot.value!.effective.mode).toBe("off");
 	} finally {
 		await unix.close();
 		await web.close();
@@ -62,13 +62,13 @@ it("takes the config file value and lets a saved value win over it", async () =>
 	const gateway = await start(dir, '{"codemode": {"mode": "on"}}');
 	const client = await connectTestClient(gateway);
 	try {
-		await waitFor(() => !!client.codemodeSettings.state.value);
-		expect(client.codemodeSettings.state.value).toMatchObject({ effective: { mode: "on" }, source: "config" });
+		await waitFor(() => !!client.codemodeSettings.snapshot.value);
+		expect(client.codemodeSettings.snapshot.value).toMatchObject({ effective: { mode: "on" }, source: "config" });
 		await client.codemodeSettings.set({ mode: "off" });
-		await waitFor(() => client.codemodeSettings.state.value?.source === "saved");
-		expect(client.codemodeSettings.state.value!.effective.mode).toBe("off");
+		await waitFor(() => client.codemodeSettings.snapshot.value?.source === "saved");
+		expect(client.codemodeSettings.snapshot.value!.effective.mode).toBe("off");
 		await client.codemodeSettings.reset({});
-		await waitFor(() => client.codemodeSettings.state.value?.source === "config");
+		await waitFor(() => client.codemodeSettings.snapshot.value?.source === "config");
 	} finally {
 		await client.close();
 		await gateway.close();

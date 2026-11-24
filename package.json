@@ -58,13 +58,13 @@
 		"registry": "https://registry.npmjs.org"
 	},
 	"dependencies": {
-		"@earendil-works/chord": "1.5.0",
-		"@earendil-works/pi-ai": "1.5.0",
-		"@earendil-works/pi-codemode": "1.5.0",
-		"@earendil-works/pi-durable": "1.5.0",
-		"@earendil-works/pi-env": "1.5.0",
-		"@earendil-works/pi-schema": "1.5.0",
-		"@earendil-works/pi-tui": "1.5.0",
+		"@earendil-works/chord": "1.6.0",
+		"@earendil-works/pi-ai": "1.6.0",
+		"@earendil-works/pi-codemode": "1.6.0",
+		"@earendil-works/pi-durable": "1.6.0",
+		"@earendil-works/pi-env": "1.6.0",
+		"@earendil-works/pi-schema": "1.6.0",
+		"@earendil-works/pi-tui": "1.6.0",
 		"sharp": "0.35.5",
 		"ws": "8.21.0",
 		"yaml": "2.9.1"

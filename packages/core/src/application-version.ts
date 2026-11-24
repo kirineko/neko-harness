@@ -1,7 +1,7 @@
 /** Release builds replace these literals; workspace execution never trusts environment values. */
 declare const NEKO_BUILD_VERSION: string;
 export const RUNNING_VERSION = typeof NEKO_BUILD_VERSION === "undefined" ? "development" : NEKO_BUILD_VERSION;
-export const APPLICATION_PROTOCOL = 10;
+export const APPLICATION_PROTOCOL = 11;
 export function upgradeCommand(platform: string): string {
 	return platform === "win32" ? "npm install -g neko-harness@latest" : "neko update";
 }

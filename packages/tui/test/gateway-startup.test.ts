@@ -100,7 +100,7 @@ it("rereads a stale port file after spawning and connects to the newly written a
 		const connection = await connectToGateway(fresh.options);
 		try {
 			expect(connection.spawned).toBe(true);
-			expect((await connection.client.models.list(null)).length).toBeGreaterThan(0);
+			expect((await connection.client.models.list()).length).toBeGreaterThan(0);
 			expect(child.spawn).toHaveBeenCalledTimes(1);
 		} finally {
 			await connection.close();

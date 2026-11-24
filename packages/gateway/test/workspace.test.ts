@@ -13,14 +13,14 @@ it("shares workspace metadata over Unix/WS and touches only distinct activations
 		const created = await unix.management.create({ cwd: b });
 		expect(created.workspaceRoot).toBe(b);
 		await waitFor(
-			() => ws.directory.state.value?.sessions.some((s) => s.id === created.id) === true,
+			() => ws.directory.snapshot.value?.sessions.some((s) => s.id === created.id) === true,
 			"directory broadcast",
 		);
 		const first = await unix.attach(created.id);
 		const second = await ws.attach(created.id);
 		expect(first.view.value?.cwd).toBe(b);
 		expect(second.view.value?.cwd).toBe(b);
-		const lastUsed = () => unix.directory.state.value!.sessions.find((s) => s.id === created.id)!.lastUsedAt;
+		const lastUsed = () => unix.directory.snapshot.value!.sessions.find((s) => s.id === created.id)!.lastUsedAt;
 		// Each client's attach touches the session and the directory pushes arrive asynchronously; take the baseline once the value is quiet.
 		await waitFor(() => lastUsed() > created.lastUsedAt, "activation");
 		await new Promise((resolve) => setTimeout(resolve, 150));
@@ -34,7 +34,7 @@ it("shares workspace metadata over Unix/WS and touches only distinct activations
 		expect(lastUsed()).toBe(accepted);
 		const fork = await ws.management.fork(created.id);
 		expect(fork.workspaceRoot).toBe(b);
-		expect(unix.directory.state.value!.sessions.find((s) => s.id === "1")!.workspaceRoot).not.toBe(b);
+		expect(unix.directory.snapshot.value!.sessions.find((s) => s.id === "1")!.workspaceRoot).not.toBe(b);
 	} finally {
 		await unix.close();
 		await ws.close();

@@ -8,6 +8,7 @@ import { PickerPanel } from "../src/components/picker.ts";
 import { modelDisplayName } from "../src/format.ts";
 import { commands } from "../src/labels.ts";
 import { isProviderRejection, modelItems, openModelPanel, providerSendBlock } from "../src/provider-ui.ts";
+import { createFakeWatchable } from "./support/fake-watchable.ts";
 
 const model = (provider: string, modelId: string, extra: Partial<NekoSelectableModel> = {}): NekoSelectableModel =>
 	({
@@ -205,26 +206,16 @@ const defaultState = (effective: NekoModelRef, source: NekoDefaultModelState["so
 });
 
 function fakeModelClient(initial: NekoDefaultModelState) {
-	const listeners = new Set<(value: NekoDefaultModelState | undefined) => void>();
+	const snapshot = createFakeWatchable(initial);
 	const calls: { set: NekoModelRef[]; clear: number } = { set: [], clear: 0 };
-	const state: {
-		value: NekoDefaultModelState | undefined;
-		subscribe(listener: (value: NekoDefaultModelState | undefined) => void): () => void;
-	} = {
-		value: initial,
-		subscribe(listener) {
-			listeners.add(listener);
-			return () => listeners.delete(listener);
-		},
-	};
 	const client = {
-		models: { list: async (_input: null) => models },
+		models: { list: async () => models },
 		defaultModel: {
-			state,
+			snapshot: snapshot.watchable,
 			set: async (input: NekoModelRef) => {
 				calls.set.push(input);
 			},
-			clear: async (_input: null) => {
+			clear: async () => {
 				calls.clear++;
 			},
 		},
@@ -233,8 +224,7 @@ function fakeModelClient(initial: NekoDefaultModelState) {
 		client,
 		calls,
 		publish(value: NekoDefaultModelState) {
-			state.value = value;
-			for (const listener of listeners) listener(value);
+			snapshot.publish(value);
 		},
 	};
 }
@@ -327,7 +317,7 @@ it("d on a model without a key changes nothing and points to /login", async () =
 	await tick();
 	expect(calls.set).toEqual([]);
 	expect(calls.clear).toBe(0);
-	expect(fake.client.defaultModel.state.value).toEqual(saved);
+	expect(fake.client.defaultModel.snapshot.value).toEqual(saved);
 	const out = text(panel);
 	expect(out).toContain("OpenAI needs a key. Use /login to configure it.");
 	expect(panel.open).toBe(true);

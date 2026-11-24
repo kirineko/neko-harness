@@ -309,7 +309,7 @@ export class LoginPanel implements Component {
 			theme.panel(` ${truncateToWidth(line, Math.max(1, width - 2), "...", true)} `),
 		);
 	}
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		return this.#level === "list" ? this.#renderList(width) : this.#renderKey(width);
 	}
 	#renderList(width: number): string[] {

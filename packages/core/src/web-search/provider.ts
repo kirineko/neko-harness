@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { SearchProviderId } from "../search-providers.ts";
 
 export type SearchHit = {

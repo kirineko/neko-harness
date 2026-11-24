@@ -1,7 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT, type Context } from "@earendil-works/chord/context";
 import type {
 	CredentialStore,
 	ModelInputLimits,
@@ -78,6 +77,7 @@ import {
 	MODEL_PROVIDERS,
 	type ModelProviderId,
 	normalizeEnabledProviders,
+	providerEnvVars,
 } from "./credentials.ts";
 import { type ChangeDetail, type ChangeList, type ChangeSummary, ChangeTracker } from "./file-changes.ts";
 import { ImageDetails } from "./image-metadata.ts";
@@ -1582,7 +1582,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 			const spec = credentialProvider(provider);
 			const saved = await credentials.read(spec.id);
 			const savedConfigured = saved?.type === "api_key" && Boolean(saved.key);
-			const environmentConfigured = Boolean(process.env[spec.envVar]);
+			const environmentConfigured = providerEnvVars(spec).some((name) => Boolean(process.env[name]));
 			return {
 				savedConfigured,
 				environmentConfigured,

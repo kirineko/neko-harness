@@ -18,11 +18,11 @@
 		"build": "tsc -p tsconfig.build.json"
 	},
 	"dependencies": {
-		"@earendil-works/chord": "1.5.0",
-		"@earendil-works/pi-ai": "1.5.0",
-		"@earendil-works/pi-durable": "1.5.0",
-		"@earendil-works/pi-schema": "1.5.0",
-		"@earendil-works/pi-tui": "1.5.0",
+		"@earendil-works/chord": "1.6.0",
+		"@earendil-works/pi-ai": "1.6.0",
+		"@earendil-works/pi-durable": "1.6.0",
+		"@earendil-works/pi-schema": "1.6.0",
+		"@earendil-works/pi-tui": "1.6.0",
 		"@neko-harness/core": "workspace:*",
 		"@neko-harness/gateway": "workspace:*",
 		"highlight.js": "11.12.0"

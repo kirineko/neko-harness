@@ -1,3 +1,4 @@
+import type { Context } from "@earendil-works/chord/context";
 import { type ConversationId, defineExtension, type PromptInput, section } from "@earendil-works/pi-durable";
 import { enabledTools } from "../agent-change.ts";
 import { ROLE_PROMPTS, SUBAGENT_DELIVERY, SubagentDoc } from "../subagents.ts";
@@ -85,10 +86,7 @@ export const createNekoPrompt = (
 	platform: NodeJS.Platform = process.platform,
 ) => {
 	const built = new WeakMap<PromptInput, Promise<Record<string, string | undefined>>>();
-	const build = async (
-		input: PromptInput,
-		context: import("@earendil-works/chord").Context,
-	): Promise<Record<string, string | undefined>> => {
+	const build = async (input: PromptInput, context: Context): Promise<Record<string, string | undefined>> => {
 		const cwd = input.agent.cwd;
 		const role = (await input.read.snapshot(SubagentDoc, input.conversationId, context))?.role;
 		const resources = cwd ? await loadResources(input.conversationId, cwd) : { contextFiles: [], skills: [] };

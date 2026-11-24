@@ -123,7 +123,7 @@ export class ApprovalDock {
 		}
 		return { handled: true };
 	}
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		if (!this.visible) return [];
 		if (this.#choicesLanguage !== getLanguage()) {
 			const selected = this.#choices.getSelectedItem()?.value === "denied" ? 1 : 0;

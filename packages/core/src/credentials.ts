@@ -23,6 +23,7 @@ export {
 	MODEL_PROVIDERS,
 	type ModelProviderId,
 	normalizeEnabledProviders,
+	providerEnvVars,
 	SEARCH_CREDENTIAL_PROVIDERS,
 } from "./credential-providers.ts";
 

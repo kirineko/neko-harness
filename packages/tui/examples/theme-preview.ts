@@ -32,7 +32,7 @@ function section(title: string): void {
 	console.log(`\n${stripTerminalSequences(theme.muted(`── ${title} `))}`);
 }
 
-function show(component: { render: (width: number) => string[] }): void {
+function show(component: { render: (width: number) => readonly string[] }): void {
 	for (const line of component.render(WIDTH)) console.log(line);
 }
 

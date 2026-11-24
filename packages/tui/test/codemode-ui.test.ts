@@ -6,6 +6,7 @@ import { codemodeItems, openCodemodePanel } from "../src/codemode-ui.ts";
 import { PickerPanel } from "../src/components/picker.ts";
 import { commands } from "../src/labels.ts";
 import { setActiveTheme } from "../src/theme/index.ts";
+import { createFakeWatchable } from "./support/fake-watchable.ts";
 
 setActiveTheme("light");
 
@@ -20,17 +21,11 @@ const state = (
 ): NekoCodemodeSettingsState => ({ revision, effective: { mode }, source });
 
 function fakeClient(initial: NekoCodemodeSettingsState, failing = false) {
-	const listeners = new Set<(value: NekoCodemodeSettingsState | undefined) => void>();
+	const snapshot = createFakeWatchable(initial);
 	const calls: unknown[] = [];
 	const client = {
 		codemodeSettings: {
-			state: {
-				value: initial as NekoCodemodeSettingsState | undefined,
-				subscribe(listener: (value: NekoCodemodeSettingsState | undefined) => void) {
-					listeners.add(listener);
-					return () => listeners.delete(listener);
-				},
-			},
+			snapshot: snapshot.watchable,
 			set: async (input: { mode: string }) => {
 				if (failing) throw new Error("offline");
 				calls.push(input);
@@ -44,11 +39,10 @@ function fakeClient(initial: NekoCodemodeSettingsState, failing = false) {
 		client: client as never,
 		calls,
 		setValue(value: NekoCodemodeSettingsState | undefined) {
-			client.codemodeSettings.state.value = value;
+			snapshot.setValue(value);
 		},
 		publish(value: NekoCodemodeSettingsState) {
-			client.codemodeSettings.state.value = value;
-			for (const listener of listeners) listener(value);
+			snapshot.publish(value);
 		},
 	};
 }

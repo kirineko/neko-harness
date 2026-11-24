@@ -60,12 +60,12 @@ export class HistoryImage implements Component {
 	invalidate() {
 		this.#component?.invalidate();
 	}
-	measure(width: number): string[] {
-		const lines = this.#fallback.render(width);
+	measure(width: number): readonly string[] {
+		const lines = [...this.#fallback.render(width)];
 		if (getCapabilities().images) while (lines.length < 8) lines.push("");
 		return lines;
 	}
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		if (this.#visible && !this.#started && !this.#component && !this.#failed && getCapabilities().images) {
 			this.#started = true;
 			void bounded(async () => {
@@ -88,7 +88,7 @@ export class HistoryImage implements Component {
 					this.changed();
 				});
 		}
-		const lines = (this.#component ?? this.#fallback).render(width);
+		const lines = [...(this.#component ?? this.#fallback).render(width)];
 		if (getCapabilities().images) while (lines.length < 8) lines.push("");
 		return lines;
 	}
@@ -135,7 +135,7 @@ export class ImageTranscript extends Container {
 		this.#itemSpacers.clear();
 		super.clear();
 	}
-	override render(width: number): string[] {
+	override render(width: number): readonly string[] {
 		const scroll = this.scroll();
 		const top = scroll?.scrollTop ?? 0;
 		const bottom = top + (scroll?.viewportHeight ?? 0);

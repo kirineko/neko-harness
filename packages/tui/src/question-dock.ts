@@ -579,7 +579,7 @@ export class QuestionDock implements Component, Focusable {
 
 	invalidate(): void {}
 
-	render(width: number): string[] {
+	render(width: number): readonly string[] {
 		const entries = this.#entries();
 		this.#rows.clear();
 		if (!this.#supported || entries.length === 0) return [];

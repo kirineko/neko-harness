@@ -167,7 +167,7 @@ describe("mobile plan approval", () => {
 		}
 		expect(await rpcError(phone.call("plan.exit", {}))).toBe("invalid_params");
 		expect(chat.view.value?.plan?.mode).toBe("plan");
-		await chat.abort(null);
+		await chat.abort();
 	}, 40_000);
 
 	it("exits plan mode from the phone, cancelling the waiting plan, and is idempotent", async () => {
@@ -200,7 +200,7 @@ describe("mobile plan approval", () => {
 		await eventually(() => chat.view.value?.busy === true, "running");
 		const outcome = await rpcError(phone.call("plan.exit", { subscriptionId: live }));
 		expect(outcome).toBe("rejected");
-		await chat.abort(null);
+		await chat.abort();
 		await eventually(() => chat.view.value?.busy === false, "stopped");
 	}, 40_000);
 
@@ -222,7 +222,7 @@ describe("mobile plan approval", () => {
 			),
 		).toBe("rejected");
 		expect((await chat.planGet({ version }))?.status).toBe("awaiting_approval");
-		await chat.abort(null);
+		await chat.abort();
 	}, 40_000);
 
 	it("refuses reads and decisions once the device is revoked", async () => {
@@ -230,12 +230,12 @@ describe("mobile plan approval", () => {
 		expect(await harness!.gateway.mobile.revoke(device.deviceId)).toBe(true);
 		expect((await phone.ws.waitForClose()).code).toBe(4401);
 		expect((await chat.planGet({ version }))?.status).toBe("awaiting_approval");
-		await chat.abort(null);
+		await chat.abort();
 	}, 40_000);
 
 	it("sends a change notice with the cancelled status when the desktop stops the session", async () => {
 		const { phone, chat, subscriptionId, version } = await awaitPlan();
-		await chat.abort(null);
+		await chat.abort();
 		const notice = await phone.notification("plan.changed", () => true);
 		expect(checkSchema(MOBILE_API_V1_NOTIFICATIONS["plan.changed"] as never, notice)).toBe(true);
 		const record = await phone.call<Plan>("plan.get", { subscriptionId, version });

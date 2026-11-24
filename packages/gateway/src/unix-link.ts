@@ -1,102 +1,125 @@
 import { lstat, mkdir, unlink } from "node:fs/promises";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
-import { type Frame, type Link, type WebSocketLike, webSocketLink } from "@earendil-works/chord";
-import { MAX_LINK_BYTES } from "./link.ts";
-/** Length-prefixed UTF-8 JSON Chord frames, with bounded receive and socket write queues. */
-export class UnixLink implements Link {
-	#receiving = false;
+import { type GatewayLink, MAX_LINK_BYTES, markGatewayLink } from "./link.ts";
+
+/** Length-prefixed binary Chord frames over a Unix socket, with bounded receive and socket write queues. */
+export class UnixLink implements GatewayLink {
+	#closed = false;
+	#protocolError = false;
+	#receivedFrame = false;
 	#pendingBytes = 0;
 	#socket: Socket;
-	#native: Link;
 	#buffer = Buffer.alloc(0);
-	#message: ((event: { data: unknown }) => void)[] = [];
-	#ended: (() => void)[] = [];
+	#listener: ((message: Uint8Array) => void) | undefined;
+	#queued: Uint8Array[] = [];
+	#closeListeners = new Set<() => void>();
+	#protocolErrorListeners = new Set<() => void>();
+
 	constructor(socket: Socket) {
+		markGatewayLink(this);
 		this.#socket = socket;
-		const bridge: WebSocketLike = {
-			get readyState() {
-				return socket.destroyed ? 3 : 1;
-			},
-			send: (data) => this.#transmit(data),
-			close: () => socket.destroy(),
-			addEventListener: (type, handler) => {
-				if (type === "message") this.#message.push(handler as (event: { data: unknown }) => void);
-				if (type === "close") this.#ended.push(handler as () => void);
-			},
-		};
-		this.#native = webSocketLink(bridge);
 		socket.on("data", (data) => this.#data(data));
-		socket.on("error", () => this.close("socket error"));
-		socket.on("close", () => {
-			this.#buffer = Buffer.alloc(0);
-			for (const fn of this.#ended.splice(0)) fn();
-		});
+		socket.on("error", () => this.close());
+		socket.on("close", () => this.#finish());
+		if (socket.destroyed) this.#finish();
 	}
-	get closed() {
-		return this.#native.closed;
+
+	get closed(): boolean {
+		return this.#closed;
 	}
-	#data(data: Buffer) {
-		if (this.closed) return;
+
+	get protocolError(): boolean {
+		return this.#protocolError;
+	}
+
+	onProtocolError(listener: () => void): void {
+		if (this.#protocolError) listener();
+		else if (!this.#closed) this.#protocolErrorListeners.add(listener);
+	}
+
+	#data(data: Buffer): void {
+		if (this.#closed) return;
 		this.#buffer = Buffer.concat([this.#buffer, data]);
 		while (this.#buffer.length >= 4) {
-			const size = this.#buffer.readUInt32BE();
-			if (!size || size > MAX_LINK_BYTES) {
-				this.close("frame limit exceeded");
+			const size = this.#buffer.readUInt32BE(0);
+			if (size === 0 || size > MAX_LINK_BYTES) {
+				if (!this.#receivedFrame) {
+					this.#protocolError = true;
+					for (const fn of [...this.#protocolErrorListeners]) fn();
+				}
+				this.close();
 				return;
 			}
 			if (this.#buffer.length < 4 + size) break;
-			let text: string;
-			try {
-				text = new TextDecoder("utf-8", { fatal: true }).decode(this.#buffer.subarray(4, 4 + size));
-			} catch {
-				this.close("protocol error");
-				return;
-			}
+			this.#receivedFrame = true;
+			const payload = new Uint8Array(this.#buffer.subarray(4, 4 + size));
 			this.#buffer = this.#buffer.subarray(4 + size);
-			if (!this.#receiving) {
+			if (this.#listener === undefined) {
 				this.#pendingBytes += size;
 				if (this.#pendingBytes > MAX_LINK_BYTES) {
-					this.close("receive queue limit exceeded");
+					this.close();
 					return;
 				}
+				this.#queued.push(payload);
+			} else {
+				this.#listener(payload);
+				if (this.#closed) return;
 			}
-			for (const fn of this.#message) fn({ data: text });
-			if (this.closed) return;
 		}
-		if (this.#buffer.length > MAX_LINK_BYTES + 4) this.close("receive buffer limit exceeded");
+		if (this.#buffer.length > MAX_LINK_BYTES + 4) this.close();
 	}
-	#transmit(data: string | Uint8Array) {
-		const bytes = Buffer.from(data);
-		if (bytes.length > MAX_LINK_BYTES || this.#socket.writableLength + bytes.length + 4 > MAX_LINK_BYTES) {
-			this.#socket.destroy();
+
+	send(message: Uint8Array): void {
+		if (this.#closed) return;
+		if (
+			message.byteLength === 0 ||
+			message.byteLength > MAX_LINK_BYTES ||
+			this.#socket.writableLength + message.byteLength + 4 > MAX_LINK_BYTES
+		) {
+			this.close();
 			throw new Error("Link byte limit exceeded");
 		}
 		const header = Buffer.alloc(4);
-		header.writeUInt32BE(bytes.length);
-		this.#socket.write(Buffer.concat([header, bytes]));
+		header.writeUInt32BE(message.byteLength, 0);
+		this.#socket.write(Buffer.concat([header, message]));
 	}
-	send(frame: Frame) {
-		try {
-			return this.#native.send(frame);
-		} catch (error) {
-			this.#native.close("pending byte limit exceeded");
-			throw error;
+
+	onMessage(listener: (message: Uint8Array) => void): void {
+		if (this.#closed) return;
+		this.#listener = listener;
+		this.#pendingBytes = 0;
+		for (const message of this.#queued.splice(0)) {
+			if (this.#closed) return;
+			listener(message);
 		}
 	}
-	receive(handler: (frame: Frame) => void) {
-		this.#receiving = true;
-		this.#pendingBytes = 0;
-		this.#native.receive(handler);
+
+	onClose(listener: () => void): void {
+		if (this.#closed) listener();
+		else this.#closeListeners.add(listener);
 	}
-	onClose(handler: (reason: string) => void) {
-		this.#native.onClose(handler);
+
+	close(): void {
+		if (this.#closed) return;
+		this.#finish();
+		this.#socket.destroy();
 	}
-	close(reason = "closed") {
-		this.#native.close(reason);
+
+	#finish(): void {
+		if (this.#closed) return;
+		this.#closed = true;
+		this.#buffer = Buffer.alloc(0);
+		this.#queued = [];
+		this.#listener = undefined;
+		const listeners = [...this.#closeListeners];
+		this.#closeListeners.clear();
+		this.#protocolErrorListeners.clear();
+		for (const fn of listeners) fn();
 	}
 }
-export async function createUnixLink(path: string, signal?: AbortSignal): Promise<Link> {
+
+export async function createUnixLink(path: string, signal?: AbortSignal): Promise<GatewayLink> {
 	const socket = connect({ path, ...(signal ? { signal } : {}) });
 	await new Promise<void>((resolve, reject) => {
 		socket.once("connect", resolve);
@@ -104,12 +127,13 @@ export async function createUnixLink(path: string, signal?: AbortSignal): Promis
 	});
 	return new UnixLink(socket);
 }
+
 export function createUnixListener(options: { path: string; onError?: (error: Error) => void }) {
 	let server: Server | undefined;
-	const links = new Set<Link>();
+	const links = new Set<GatewayLink>();
 	let bound = false;
 	return {
-		async start(accept: (link: Link) => void) {
+		async start(accept: (link: GatewayLink) => void) {
 			await mkdir(dirname(options.path), { recursive: true });
 			try {
 				const stat = await lstat(options.path);

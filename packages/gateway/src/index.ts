@@ -4,8 +4,20 @@ export {
 	type NekoGatewayAddress,
 	type NekoGatewayClient,
 } from "./client.ts";
-export { assertGatewayIdentity } from "./client-session.ts";
 export {
+	assertGatewayIdentity,
+	safeValue,
+	subscribeNative,
+	subscribeState,
+	waitForLive,
+} from "./client-session.ts";
+export {
+	type ClientHeld,
+	type ClientRef,
+	decodeSubagentTarget,
+	encodeSubagentTarget,
+	GATEWAY_ADDRESS,
+	GatewayKind,
 	NekoApplicationInfo,
 	NekoChat,
 	NekoCodemodeSettings,
@@ -30,6 +42,8 @@ export {
 	type NekoSessionSummary,
 	NekoSkillMarket,
 	type NekoSubmitInput,
+	wrapClientHeld,
+	wrapClientRef,
 } from "./contract.ts";
 export {
 	type NekoGateway,
@@ -37,7 +51,7 @@ export {
 	startGateway,
 } from "./gateway.ts";
 export { isServerId } from "./identity.ts";
-export { createClientHost } from "./link.ts";
+export { createClientHost, type GatewayLink, observableLink } from "./link.ts";
 export { NekoMobileAdmin, readOrCreateMobileAdminToken } from "./mobile/admin.ts";
 export { gatewayPortFilePath, readGatewayPortFile, removeGatewayPortFile } from "./port-file.ts";
 export { gatewayCommand, stopGatewayProcess } from "./process.ts";

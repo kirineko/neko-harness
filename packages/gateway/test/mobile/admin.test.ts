@@ -5,12 +5,14 @@ import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls";
-import { ChordError, type Link, memoryLinkPair } from "@earendil-works/chord";
+import { type ChordError, isChordError, type Link, memoryLinkPair } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderPairingQr } from "../../../../scripts/mobile-dev-pair.ts";
 import { spawnProcess } from "../../../../test/process.ts";
 import { rm } from "../../../../test/temp-dir.ts";
+import { wrapClientRef } from "../../src/contract.ts";
 import { type NekoGateway, startGateway } from "../../src/index.ts";
 import { createClientHost } from "../../src/link.ts";
 import { createMobileAdminFactory, NekoMobileAdmin } from "../../src/mobile/admin.ts";
@@ -151,7 +153,7 @@ async function connectAdmin(gateway: NekoGateway, token: string) {
 		link = await createUnixLink(gateway.socketPath ?? "");
 	}
 	const host = createClientHost(link);
-	const admin = await host.get(NekoMobileAdmin, { token });
+	const admin = wrapClientRef(await host.get(NekoMobileAdmin, { token }, BACKGROUND_CONTEXT));
 	return { host, link, admin };
 }
 
@@ -176,14 +178,14 @@ describe("mobile admin minimal subset", () => {
 				expect(state).toEqual({ status: "listening", address: "127.0.0.1", port });
 				expect(gateway.mobile.state).toEqual({ status: "listening", address: "127.0.0.1", port });
 
-				const { pairingText, expiresAt } = await admin.createPairing(null);
+				const { pairingText, expiresAt } = await admin.createPairing();
 				expect(pairingText.startsWith("nekopair:1:")).toBe(true);
 				expect(parsePairingText(pairingText).ep).toBe(`https://127.0.0.1:${port}`);
 				expect(expiresAt).toBeGreaterThan(Date.now());
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 			expect(gateway.mobile.state.status).toBe("listening");
 		} finally {
@@ -198,28 +200,28 @@ describe("mobile admin minimal subset", () => {
 			const wrong = `wrong-${randomUUID()}`;
 			const { host, link, admin } = await connectAdmin(gateway, wrong);
 			try {
-				const failure = await admin.createPairing(null).then(
+				const failure = await admin.createPairing().then(
 					() => undefined,
 					(error: unknown) => error as Error,
 				);
-				expect(failure).toBeInstanceOf(ChordError);
+				expect(isChordError(failure)).toBe(true);
 				expect((failure as ChordError).code).toBe("forbidden");
 				expect(String((failure as Error).message)).not.toContain(wrong);
 				expect(JSON.stringify(failure)).not.toContain(wrong);
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 
 			const denied = await connectAdmin(gateway, "");
 			try {
 				await expect(denied.admin.enable({ address: "127.0.0.1" })).rejects.toMatchObject({ code: "forbidden" });
-				await expect(denied.admin.createPairing(null)).rejects.toMatchObject({ code: "forbidden" });
+				await expect(denied.admin.createPairing()).rejects.toMatchObject({ code: "forbidden" });
 			} finally {
 				denied.admin.release();
-				await denied.host.close().catch(() => undefined);
-				denied.link.close("done");
+				await denied.host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				denied.link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -245,7 +247,7 @@ describe("mobile admin minimal subset", () => {
 		} catch (error) {
 			failure = error;
 		}
-		expect(failure).toBeInstanceOf(ChordError);
+		expect(isChordError(failure)).toBe(true);
 		expect((failure as ChordError).code).toBe("forbidden");
 		expect(calls).toEqual([]);
 	});
@@ -256,7 +258,7 @@ describe("mobile admin minimal subset", () => {
 			const desktop = await connectTestClient(gateway);
 			const exposed = Object.keys(desktop).filter((key) => key.toLowerCase().includes("admin"));
 			expect(exposed).toEqual([]);
-			const models = await desktop.models.list(null);
+			const models = await desktop.models.list();
 			expect(models.length).toBeGreaterThan(0);
 			await desktop.close();
 		} finally {
@@ -289,12 +291,12 @@ describe("mobile admin minimal subset", () => {
 
 				const state = (await MobileStore.open(dir)).getState();
 				expect(state.devices.map((device) => device.deviceId)).toEqual([survivor.deviceId]);
-				expect((await desktop.models.list(null)).length).toBeGreaterThan(0);
+				expect((await desktop.models.list()).length).toBeGreaterThan(0);
 				await expect(admin.revoke({ deviceId: target.deviceId })).resolves.toEqual({ revoked: false });
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 			survivorClient.close(1000, "done");
 			await survivorClient.waitForClose();
@@ -318,12 +320,12 @@ describe("mobile admin minimal subset", () => {
 					() => undefined,
 					(error: unknown) => error,
 				);
-				expect(failure).toBeInstanceOf(ChordError);
+				expect(isChordError(failure)).toBe(true);
 				expect((failure as ChordError).code).toBe("forbidden");
 			} finally {
 				denied.admin.release();
-				await denied.host.close().catch(() => undefined);
-				denied.link.close("done");
+				await denied.host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				denied.link.close();
 			}
 
 			expect((await MobileStore.open(dir)).getState().devices.map((d) => d.deviceId)).toEqual([device.deviceId]);
@@ -342,14 +344,14 @@ describe("mobile admin minimal subset", () => {
 		try {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const first = await connectAdmin(gateway, token);
-			const rejected = await first.admin.createPairing(null).then(
+			const rejected = await first.admin.createPairing().then(
 				() => undefined,
 				(error: unknown) => error,
 			);
 			expect(rejected).toBeDefined();
 			first.admin.release();
-			await first.host.close();
-			first.link.close("done");
+			await first.host.close(BACKGROUND_CONTEXT);
+			first.link.close();
 
 			const second = await connectAdmin(gateway, token);
 			try {
@@ -357,8 +359,8 @@ describe("mobile admin minimal subset", () => {
 				expect(state.status).toBe("listening");
 			} finally {
 				second.admin.release();
-				await second.host.close().catch(() => undefined);
-				second.link.close("done");
+				await second.host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				second.link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -429,7 +431,7 @@ describe("mobile admin full surface (4.1)", () => {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const initial = await connectAdmin(gateway, token);
 			try {
-				const before = await initial.admin.state(null);
+				const before = await initial.admin.status();
 				expect(before.state).toEqual({ status: "disabled" });
 				expect(Array.isArray(before.candidates)).toBe(true);
 				expect(before.port).toBe(8323);
@@ -439,8 +441,8 @@ describe("mobile admin full surface (4.1)", () => {
 				expect(before.devices).toEqual([]);
 			} finally {
 				initial.admin.release();
-				await initial.host.close().catch(() => undefined);
-				initial.link.close("done");
+				await initial.host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				initial.link.close();
 			}
 
 			const port = await freePort();
@@ -451,7 +453,7 @@ describe("mobile admin full surface (4.1)", () => {
 
 			const during = await connectAdmin(gateway, token);
 			try {
-				const state = await during.admin.state(null);
+				const state = await during.admin.status();
 				expect(state.state).toEqual({ status: "listening", address: "127.0.0.1", port });
 				expect(state.certificate?.fingerprint).toMatch(/^[0-9a-f]{64}$/);
 				expect(state.certificate?.expiresAt).toBeGreaterThan(Date.now());
@@ -460,8 +462,8 @@ describe("mobile admin full surface (4.1)", () => {
 				expect(state.devices[0]?.online).toBe(true);
 			} finally {
 				during.admin.release();
-				await during.host.close().catch(() => undefined);
-				during.link.close("done");
+				await during.host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				during.link.close();
 			}
 
 			const touched = async (): Promise<boolean> =>
@@ -477,18 +479,18 @@ describe("mobile admin full surface (4.1)", () => {
 			const after = await connectAdmin(gateway, token);
 			try {
 				// The server notices the closed socket asynchronously; the client-side close can come first (observed on Windows).
-				let state = await after.admin.state(null);
+				let state = await after.admin.status();
 				const offlineBy = Date.now() + 5_000;
 				while (state.devices[0]?.online !== false && Date.now() < offlineBy) {
 					await new Promise((resolve) => setTimeout(resolve, 25));
-					state = await after.admin.state(null);
+					state = await after.admin.status();
 				}
 				expect(state.devices[0]?.online).toBe(false);
 				expect(state.devices[0]?.lastSeenAt).toBeGreaterThan(pairedAt);
 			} finally {
 				after.admin.release();
-				await after.host.close().catch(() => undefined);
-				after.link.close("done");
+				await after.host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				after.link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -512,14 +514,14 @@ describe("mobile admin full surface (4.1)", () => {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				const state = await admin.state(null);
+				const state = await admin.status();
 				// 接入 socket 的本地地址即监听地址；学习值原样上报（127.0.0.1 是内部地址，不在候选里）。
 				expect(state.lastConnectedAddress).toBe("127.0.0.1");
 				expect(state.candidates).not.toContain("127.0.0.1");
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 		} finally {
 			client.close(1000, "done");
@@ -534,13 +536,13 @@ describe("mobile admin full surface (4.1)", () => {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				const state = await admin.state(null);
+				const state = await admin.status();
 				expect(state.lastConnectedAddress).toBe("127.0.0.1");
 				expect(state.state).toEqual({ status: "listening", address: "127.0.0.1", port });
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -555,14 +557,14 @@ describe("mobile admin full surface (4.1)", () => {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				expect(await admin.disable(null)).toEqual({ status: "disabled" });
+				expect(await admin.disable()).toEqual({ status: "disabled" });
 				expect(gateway.mobile.state).toEqual({ status: "disabled" });
 				await expect(mobileRequest(port, "/")).rejects.toThrow();
 				expect((await MobileStore.open(dir)).getState().enabled).toBe(false);
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -577,8 +579,8 @@ describe("mobile admin full surface (4.1)", () => {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				const { pairingText } = await admin.createPairing(null);
-				await admin.cancelPairing(null);
+				const { pairingText } = await admin.createPairing();
+				await admin.cancelPairing();
 				const payload = parsePairingText(pairingText);
 				const response = await mobileRequest(
 					port,
@@ -601,8 +603,8 @@ describe("mobile admin full surface (4.1)", () => {
 				expect((await MobileStore.open(dir)).getState().devices).toEqual([]);
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -631,8 +633,8 @@ describe("mobile admin full surface (4.1)", () => {
 				await expect(admin.revoke({ deviceId: device.deviceId })).resolves.toEqual({ revoked: true });
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 			const close = await client.waitForClose();
 			expect(close.code).toBe(4401);
@@ -660,11 +662,11 @@ describe("mobile admin full surface (4.1)", () => {
 			const secondClient = await connectMobileHello(port, secondDevice);
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				const before = await admin.state(null);
+				const before = await admin.status();
 				const oldFingerprint = before.certificate?.fingerprint ?? "";
-				const { pairingText } = await admin.createPairing(null);
+				const { pairingText } = await admin.createPairing();
 
-				const rotated = await admin.regenerateCertificate(null);
+				const rotated = await admin.regenerateCertificate();
 				expect(rotated.fingerprint).toMatch(/^[0-9a-f]{64}$/);
 				expect(rotated.fingerprint).not.toBe(oldFingerprint);
 				expect(rotated.expiresAt).toBeGreaterThan(Date.now());
@@ -704,14 +706,14 @@ describe("mobile admin full surface (4.1)", () => {
 
 				// listener 用新证书重启。
 				expect(await tlsFingerprint(port)).toBe(rotated.fingerprint);
-				const after = await admin.state(null);
+				const after = await admin.status();
 				expect(after.state).toEqual({ status: "listening", address: "127.0.0.1", port });
 				expect(after.certificate?.fingerprint).toBe(rotated.fingerprint);
 				expect(after.devices).toEqual([]);
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 		} finally {
 			await gateway.close();
@@ -725,15 +727,15 @@ describe("mobile admin full surface (4.1)", () => {
 			let rotated: { fingerprint: string; expiresAt: number } | undefined;
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				rotated = await admin.regenerateCertificate(null);
+				rotated = await admin.regenerateCertificate();
 				expect(rotated.fingerprint).toMatch(/^[0-9a-f]{64}$/);
-				const state = await admin.state(null);
+				const state = await admin.status();
 				expect(state.state).toEqual({ status: "disabled" });
 				expect(state.certificate?.fingerprint).toBe(rotated.fingerprint);
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 
 			const port = await freePort();
@@ -757,7 +759,7 @@ describe("mobile admin full surface (4.1)", () => {
 			const token = await (await MobileStore.open(dir)).ensureAdminToken();
 			const { host, link, admin } = await connectAdmin(gateway, token);
 			try {
-				const state = await admin.state(null);
+				const state = await admin.status();
 				expect(state.state).toEqual({ status: "listening", address: "127.0.0.1", port });
 				expect(state.certificate?.fingerprint).toBe(fingerprint);
 				expect(state.devices.map((entry) => entry.deviceId)).toEqual([device.deviceId]);
@@ -765,8 +767,8 @@ describe("mobile admin full surface (4.1)", () => {
 				expect(await tlsFingerprint(port)).toBe(fingerprint);
 			} finally {
 				admin.release();
-				await host.close().catch(() => undefined);
-				link.close("done");
+				await host.close(BACKGROUND_CONTEXT).catch(() => undefined);
+				link.close();
 			}
 			expect(await tlsFingerprint(port)).toBe(fingerprint);
 		} finally {

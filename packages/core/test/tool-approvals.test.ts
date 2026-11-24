@@ -3,6 +3,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import type { Context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { obj } from "@earendil-works/pi-schema";
 import { expect, it } from "vitest";
@@ -132,7 +133,7 @@ for (const checkpoint of ["decided", "intent", "executing"] as const) {
 		const barrier = new Promise<void>((resolve) => {
 			reached = resolve;
 		});
-		const pause = (ctx: import("@earendil-works/chord").Context) =>
+		const pause = (ctx: Context) =>
 			new Promise<never>((_, reject) => {
 				reached();
 				const abort = () => reject(ctx.abortSignal?.reason);

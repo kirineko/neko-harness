@@ -144,7 +144,7 @@ const desktop = await connectNekoGateway({
 	socketPath: join(dir, "gateway.sock"),
 	serverId: gateway.serverId,
 });
-if (!(desktop.workspaces.state.value?.workspaces ?? []).some((entry) => entry.path === workspace))
+if (!(desktop.workspaces.snapshot.value?.workspaces ?? []).some((entry) => entry.path === workspace))
 	await desktop.workspaces.add({ path: workspace });
 await gateway.mobile.enable({ address, port });
 

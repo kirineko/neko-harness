@@ -10,6 +10,7 @@ import type { ChatView } from "@neko-harness/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
+import { subscribeState } from "../src/client-session.ts";
 import { startGateway } from "../src/index.ts";
 import { connectTestClient, testSocketPath } from "./helpers.ts";
 
@@ -58,13 +59,13 @@ describe("skills over the gateway", () => {
 				const created = await client.management.create({});
 				const chat = await client.attach(created.id);
 
-				const skills = await chat.skills(null);
+				const skills = await chat.skills();
 				const byName = new Map(skills.map((s) => [s.name, s]));
 				expect(byName.get("global")?.description).toBe("Global skill");
 				expect(byName.get("local")?.location).toBe(join(workspace, ".agents", "skills", "local", "SKILL.md"));
 
 				const seen: ChatView[] = [];
-				chat.view.subscribe((value) => {
+				subscribeState(chat.view, (value) => {
 					if (value) seen.push(value);
 				});
 				await chat.submit({ content: "/skill:local do it" });

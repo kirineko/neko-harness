@@ -20,6 +20,7 @@ import {
 	isModelProvider,
 	MODEL_PROVIDERS,
 	normalizeEnabledProviders,
+	providerEnvVars,
 } from "../src/credential-providers.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
 import { SessionMetadataDoc } from "../src/session-metadata.ts";
@@ -28,8 +29,12 @@ import { listDelegations } from "../src/subagents.ts";
 const dirs: string[] = [];
 const saved = new Map<string, string | undefined>();
 beforeEach(() => {
-	for (const spec of MODEL_PROVIDERS) saved.set(spec.envVar, process.env[spec.envVar]);
-	for (const spec of MODEL_PROVIDERS) delete process.env[spec.envVar];
+	for (const spec of MODEL_PROVIDERS) {
+		for (const name of providerEnvVars(spec)) {
+			saved.set(name, process.env[name]);
+			delete process.env[name];
+		}
+	}
 });
 afterEach(async () => {
 	for (const [name, value] of saved) {
@@ -41,8 +46,8 @@ afterEach(async () => {
 
 it("keeps the catalog in sync with Pi's api-key providers and environment variables", async () => {
 	const pi = new Map(builtinProviders().map((provider) => [provider.id, provider]));
-	expect(MODEL_PROVIDERS).toHaveLength(32);
-	expect(new Set(MODEL_PROVIDERS.map((item) => item.id)).size).toBe(32);
+	expect(MODEL_PROVIDERS).toHaveLength(33);
+	expect(new Set(MODEL_PROVIDERS.map((item) => item.id)).size).toBe(33);
 	for (const spec of MODEL_PROVIDERS) {
 		const provider = pi.get(spec.id);
 		expect(provider, spec.id).toBeDefined();
@@ -51,16 +56,50 @@ it("keeps the catalog in sync with Pi's api-key providers and environment variab
 		const models = createModels({ credentials: new InMemoryCredentialStore() });
 		models.setProvider(provider!);
 		expect(await models.checkAuth(spec.id), spec.id).toBeUndefined();
-		process.env[spec.envVar] = "test-env";
-		try {
-			expect(await models.checkAuth(spec.id), spec.id).toMatchObject({ type: "api_key", source: spec.envVar });
-		} finally {
-			delete process.env[spec.envVar];
+		for (const envName of providerEnvVars(spec)) {
+			process.env[envName] = "test-env";
+			try {
+				expect(await models.checkAuth(spec.id), `${spec.id}:${envName}`).toMatchObject({
+					type: "api_key",
+					source: envName,
+				});
+			} finally {
+				delete process.env[envName];
+			}
 		}
 	}
 	expect(CREDENTIAL_PROVIDERS.map((item) => item.id)).toContain("tavily");
 	expect(isModelProvider("tavily")).toBe(false);
 	expect(isModelProvider("anthropic")).toBe(false);
+});
+
+it("recognizes upstream fallback environment variables in credentialStatus and model availability", async () => {
+	process.env.QWEN_TOKEN_PLAN_API_KEY = "legacy-shared-key";
+	const runtime = await createNekoRuntime({ storage: "memory", credentials: new InMemoryCredentialStore() });
+	try {
+		await runtime.setProviderEnabled("qwen-token-plan", true);
+		expect(await runtime.credentialStatus("qwen-token-plan")).toEqual({
+			savedConfigured: false,
+			environmentConfigured: true,
+			source: "environment",
+		});
+		const models = await runtime.listSelectableModels();
+		expect(models.filter((m) => m.provider === "qwen-token-plan").every((m) => m.available)).toBe(true);
+		await runtime.saveCredential("qwen-token-plan", "saved-plan-key");
+		expect(await runtime.credentialStatus("qwen-token-plan")).toEqual({
+			savedConfigured: true,
+			environmentConfigured: true,
+			source: "saved",
+		});
+		await runtime.removeCredential("qwen-token-plan");
+		expect(await runtime.credentialStatus("qwen-token-plan")).toEqual({
+			savedConfigured: false,
+			environmentConfigured: true,
+			source: "environment",
+		});
+	} finally {
+		await runtime.close();
+	}
 });
 
 it("normalizes enabled providers to catalog members and always keeps DeepSeek", () => {
