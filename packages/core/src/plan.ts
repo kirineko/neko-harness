@@ -120,15 +120,19 @@ export class PlanService {
 			}
 			if (state.mode !== "plan") throw new Error("submit_plan is only available in plan mode.");
 			for (const item of state.items) if (item.status === "awaiting_approval") settle(state, item, "superseded");
+			// A user input already queued answers the user's newer intent: it is placed after this plan, so the plan is stale.
+			const inbox = await tx.doc(InboxDoc, id);
+			const superseded = inbox.items.some((item) => queuedUserInput(item));
+			const now = Date.now();
 			const item: PlanItem = {
 				version: randomUUID(),
 				title: args.title,
 				steps: [...args.steps],
 				note: args.note,
-				status: "awaiting_approval",
+				status: superseded ? "superseded" : "awaiting_approval",
 				feedback: null,
-				createdAt: Date.now(),
-				settledAt: null,
+				createdAt: now,
+				settledAt: superseded ? now : null,
 				taskId,
 				dispatched: false,
 			};
@@ -258,13 +262,7 @@ function submitPlanTool(service: () => PlanService) {
 				if (error instanceof InteractionInputError) throw new Error(`Invalid submit_plan arguments: ${error.message}`);
 				throw error;
 			}
-			let record = await service().submit(api.conversationId, api.taskId, args, context);
-			// A user input already queued answers the user's newer intent: it is placed after this plan, so the plan is stale.
-			const inbox = await api.snapshot(InboxDoc, api.conversationId, context);
-			if (record.status === "awaiting_approval" && inbox?.items.some((item) => queuedUserInput(item))) {
-				await service().supersedePending(api.conversationId);
-				record = (await service().get(api.conversationId, record.version)) ?? record;
-			}
+			const record = await service().submit(api.conversationId, api.taskId, args, context);
 			const details: PlanDetails = {
 				version: record.version,
 				title: record.title,

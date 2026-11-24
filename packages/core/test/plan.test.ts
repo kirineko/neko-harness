@@ -446,3 +446,64 @@ it("projects submit_plan as a structured tool item and a decision as a system re
 		await runtime.close();
 	}
 });
+
+it("commits superseded directly in one transaction without an awaiting_approval intermediate state when user input is queued", async () => {
+	const { onCommits } = await import("../src/commits.ts");
+	const faux = fauxProvider();
+	faux.setResponses([
+		call("ask_user", { question: "Which?" }),
+		call("submit_plan", plan1),
+		fauxAssistantMessage("handled the queued input"),
+	]);
+	const runtime = await open(faux);
+	try {
+		await runtime.root.setPlanMode("plan");
+		const beforeRevision = (await runtime.root.plan()).revision;
+		const seenStatuses: string[] = [];
+		let planCommits = 0;
+		const watch = await runtime.harness.watchDoc(PlanDoc, runtime.conversation.id, runtime.context);
+		watch?.start(async (ev) => {
+			if (ev.kind === "value") {
+				for (const item of watch.value.items) seenStatuses.push(item.status);
+			}
+		});
+		const stopCommits = onCommits(runtime.harness, ({ changes }) => {
+			for (const c of changes) {
+				if (
+					c.type === "document" &&
+					c.record.kind === PlanDoc.definition.kind &&
+					c.conversationId === runtime.conversation.id
+				) {
+					planCommits++;
+				}
+			}
+		});
+		try {
+			const first = await runtime.submit("plan");
+			const q = (
+				await until(
+					() => runtime.root.questions(),
+					(l) => l.pending.length > 0,
+					"a question",
+				)
+			).pending[0]!;
+			const queued = await runtime.submit("also support yaml", { whenBusy: "followUp" });
+			await runtime.root.respondQuestion(q.id, q.version, { kind: "skip" });
+			await runtime.waitAnswer(first).catch(() => {});
+			const answer = await runtime.waitAnswer(queued);
+			expect(answer).toEqual({ status: "done", text: "handled the queued input" });
+			expect(seenStatuses).not.toContain("awaiting_approval");
+			expect(seenStatuses).toContain("superseded");
+			expect(planCommits).toBe(1);
+			const view = await runtime.root.plan();
+			expect(view.revision).toBe(beforeRevision + 1);
+			expect(view.current).toMatchObject({ status: "superseded" });
+			expect(view.current?.settledAt).not.toBeNull();
+		} finally {
+			stopCommits();
+			await watch?.stop();
+		}
+	} finally {
+		await runtime.close();
+	}
+});

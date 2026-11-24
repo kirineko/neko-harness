@@ -6,14 +6,14 @@ import {
 	defineDoc,
 	defineDocFamily,
 	defineExtension,
+	defineSignal,
 	defineTool,
 	type Extension,
 	type Harness,
 	type TaskId,
 	type Tx,
 } from "@earendil-works/pi-durable";
-import { arr, bool, nul, obj, opt, str, union } from "@earendil-works/pi-schema";
-import { onCommits } from "./commits.ts";
+import { arr, bool, nul, obj, oneOf, opt, str, union } from "@earendil-works/pi-schema";
 import {
 	answerLabels,
 	InteractionInputError,
@@ -53,6 +53,15 @@ export const QuestionsDoc = defineDoc<{ revision: number; pending: number[] }>({
 	history: "latest",
 	fork: "initial",
 	initial: () => ({ revision: 0, pending: [] }),
+});
+
+/** Delivered by `UserQuestions.respond()` in the settling commit to wake the parked `ask_user` tool task. */
+export const QuestionAnsweredSignal = defineSignal({
+	name: "app.neko.question-settled",
+	version: 1,
+	schema: obj({
+		status: oneOf(["answered", "skipped", "cancelled"]),
+	}),
 });
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -98,7 +107,7 @@ function settle(
 	index.revision += 1;
 }
 
-/** Durable questions of every conversation: creation, waiting, first-settle answers and cancellation. */
+/** Durable questions of every conversation: creation, signal-backed settlement and cancellation reconciliation. */
 export class UserQuestions {
 	readonly harness: Harness;
 	#tracked = new Set<ConversationId>();
@@ -108,12 +117,6 @@ export class UserQuestions {
 	constructor(harness: Harness, context: Context) {
 		this.harness = harness;
 		this.#context = context;
-		const stop = onCommits(harness, ({ changes }) => {
-			if (!changes.some((c) => c.type === "task" && (c.value.abortRequested || c.value.state.status === "terminal")))
-				return;
-			void this.reconcileAll();
-		});
-		harness.closed.finally(stop).catch(() => {});
 	}
 
 	/** Remember conversations whose open questions must be reconciled when tasks stop. */
@@ -201,53 +204,6 @@ export class UserQuestions {
 		}, context);
 	}
 
-	/**
-	 * Wait until the record leaves `pending`. The watch is taken first and its current value checked before any
-	 * listener runs, so an answer committed in between cannot be missed; ending the watch rejects the wait.
-	 */
-	async wait(conversationId: ConversationId, id: number, context: Context): Promise<QuestionRecord> {
-		const watch = await this.harness.watchDoc(QuestionDoc, conversationId, String(id), context);
-		if (!watch) throw new Error("Question unavailable");
-		const signal = context.abortSignal;
-		let onAbort = () => {};
-		try {
-			return await new Promise<QuestionRecord>((resolve, reject) => {
-				let done = false;
-				const finish = (action: () => void) => {
-					if (done) return;
-					done = true;
-					action();
-				};
-				const check = (value: Readonly<QuestionRecord> | undefined) => {
-					if (value && value.status !== "pending") finish(() => resolve(clone(value) as QuestionRecord));
-				};
-				onAbort = () => finish(() => reject(signal?.reason ?? new Error("Cancelled")));
-				signal?.addEventListener("abort", onAbort, { once: true });
-				if (signal?.aborted) return onAbort();
-				void watch.closed.then((end) => {
-					if (end.kind === "stopped") return;
-					finish(() =>
-						reject(
-							signal?.aborted
-								? signal.reason
-								: end.kind === "listener_error" || end.kind === "failed"
-									? end.error
-									: new Error(`Question watch ended: ${end.kind}`),
-						),
-					);
-				});
-				check(watch.value);
-				if (!done)
-					watch.start(async (call) => {
-						if (call.kind === "value") check(call.value);
-					});
-			});
-		} finally {
-			signal?.removeEventListener("abort", onAbort);
-			await watch.stop();
-		}
-	}
-
 	/** Open questions of a conversation; stopped ones are cancelled first. */
 	async list(conversationId: ConversationId, context: Context): Promise<QuestionList> {
 		this.track(conversationId);
@@ -289,16 +245,18 @@ export class UserQuestions {
 			if (record.version !== version) throw new Error("Question has changed.");
 			const decision = validateQuestionResponse(record, response);
 			if (record.status !== "pending") return clone(record) as QuestionRecord;
+			const isLive = await live(tx, id);
 			const index = await tx.doc(QuestionsDoc, conversationId);
-			if (!(await live(tx, id))) {
+			if (!isLive) {
 				settle(record as QuestionRecord, index, "cancelled");
 				return clone(record) as QuestionRecord;
 			}
-			if (decision.kind === "skip") settle(record as QuestionRecord, index, "skipped");
-			else {
+			const nextStatus = decision.kind === "skip" ? "skipped" : "answered";
+			if (decision.kind !== "skip") {
 				record.answer = { optionIds: decision.optionIds, text: decision.text };
-				settle(record as QuestionRecord, index, "answered");
 			}
+			settle(record as QuestionRecord, index, nextStatus);
+			await tx.signal(id as TaskId, QuestionAnsweredSignal, record.version, { status: nextStatus });
 			return clone(record) as QuestionRecord;
 		}, context);
 	}
@@ -408,16 +366,41 @@ export function createAskUserTool(service: () => UserQuestions) {
 				throw error;
 			}
 			const questions = service();
+			if (api.wake !== undefined) {
+				const settled = await questions.get(api.conversationId, api.taskId, context);
+				if (!settled || settled.status === "pending") throw new Error("Question unavailable");
+				return {
+					output: [{ type: "text", text: questionOutput(settled) }],
+					structuredOutput: outcomeOf(settled),
+					details: questionDetails(settled),
+					isError: settled.status === "cancelled",
+				};
+			}
 			const created = await questions.ensure(api.conversationId, api.taskId, api.callId, args, context);
 			await api.details(questionDetails(created), context);
-			const record =
-				created.status === "pending" ? await questions.wait(api.conversationId, api.taskId, context) : created;
+			if (created.status === "pending") {
+				return { sleep: { signals: [QuestionAnsweredSignal.key(created.version)] } };
+			}
 			return {
-				output: [{ type: "text", text: questionOutput(record) }],
-				structuredOutput: outcomeOf(record),
-				details: questionDetails(record),
-				isError: record.status === "cancelled",
+				output: [{ type: "text", text: questionOutput(created) }],
+				structuredOutput: outcomeOf(created),
+				details: questionDetails(created),
+				isError: created.status === "cancelled",
 			};
+		},
+		cancel: async (_input, api, context) => {
+			const existing = await api.snapshot(QuestionDoc, api.conversationId, String(api.taskId), context);
+			if (!existing) return;
+			const settled =
+				existing.status === "pending"
+					? await api.commit(async (tx) => {
+							const record = await tx.doc(QuestionDoc, api.conversationId, String(api.taskId), clone(existing));
+							const index = await tx.doc(QuestionsDoc, api.conversationId);
+							if (record.status === "pending") settle(record as QuestionRecord, index, "cancelled");
+							return clone(record) as QuestionRecord;
+						}, context)
+					: (clone(existing) as QuestionRecord);
+			await api.details(questionDetails(settled), context);
 		},
 	});
 }

@@ -417,7 +417,7 @@ for (const breakpoint of ["before-question", "answer-saved"] as const) {
 								await pause(ctx);
 							}
 							const result = await base.execute(args, api, ctx);
-							if (first && breakpoint === "answer-saved") {
+							if (first && breakpoint === "answer-saved" && api.wake !== undefined) {
 								first = false;
 								await pause(ctx);
 							}
@@ -590,59 +590,96 @@ it("cancels pending questions when the session is archived", async () => {
 	}
 }, 30_000);
 
-it("waits on committed state only: settled before subscribing, aborted, closed, and always released", async () => {
-	const { withAbortSignal } = await import("@earendil-works/chord/context");
+it("parks in durable sleeping state without holding running tasks and survives repeated ungraceful restarts past restartLimit", async () => {
+	const { cp } = await import("node:fs/promises");
+	const { DEFAULT_RESTART_LIMIT, LiveDoc } = await import("@earendil-works/pi-durable");
+	const dir = await mkdtemp(join(tmpdir(), "neko-question-crashes-"));
+	const liveDir = join(dir, "live");
 	const faux = fauxProvider();
-	faux.setResponses([ask(single), fauxAssistantMessage("done")]);
-	const runtime = await open(faux);
+	faux.setResponses([ask(single), fauxAssistantMessage("survived all crashes")]);
+	const reports: unknown[] = [];
+	const makeOptions = (storagePath: string) => ({
+		storagePath,
+		providers: [faux.provider],
+		model,
+		onReport: (_err: unknown, report: unknown) => {
+			if (report) reports.push(report);
+		},
+	});
+	let runtime = await createNekoRuntime(makeOptions(join(liveDir, "state.sqlite")));
 	try {
-		const watches: { closed: Promise<unknown> }[] = [];
-		const watchDoc = runtime.harness.watchDoc.bind(runtime.harness) as (
-			...args: unknown[]
-		) => Promise<{ closed: Promise<unknown> }>;
-		(runtime.harness as { watchDoc: unknown }).watchDoc = async (...args: unknown[]) => {
-			const watch = await watchDoc(...args);
-			if (watch) watches.push(watch);
-			return watch;
-		};
 		const job = await runtime.submit("go");
 		const q = await firstPending(runtime);
-		const controller = new AbortController();
-		const aborted = runtime.questions.wait(runtime.root.id, q.id, withAbortSignal(controller.signal, runtime.context));
-		await sleep(30);
-		controller.abort(new Error("stopped by test"));
-		await expect(aborted).rejects.toThrow("stopped by test");
-		const settled = await runtime.root.respondQuestion(q.id, q.version, answer(["pg"]));
+		await until(
+			async () => (await runtime.harness.getTask(q.id as never, runtime.context))?.state.status === "sleeping",
+			Boolean,
+			"ask_user task sleeping",
+		);
+		const runId = (await runtime.harness.snapshot(LiveDoc, runtime.root.id, runtime.context))?.run?.taskId;
+		expect(runId).toBeDefined();
+		expect((await runtime.harness.getTask(runId!, runtime.context))?.state.status).toBe("waiting");
+
+		// Snapshot the open SQLite directory (including WAL) to simulate an ungraceful process kill 6 times (> restartLimit).
+		let currentDir = liveDir;
+		for (let i = 1; i <= DEFAULT_RESTART_LIMIT + 1; i++) {
+			const crashDir = join(dir, `crash-${i}`);
+			await cp(currentDir, crashDir, { recursive: true });
+			await runtime.close();
+			currentDir = crashDir;
+			runtime = await createNekoRuntime(makeOptions(join(currentDir, "state.sqlite")));
+			await until(
+				async () => (await runtime.harness.getTask(q.id as never, runtime.context))?.state.status === "sleeping",
+				Boolean,
+				`ask_user sleeping after crash ${i}`,
+			);
+			const task = await runtime.harness.getTask(q.id as never, runtime.context);
+			expect(task?.restarts).toBeUndefined();
+			const again = await firstPending(runtime);
+			expect(again).toMatchObject({ id: q.id, version: q.version });
+		}
+		expect(reports).toEqual([]);
+		await runtime.root.respondQuestion(q.id, q.version, answer(["pg"], "still here"));
+		const submission = await runtime.harness.submission(job.id, runtime.context);
+		expect(await runtime.waitAnswer(submission!)).toEqual({ status: "done", text: "survived all crashes" });
+	} finally {
+		await runtime.close();
+		await rm(dir, { recursive: true, force: true });
+	}
+}, 30_000);
+
+it("persists cancelled structured details via the cancel hook when a parked question is aborted", async () => {
+	const { projectChatView } = await import("../src/projection.ts");
+	const faux = fauxProvider();
+	faux.setResponses([ask(single)]);
+	const runtime = await open(faux);
+	try {
+		const job = await runtime.submit("go");
+		const q = await firstPending(runtime);
+		await until(
+			async () => (await runtime.harness.getTask(q.id as never, runtime.context))?.state.status === "sleeping",
+			Boolean,
+			"ask_user task sleeping",
+		);
+		await runtime.abort();
 		await runtime.waitAnswer(job);
-		expect(await runtime.questions.wait(runtime.root.id, q.id, runtime.context)).toEqual(settled);
-		await expect(runtime.questions.wait(runtime.root.id, 424242, runtime.context)).rejects.toThrow(/unavailable/);
-		const ended = await Promise.all(watches.map((w) => Promise.race([w.closed, sleep(1000).then(() => "LEAK")])));
-		expect(watches.length).toBeGreaterThanOrEqual(3);
-		expect(ended).not.toContain("LEAK");
+		expect((await runtime.root.questions()).pending).toEqual([]);
+		expect((await runtime.root.question(q.id))?.status).toBe("cancelled");
+		const view = await runtime.root.follow();
+		try {
+			const item = projectChatView(view.value, "faux").items.find((i) => i.type === "tool" && i.name === "ask_user");
+			expect(item).toMatchObject({
+				type: "tool",
+				phase: "done",
+				isError: true,
+				interaction: { kind: "ask_user", id: q.id, status: "cancelled" },
+			});
+		} finally {
+			view.dispose();
+		}
 	} finally {
 		await runtime.close();
 	}
 }, 30_000);
-
-it("fails a wait explicitly when the store closes instead of hanging or inventing an answer", async () => {
-	const faux = fauxProvider();
-	faux.setResponses([ask(single)]);
-	const runtime = await open(faux);
-	const q = await (async () => {
-		await runtime.submit("go");
-		return firstPending(runtime);
-	})();
-	const waiting = runtime.questions.wait(runtime.root.id, q.id, runtime.context);
-	const outcome = waiting.then(
-		() => "resolved",
-		(error: Error) => error.message,
-	);
-	await sleep(30);
-	await runtime.close();
-	const result = await Promise.race([outcome, sleep(3000).then(() => "HUNG")]);
-	expect(result).not.toBe("HUNG");
-	expect(result).not.toBe("resolved");
-});
 
 it("projects the question and its settlement from persisted details, not from result text", async () => {
 	const { projectChatView } = await import("../src/projection.ts");

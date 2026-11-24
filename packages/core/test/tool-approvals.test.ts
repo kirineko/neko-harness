@@ -1,22 +1,28 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { DEFAULT_RESTART_LIMIT, type Report, type TaskId } from "@earendil-works/pi-durable";
 import { obj } from "@earendil-works/pi-schema";
 import { expect, it } from "vitest";
 import { fauxProvider } from "../../../test/faux.ts";
 import { rm } from "../../../test/temp-dir.ts";
 import { followConversation } from "../src/conversation-follow.ts";
 import { createNekoRuntime, type NekoRuntime } from "../src/runtime.ts";
-import type { ToolApproval } from "../src/tool-approvals.ts";
+import { ApprovalsDoc, type ToolApproval } from "../src/tool-approvals.ts";
 
 async function pending(runtime: NekoRuntime): Promise<ToolApproval> {
 	for (let i = 0; i < 500; i++) {
-		const a = (await runtime.approvals.list(runtime.root.id, runtime.context)).find((a) => a.status === "pending");
-		if (a) return a;
+		const a = (await runtime.approvals.list(runtime.root.id, runtime.context)).find(
+			(item) => item.status === "pending",
+		);
+		if (a) {
+			const task = await runtime.harness.getTask(a.id as TaskId, runtime.context);
+			if (task?.state.status === "sleeping") return a;
+		}
 		await sleep(10);
 	}
 	throw new Error("No pending approval");
@@ -52,13 +58,15 @@ for (const decision of ["allowed", "denied", "cancelled"] as const) {
 			);
 			expect(
 				projectChatView(childView.value, "faux").items.find((i) => i.type === "tool" && i.callId === a.callId),
-			).toMatchObject({ phase: "pending" });
+			).toMatchObject({ phase: "running", result: null });
 			childView.dispose();
 			await expect(
 				runtime.approvals.decide(runtime.root.id, a.delegationTaskId, a.id, "wrong", "allowed", runtime.context),
 			).rejects.toThrow();
 			if (decision === "cancelled") {
 				await runtime.abort();
+				const raw = await runtime.harness.snapshot(ApprovalsDoc, runtime.root.id, runtime.context);
+				expect(raw?.items[0]?.status).toBe("cancelled");
 				expect(
 					await runtime.approvals.decide(
 						runtime.root.id,
@@ -123,9 +131,143 @@ it("restores a pending approval after SQLite reopen", async () => {
 	}
 }, 20000);
 
+it("re-sleeps idempotently across extension reinstalls and repeated restarts past restartLimit", async () => {
+	const { defineExtension, hook, ToolTask } = await import("@earendil-works/pi-durable");
+	const root = await mkdtemp(join(tmpdir(), "neko-approval-durable-"));
+	const workDir = join(root, "work");
+	let stateDir = join(root, "state-0");
+	await mkdtemp(join(root, "init-"));
+	const { mkdir } = await import("node:fs/promises");
+	await mkdir(workDir, { recursive: true });
+	await mkdir(stateDir, { recursive: true });
+	const faux = fauxProvider();
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("subagent", { type: "explore", title: "Inspect", task: "Inspect" })], {
+			stopReason: "toolUse",
+		}),
+		fauxAssistantMessage([fauxToolCall("bash", { command: "printf survived >> result.txt" })], {
+			stopReason: "toolUse",
+		}),
+		fauxAssistantMessage("Child report"),
+		fauxAssistantMessage("Main report"),
+	]);
+	const reports: Report[] = [];
+	const openAt = (dir: string) =>
+		createNekoRuntime({
+			storagePath: join(dir, "state.sqlite"),
+			cwd: workDir,
+			providers: [faux.provider],
+			model: { provider: "faux", modelId: "faux-1" },
+			onReport: (_error, report) => {
+				if (report) reports.push(report);
+			},
+		});
+	let runtime = await openAt(stateDir);
+	try {
+		expect("wait" in runtime.approvals).toBe(false);
+		const job = await runtime.submit("Inspect");
+		const initial = await pending(runtime);
+
+		// Hot-installing extensions wakes gated tool calls without consuming the approval signal memo.
+		let probeCalls = 0;
+		for (let i = 0; i < 2; i++) {
+			runtime.installExtension(
+				defineExtension({
+					name: `noop-gate-${i}`,
+					hooks: [
+						hook(ToolTask, {
+							beforeTool: () => {
+								probeCalls++;
+								return undefined;
+							},
+						}),
+					],
+				}),
+			);
+			const afterInstall = await pending(runtime);
+			expect(afterInstall.id).toBe(initial.id);
+			expect(afterInstall.version).toBe(initial.version);
+		}
+		expect(probeCalls).toBe(0);
+
+		// Re-run gate across DEFAULT_RESTART_LIMIT + 1 restarts (including ungraceful copies while open).
+		for (let i = 1; i <= DEFAULT_RESTART_LIMIT + 1; i++) {
+			const nextDir = join(root, `state-${i}`);
+			if (i <= 3) {
+				await cp(stateDir, nextDir, { recursive: true });
+				await runtime.close();
+			} else {
+				await runtime.close();
+				await cp(stateDir, nextDir, { recursive: true });
+			}
+			stateDir = nextDir;
+			runtime = await openAt(stateDir);
+			const restored = await pending(runtime);
+			expect(restored.id).toBe(initial.id);
+			expect(restored.version).toBe(initial.version);
+			const task = await runtime.harness.getTask(restored.id as TaskId, runtime.context);
+			expect(task?.state).toMatchObject({ status: "sleeping", checkpoint: { phase: "call" } });
+			expect(task?.restarts).toBeUndefined();
+			expect(await runtime.approvals.list(runtime.root.id, runtime.context)).toHaveLength(1);
+		}
+		expect(reports).toEqual([]);
+
+		await runtime.approvals.decide(
+			runtime.root.id,
+			initial.delegationTaskId,
+			initial.id,
+			initial.version,
+			"allowed",
+			runtime.context,
+		);
+		const submission = await runtime.harness.submission(job.id, runtime.context);
+		await runtime.waitAnswer(submission!);
+		expect(await readFile(join(workDir, "result.txt"), "utf8")).toBe("survived");
+	} finally {
+		await runtime.close();
+		await rm(root, { recursive: true, force: true });
+	}
+}, 30000);
+
+it("cancels a pending approval synchronously when the active subagent round is stopped", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "neko-approval-stop-round-"));
+	const faux = fauxProvider();
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("subagent", { type: "explore", title: "Inspect", task: "Inspect" })], {
+			stopReason: "toolUse",
+		}),
+		fauxAssistantMessage([fauxToolCall("bash", { command: "printf never > result.txt" })], {
+			stopReason: "toolUse",
+		}),
+		fauxAssistantMessage("Main after stop"),
+	]);
+	const runtime = await createNekoRuntime({
+		storage: "memory",
+		cwd: dir,
+		providers: [faux.provider],
+		model: { provider: "faux", modelId: "faux-1" },
+	});
+	try {
+		const job = await runtime.submit("Inspect");
+		const a = await pending(runtime);
+		await runtime.harness.abortTask(a.delegationTaskId as TaskId, runtime.context);
+		await runtime.harness.waitForTask(a.delegationTaskId as TaskId, runtime.context);
+		const snap = await runtime.harness.snapshot(ApprovalsDoc, runtime.root.id, runtime.context);
+		expect(snap?.items[0]?.status).toBe("cancelled");
+		expect(
+			await runtime.approvals.decide(runtime.root.id, a.delegationTaskId, a.id, a.version, "allowed", runtime.context),
+		).toBe("cancelled");
+		await runtime.waitAnswer(job);
+		expect(existsSync(join(dir, "result.txt"))).toBe(false);
+	} finally {
+		await runtime.close();
+		await rm(dir, { recursive: true, force: true });
+	}
+}, 20000);
+
 for (const checkpoint of ["decided", "intent", "executing"] as const) {
 	it(`recovers at ${checkpoint} without replaying Bash effects`, async () => {
-		const { defineExtension, wrapTool } = await import("@earendil-works/pi-durable");
+		const { defineExtension, hook, ToolTask, wrapTool } = await import("@earendil-works/pi-durable");
 		const { createBashTool } = await import("@earendil-works/pi-durable/tools");
 		const dir = await mkdtemp(join(tmpdir(), "neko-approval-phase-"));
 		const faux = fauxProvider();
@@ -179,12 +321,22 @@ for (const checkpoint of ["decided", "intent", "executing"] as const) {
 		let runtime = await createNekoRuntime(options);
 		try {
 			if (checkpoint === "decided") {
-				const original = runtime.approvals.wait.bind(runtime.approvals);
-				runtime.approvals.wait = async (parent, id, ctx) => {
-					const item = await original(parent, id, ctx);
-					await pause(ctx);
-					return item;
-				};
+				let paused = false;
+				runtime.installExtension(
+					defineExtension({
+						name: "after-approval-gate",
+						hooks: [
+							hook(ToolTask, {
+								beforeTool: async (call, _api, ctx) => {
+									if (call.name === "bash" && !paused) {
+										paused = true;
+										await pause(ctx);
+									}
+								},
+							}),
+						],
+					}),
+				);
 			}
 			const job = await runtime.submit("Inspect");
 			const a = await pending(runtime);

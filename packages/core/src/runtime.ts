@@ -760,6 +760,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 	const changes = new ChangeTracker(harness, context);
 	const existing = await scanConversations();
 	questions.track(...existing.map((r) => r.id));
+	approvals.track(...existing.map((r) => r.id));
 
 	try {
 		await installSubagentCoordinator(
@@ -795,6 +796,7 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		throw error;
 	}
 	await questions.reconcileAll();
+	await approvals.reconcileAll();
 	// Root conversation: the launch-time effective default (CLI --model wins over the config/built-in
 	// base), matching the pre-split `options.model ?? fileConfig.defaultModel ?? DEFAULT_MODEL` behavior.
 	const rootModel = modelOverride ?? model;
@@ -1257,6 +1259,8 @@ export async function createNekoRuntime(options: NekoRuntimeOptions = {}): Promi
 		},
 		async abort() {
 			await target.abort(context);
+			await questions.reconcile(target.id, context);
+			await approvals.reconcile(target.id, context);
 			await plans.cancelPending(target.id);
 		},
 		continueRun() {

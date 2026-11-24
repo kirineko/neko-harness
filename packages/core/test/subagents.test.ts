@@ -5,7 +5,7 @@ import { fauxProvider } from "../../../test/faux.ts";
 import { followConversation } from "../src/conversation-follow.ts";
 import { InMemoryCredentialStore } from "../src/credentials.ts";
 import { createNekoRuntime } from "../src/runtime.ts";
-import { listDelegations } from "../src/subagents.ts";
+import { listDelegations, SlotsDoc, SlotWakeSignal } from "../src/subagents.ts";
 
 it("delegates in an owned conversation, restricts tools and returns the final report", async () => {
 	const faux = fauxProvider();
@@ -94,8 +94,17 @@ it("limits foreground children, cancels queued/running delegates and keeps sibli
 		const records = await until(list, (ds) => ds.length === 4 && ds.filter((d) => d.status === "running").length === 3);
 		const queued = records.find((d) => d.status === "queued")!;
 		const running = records.find((d) => d.status === "running")!;
+		await until(
+			async () =>
+				(await runtime.harness.getTask(queued.runnerId as never, runtime.context))?.state.status === "sleeping",
+			Boolean,
+		);
+		expect((await runtime.harness.snapshot(SlotsDoc, runtime.context))?.waiters?.map((w) => w.taskId)).toEqual([
+			queued.taskId,
+		]);
 		await runtime.harness.abortTask(queued.taskId as never, runtime.context);
 		await runtime.harness.waitForTask(queued.taskId as never, runtime.context);
+		expect((await runtime.harness.snapshot(SlotsDoc, runtime.context))?.waiters ?? []).toEqual([]);
 		await runtime.harness.abortTask(running.taskId as never, runtime.context);
 		release();
 		await runtime.harness.waitForTask(running.taskId as never, runtime.context);
@@ -104,6 +113,7 @@ it("limits foreground children, cancels queued/running delegates and keeps sibli
 		expect(settled.filter((d) => d.status === "cancelled")).toHaveLength(2);
 		expect(settled.find((d) => d.taskId === queued.taskId)!.roundUsage!.input).toBe(0);
 		expect(settled.filter((d) => d.status === "completed")).toHaveLength(2);
+		expect(await runtime.harness.snapshot(SlotsDoc, runtime.context)).toEqual({ items: [], waiters: [] });
 		const child = await runtime.harness.conversation(queued.childId as never, runtime.context);
 		expect((await child!.entries({}, 10, undefined, runtime.context)).items).toHaveLength(0);
 	} finally {
@@ -185,25 +195,34 @@ it("forks child references at fixed history watermarks without inheriting writab
 	}
 }, 30000);
 
-it("serializes coders in the same workspace and releases the slot after completion", async () => {
+it("serializes coders in the same workspace via slot signal wakeup one at a time and cleans up slots", async () => {
 	const faux = fauxProvider();
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
+	let releaseFirst!: () => void;
+	let releaseSecond!: () => void;
+	const firstGate = new Promise<void>((resolve) => {
+		releaseFirst = resolve;
+	});
+	const secondGate = new Promise<void>((resolve) => {
+		releaseSecond = resolve;
 	});
 	faux.setResponses([
 		fauxAssistantMessage(
 			[
 				fauxToolCall("subagent", { type: "coder", title: "First", task: "First change" }),
 				fauxToolCall("subagent", { type: "coder", title: "Second", task: "Second change" }),
+				fauxToolCall("subagent", { type: "coder", title: "Third", task: "Third change" }),
 			],
 			{ stopReason: "toolUse" },
 		),
 		async () => {
-			await gate;
+			await firstGate;
 			return fauxAssistantMessage("First complete");
 		},
-		fauxAssistantMessage("Second complete"),
+		async () => {
+			await secondGate;
+			return fauxAssistantMessage("Second complete");
+		},
+		fauxAssistantMessage("Third complete"),
 		fauxAssistantMessage("Integrated"),
 	]);
 	const runtime = await createNekoRuntime({
@@ -213,15 +232,137 @@ it("serializes coders in the same workspace and releases the slot after completi
 		model: { provider: "faux", modelId: "faux-1" },
 	});
 	try {
-		const submission = await runtime.submit("Make two independent changes");
+		const submission = await runtime.submit("Make three independent changes");
 		const list = () => listDelegations(runtime.harness, runtime.root.id, runtime.context);
-		const records = await until(list, (ds) => ds.length === 2 && ds.some((d) => d.status === "running"));
-		expect(records.filter((d) => d.status === "queued")).toHaveLength(1);
-		release();
+		const initial = await until(list, (ds) => ds.length === 3 && ds.some((d) => d.status === "running"));
+		const queued = initial.filter((d) => d.status === "queued");
+		expect(queued).toHaveLength(2);
+		await until(async () => {
+			const states = await Promise.all(
+				queued.map((d) => runtime.harness.getTask(d.runnerId as never, runtime.context)),
+			);
+			return states.every((t) => t?.state.status === "sleeping");
+		}, Boolean);
+		releaseFirst();
+		const afterFirst = await until(
+			list,
+			(ds) => ds.some((d) => d.status === "completed") && ds.some((d) => d.status === "running"),
+		);
+		expect(afterFirst.map((d) => d.status)).toEqual(["completed", "running", "queued"]);
+		const thirdRunner = await runtime.harness.getTask(afterFirst[2]!.runnerId as never, runtime.context);
+		expect(thirdRunner?.state.status).toBe("sleeping");
+		releaseSecond();
 		await submission.wait(runtime.context);
-		expect((await list()).map((d) => d.status)).toEqual(["completed", "completed"]);
+		expect((await list()).map((d) => d.status)).toEqual(["completed", "completed", "completed"]);
+		expect(await runtime.harness.snapshot(SlotsDoc, runtime.context)).toEqual({ items: [], waiters: [] });
 	} finally {
-		release();
+		releaseFirst();
+		releaseSecond();
+		await runtime.close();
+	}
+}, 30000);
+
+it("parks parent tool in waiting, sleeps slot waiters without polling, and re-sleeps idempotently on contention", async () => {
+	const faux = fauxProvider();
+	const releases: Array<() => void> = [];
+	const gates = Array.from(
+		{ length: 5 },
+		(_, i) =>
+			new Promise<void>((resolve) => {
+				releases[i] = resolve;
+			}),
+	);
+	let nextChild = 0;
+	faux.setResponses([
+		fauxAssistantMessage(
+			Array.from({ length: 5 }, (_, i) =>
+				fauxToolCall("subagent", { type: "explore", title: `Child ${i}`, task: `Task ${i}` }),
+			),
+			{ stopReason: "toolUse" },
+		),
+		...Array.from({ length: 5 }, () => async () => {
+			const idx = nextChild++;
+			await gates[idx];
+			return fauxAssistantMessage(`report ${idx}`);
+		}),
+		fauxAssistantMessage("integrated five"),
+	]);
+	const runtime = await createNekoRuntime({
+		storage: "memory",
+		credentials: new InMemoryCredentialStore(),
+		providers: [faux.provider],
+		model: { provider: "faux", modelId: "faux-1" },
+	});
+	const list = () => listDelegations(runtime.harness, runtime.root.id, runtime.context);
+	try {
+		const submission = await runtime.submit("Investigate five tasks");
+		const records = await until(list, (ds) => ds.length === 5 && ds.filter((d) => d.status === "running").length === 3);
+		await until(async () => {
+			const parents = await Promise.all(
+				records.map((d) => runtime.harness.getTask(d.taskId as never, runtime.context)),
+			);
+			const queuedRunners = await Promise.all(
+				records
+					.filter((d) => d.status === "queued")
+					.map((d) => runtime.harness.getTask(d.runnerId as never, runtime.context)),
+			);
+			return (
+				parents.every((t) => t?.state.status === "waiting") &&
+				queuedRunners.length === 2 &&
+				queuedRunners.every((t) => t?.state.status === "sleeping")
+			);
+		}, Boolean);
+		const snap1 = await runtime.harness.snapshot(SlotsDoc, runtime.context);
+		expect(snap1?.items).toHaveLength(3);
+		expect(snap1?.waiters?.map((w) => w.wakeSeq)).toEqual([1, 1]);
+
+		// Verify no 100ms timer polling advances wakeSeq while idle.
+		await sleep(220);
+		const snapAfterIdle = await runtime.harness.snapshot(SlotsDoc, runtime.context);
+		expect(snapAfterIdle?.waiters?.map((w) => w.wakeSeq)).toEqual([1, 1]);
+
+		// Contended/spurious wake while all 3 slots are still full increments wakeSeq and re-sleeps cleanly.
+		const firstWaiter = snapAfterIdle!.waiters![0]!;
+		await runtime.harness.commit(
+			(tx) =>
+				tx.signal(firstWaiter.runnerId as never, SlotWakeSignal, String(firstWaiter.wakeSeq), {
+					seq: firstWaiter.wakeSeq,
+				}),
+			runtime.context,
+		);
+		await until(async () => {
+			const snap = await runtime.harness.snapshot(SlotsDoc, runtime.context);
+			const runner = await runtime.harness.getTask(firstWaiter.runnerId as never, runtime.context);
+			return (
+				snap?.waiters?.find((w) => w.runnerId === firstWaiter.runnerId)?.wakeSeq === 2 &&
+				runner?.state.status === "sleeping"
+			);
+		}, Boolean);
+		expect((await runtime.harness.snapshot(SlotsDoc, runtime.context))?.waiters?.map((w) => w.wakeSeq)).toEqual([2, 1]);
+
+		// Freeing 1 slot wakes only the first FIFO waiter (using wakeSeq=2); the second stays asleep at wakeSeq=1.
+		releases[0]!();
+		const afterOneFree = await until(
+			list,
+			(ds) => ds.some((d) => d.status === "completed") && ds.filter((d) => d.status === "running").length === 3,
+		);
+		expect(afterOneFree.filter((d) => d.status === "queued")).toHaveLength(1);
+		const remainingWaiter = (await runtime.harness.snapshot(SlotsDoc, runtime.context))?.waiters;
+		expect(remainingWaiter).toHaveLength(1);
+		expect(remainingWaiter![0]!.wakeSeq).toBe(1);
+
+		for (let i = 1; i < 5; i++) releases[i]!();
+		expect(await runtime.waitAnswer(submission)).toEqual({ status: "done", text: "integrated five" });
+		expect((await list()).map((d) => d.status)).toEqual([
+			"completed",
+			"completed",
+			"completed",
+			"completed",
+			"completed",
+		]);
+		expect(await runtime.harness.snapshot(SlotsDoc, runtime.context)).toEqual({ items: [], waiters: [] });
+	} finally {
+		for (const r of releases) r();
 		await runtime.close();
 	}
 }, 30000);

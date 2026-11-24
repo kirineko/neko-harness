@@ -6,13 +6,17 @@ import {
 	configure,
 	defineDoc,
 	defineExtension,
+	defineSignal,
 	defineTask,
 	defineTool,
 	type Extension,
 	type Harness,
 	LiveDoc,
+	SubmissionSettled,
 	type TaskId,
-	type TaskRuntime,
+	type TaskOutcome,
+	type ToolExecutionResult,
+	type ToolPark,
 	type Tx,
 	UsageDoc,
 	type UsageState,
@@ -26,6 +30,7 @@ import { NekoInput } from "./input.ts";
 import { PLAN_CODER_BLOCKED, PlanDoc } from "./plan-doc.ts";
 import type { UsageTotals } from "./projection.ts";
 import { emptySubagentUsage, subagentUsageTotals, subtractSubagentUsage } from "./subagent-usage.ts";
+import { cancelRoundApprovals } from "./tool-approvals.ts";
 
 export type SubagentRole = "explore" | "plan" | "coder";
 export type Delegation = {
@@ -107,12 +112,28 @@ export const SubagentDoc = defineDoc<{ role: SubagentRole | null; parentId: numb
 	fork: "initial",
 	initial: () => ({ role: null, parentId: null }),
 });
-const SlotsDoc = defineDoc<{ items: { taskId: number; parentId: number; cwd: string; coder: boolean }[] }>({
+export type SlotItem = { taskId: number; runnerId?: number; parentId: number; cwd: string; coder: boolean };
+export type SlotWaiter = {
+	runnerId: number;
+	taskId: number;
+	parentId: number;
+	cwd: string;
+	coder: boolean;
+	wakeSeq: number;
+};
+export const SlotsDoc = defineDoc<{ items: SlotItem[]; waiters?: SlotWaiter[] }>({
 	kind: "app.neko.subagent-slots",
 	checkpointWhen: () => false,
 	version: 1,
 	scope: "session",
-	initial: () => ({ items: [] }),
+	initial: () => ({ items: [], waiters: [] }),
+});
+export const SlotWakeSignal = defineSignal({
+	name: "app.neko.subagent-slot",
+	version: 1,
+	schema: obj({
+		seq: int(),
+	}),
 });
 export const ROLE_PROMPTS: Record<SubagentRole, string> = {
 	explore:
@@ -208,27 +229,120 @@ export function summarizeSubagents(
 	});
 }
 
-async function acquireSlot(tx: Tx, round: Delegation, cwd: string) {
+async function taskLive(tx: Tx, id: number): Promise<boolean> {
+	const task = await tx.task(id as TaskId);
+	return !!task && !task.abortRequested && task.state.status !== "terminal" && task.state.status !== "completing";
+}
+
+function canAcquire(items: readonly SlotItem[], candidate: { parentId: number; cwd: string; coder: boolean }): boolean {
+	return (
+		items.filter((slot) => slot.parentId === candidate.parentId).length < 3 &&
+		(!candidate.coder || !items.some((slot) => slot.coder && slot.cwd === candidate.cwd))
+	);
+}
+
+async function readLiveSlots(tx: Tx, freedTaskId?: number) {
 	const slots = await tx.doc(SlotsDoc);
-	const live: typeof slots.items = [];
+	const liveItems: SlotItem[] = [];
 	for (const slot of slots.items) {
-		const task = await tx.task(slot.taskId as TaskId);
-		if (task && task.state.status !== "terminal") live.push(slot);
+		if (slot.taskId === freedTaskId) continue;
+		if ((await taskLive(tx, slot.taskId)) && (slot.runnerId === undefined || (await taskLive(tx, slot.runnerId)))) {
+			liveItems.push({ ...slot });
+		}
 	}
-	slots.items = live;
-	if (live.some((slot) => slot.taskId === round.taskId)) return true;
-	if (
-		live.filter((slot) => slot.parentId === round.parentId).length >= 3 ||
-		(round.role === "coder" && live.some((slot) => slot.coder && slot.cwd === cwd))
-	)
-		return false;
-	slots.items.push({ taskId: round.taskId, parentId: round.parentId, cwd, coder: round.role === "coder" });
-	return true;
+	const liveWaiters: SlotWaiter[] = [];
+	for (const waiter of slots.waiters ?? []) {
+		if (waiter.taskId === freedTaskId) continue;
+		if ((await taskLive(tx, waiter.taskId)) && (await taskLive(tx, waiter.runnerId))) {
+			liveWaiters.push({ ...waiter });
+		}
+	}
+	return { slots, liveItems, liveWaiters };
+}
+
+async function acquireOrParkSlot(tx: Tx, round: Delegation, runnerId: number, cwd: string): Promise<number | null> {
+	const { slots, liveItems, liveWaiters } = await readLiveSlots(tx);
+	const coder = round.role === "coder";
+	const held = liveItems.find((slot) => slot.taskId === round.taskId);
+	if (held) {
+		held.runnerId = runnerId;
+		slots.items = liveItems;
+		slots.waiters = liveWaiters.filter((w) => w.runnerId !== runnerId && w.taskId !== round.taskId);
+		return null;
+	}
+	if (canAcquire(liveItems, { parentId: round.parentId, cwd, coder })) {
+		liveItems.push({ taskId: round.taskId, runnerId, parentId: round.parentId, cwd, coder });
+		slots.items = liveItems;
+		slots.waiters = liveWaiters.filter((w) => w.runnerId !== runnerId && w.taskId !== round.taskId);
+		return null;
+	}
+	const existing = liveWaiters.find((w) => w.runnerId === runnerId);
+	let seq: number;
+	if (existing) {
+		existing.cwd = cwd;
+		existing.coder = coder;
+		existing.wakeSeq += 1;
+		seq = existing.wakeSeq;
+	} else {
+		seq = 1;
+		liveWaiters.push({
+			runnerId,
+			taskId: round.taskId,
+			parentId: round.parentId,
+			cwd,
+			coder,
+			wakeSeq: seq,
+		});
+	}
+	slots.items = liveItems;
+	slots.waiters = liveWaiters;
+	return seq;
+}
+
+async function releaseAndWakeSlots(tx: Tx, freedTaskId?: number): Promise<void> {
+	const { slots, liveItems, liveWaiters } = await readLiveSlots(tx, freedTaskId);
+	slots.items = liveItems;
+	slots.waiters = liveWaiters;
+	const projected: SlotItem[] = [...liveItems];
+	const toWake: SlotWaiter[] = [];
+	for (const waiter of liveWaiters) {
+		if (canAcquire(projected, waiter)) {
+			projected.push({
+				taskId: waiter.taskId,
+				runnerId: waiter.runnerId,
+				parentId: waiter.parentId,
+				cwd: waiter.cwd,
+				coder: waiter.coder,
+			});
+			toWake.push(waiter);
+		}
+	}
+	if (toWake.length > 0) {
+		await Promise.all(
+			toWake.map((w) => tx.signal(w.runnerId as TaskId, SlotWakeSignal, String(w.wakeSeq), { seq: w.wakeSeq })),
+		);
+	}
 }
 
 type RoundInput = { parentId: number; childId: number; taskId: number; task: string; cwd: string };
 type RoundState = { phase: "admission" | "deliver" | "settle" };
 type RoundResult = { status: "completed" | "failed" | "cancelled"; report: string };
+type SubagentParkCheckpoint = {
+	runnerId: number;
+	childId: number;
+	agentId: string;
+	roundId: number;
+	role: SubagentRole;
+	title: string;
+};
+type SubagentToolDetails = {
+	conversationId: number;
+	agentId: string;
+	roundId: number;
+	role: SubagentRole;
+	title: string;
+	status?: RoundResult["status"];
+};
 const actionParameters = union([
 	obj({
 		action: opt(lit("create")),
@@ -292,23 +406,35 @@ const structuredOutputSchema = union([
 	}),
 ]);
 
-const ADMISSION_POLL_MS = 100;
-
-/** Waits inside the phase: a slot frees up in this process, so persisting each poll as a sleep would only add writes. */
-function pause(runtime: Pick<TaskRuntime<never, never, never, object>, "signal" | "setTimer">, ms: number) {
-	const { signal } = runtime;
-	return new Promise<void>((resolve, reject) => {
-		if (signal.aborted) return reject(signal.reason);
-		const disarm = runtime.setTimer(() => {
-			signal.removeEventListener("abort", abort);
-			resolve();
-		}, ms);
-		const abort = () => {
-			disarm();
-			reject(signal.reason);
-		};
-		signal.addEventListener("abort", abort, { once: true });
-	});
+function formatRoundOutcome(
+	cp: SubagentParkCheckpoint,
+	outcome: TaskOutcome<RoundResult>,
+): ToolExecutionResult<SubagentToolDetails> {
+	const result: RoundResult =
+		outcome.status === "completed"
+			? outcome.result
+			: {
+					status: outcome.status === "aborted" ? "cancelled" : "failed",
+					report: `Subagent ${outcome.status}`,
+				};
+	return {
+		output: [
+			{
+				type: "text",
+				text: `Agent: ${cp.agentId}\nStatus: ${result.status}\n${result.report || "Subagent completed without a text report."}`,
+			},
+		],
+		isError: result.status !== "completed",
+		structuredOutput: { agentId: cp.agentId, roundId: cp.roundId, ...result },
+		details: {
+			conversationId: cp.childId,
+			agentId: cp.agentId,
+			roundId: cp.roundId,
+			role: cp.role,
+			title: cp.title,
+			status: result.status,
+		},
+	};
 }
 
 export function createSubagentExtension(
@@ -317,6 +443,7 @@ export function createSubagentExtension(
 	guard?: (model: { provider: string; modelId: string }) => Promise<void>,
 ): Extension {
 	const finish = async (tx: Tx, input: RoundInput, status: RoundResult["status"], report: string) => {
+		await cancelRoundApprovals(tx, input.parentId as ConversationId, input.taskId);
 		const round = (await tx.doc(DelegationsDoc, input.parentId as ConversationId)).items.find(
 			(r) => r.taskId === input.taskId,
 		)!;
@@ -329,6 +456,14 @@ export function createSubagentExtension(
 			: round.startedAt === null
 				? subagentUsageTotals(emptySubagentUsage())
 				: null;
+		const identity = (await tx.doc(SubagentsDoc, input.parentId as ConversationId)).items.find(
+			(a) => a.childId === input.childId,
+		);
+		const live = await tx.doc(LiveDoc, input.childId as ConversationId);
+		if (identity?.activeRoundId === input.taskId && live.run === undefined && !live.compactions?.length) {
+			identity.activeRoundId = null;
+		}
+		await releaseAndWakeSlots(tx, input.taskId);
 	};
 	const RoundTask = defineTask<RoundInput, RoundState, RoundResult>({
 		name: "app.neko.subagent-round",
@@ -339,33 +474,34 @@ export function createSubagentExtension(
 				const env = await runtime.env(ctx);
 				const canonical = env && (await env.canonicalPath(task.input.cwd, ctx));
 				const slotCwd = canonical?.ok ? canonical.value : task.input.cwd;
-				let admitted = false;
-				while (!admitted) {
-					await runtime.commit(async (tx) => {
-						const round = (await tx.doc(DelegationsDoc, task.input.parentId as ConversationId)).items.find(
-							(r) => r.taskId === task.input.taskId,
-						)!;
-						if (!(await acquireSlot(tx, round, slotCwd))) return;
-						admitted = true;
-						const duplicate = await tx.submissionByRequest(
-							task.input.childId as ConversationId,
-							`subagent:${round.taskId}`,
-						);
-						if (!duplicate && !round.usageStart)
-							round.usageStart = JSON.parse(
-								JSON.stringify(await tx.doc(UsageDoc, task.input.childId as ConversationId)),
-							);
-						round.status = "running";
-						round.startedAt ??= Date.now();
-						return { status: "running", checkpoint: { phase: "deliver" } };
-					}, ctx);
-					if (!admitted) await pause(runtime, ADMISSION_POLL_MS);
-				}
+				await runtime.commit(async (tx) => {
+					const round = (await tx.doc(DelegationsDoc, task.input.parentId as ConversationId)).items.find(
+						(r) => r.taskId === task.input.taskId,
+					)!;
+					const waitSeq = await acquireOrParkSlot(tx, round, runtime.taskId, slotCwd);
+					if (waitSeq !== null) {
+						return {
+							status: "sleeping",
+							checkpoint: { phase: "admission" },
+							signals: [SlotWakeSignal.key(String(waitSeq))],
+						};
+					}
+					const duplicate = await tx.submissionByRequest(
+						task.input.childId as ConversationId,
+						`subagent:${round.taskId}`,
+					);
+					if (!duplicate && !round.usageStart)
+						round.usageStart = JSON.parse(JSON.stringify(await tx.doc(UsageDoc, task.input.childId as ConversationId)));
+					round.status = "running";
+					round.startedAt ??= Date.now();
+					return { status: "running", checkpoint: { phase: "deliver" } };
+				}, ctx);
 			},
 			deliver: async (task, runtime, ctx) => {
 				const input = task.input;
 				const child = (await runtime.conversation(input.childId as ConversationId, ctx))!;
 				const requestId = `subagent:${input.taskId}`;
+				const notifyKey = `round:${input.taskId}`;
 				try {
 					let duplicate = false;
 					await runtime.commit(async (tx) => {
@@ -378,6 +514,7 @@ export function createSubagentExtension(
 							content: input.task,
 							requestId,
 							whenBusy: "reject",
+							notify: { taskId: runtime.taskId, key: notifyKey },
 							entry: {
 								kind: NekoInput.kind,
 								data: { at: Date.now(), prompt: input.task, images: [], subagentRoundId: input.taskId },
@@ -386,12 +523,19 @@ export function createSubagentExtension(
 						ctx,
 					);
 					const placed = await submission.status(ctx);
+					const settled = placed.status === "done" || placed.status === "unanswered";
 					await runtime.commit(async (tx) => {
 						if (placed.type === "input" && placed.entry !== undefined)
 							(await tx.doc(DelegationsDoc, input.parentId as ConversationId)).items.find(
 								(r) => r.taskId === input.taskId,
 							)!.inputEntryId = placed.entry;
-						return { status: "running", checkpoint: { phase: "settle" } };
+						return settled
+							? { status: "running", checkpoint: { phase: "settle" } }
+							: {
+									status: "sleeping",
+									checkpoint: { phase: "settle" },
+									signals: [SubmissionSettled.key(notifyKey)],
+								};
 					}, ctx);
 				} catch (error) {
 					discard(input.childId as ConversationId, requestId);
@@ -407,12 +551,18 @@ export function createSubagentExtension(
 			settle: async (task, runtime, ctx) => {
 				const input = task.input;
 				const child = (await runtime.conversation(input.childId as ConversationId, ctx))!;
-				// A repeat returns the same submission without accepting a second input.
-				const submission = await child.submit(
-					{ type: "input", content: input.task, requestId: `subagent:${input.taskId}` },
-					ctx,
-				);
-				const settled = await submission.wait(ctx);
+				const notifyKey = `round:${input.taskId}`;
+				const signaled = await runtime.readSignal(SubmissionSettled, notifyKey, ctx);
+				let settled = signaled && "value" in signaled ? signaled.value : undefined;
+				if (settled === undefined) {
+					// Legacy checkpoint created before SubmissionSettled notification was wired.
+					const submission = await child.submit(
+						{ type: "input", content: input.task, requestId: `subagent:${input.taskId}` },
+						ctx,
+					);
+					const current = await submission.status(ctx);
+					settled = current.status === "done" || current.status === "unanswered" ? current : await submission.wait(ctx);
+				}
 				await child.waitForIdle(ctx);
 				await runtime.commit(async (tx) => {
 					let report = "";
@@ -457,7 +607,7 @@ export function createSubagentExtension(
 		name: "neko-subagents",
 		tasks: [RoundTask],
 		tools: [
-			defineTool({
+			defineTool<typeof parameters, SubagentToolDetails, SubagentParkCheckpoint>({
 				name: "subagent",
 				description:
 					"Manage persistent foreground subagents. create (default): type explore/plan/coder, title, task. continue: agentId, title, task; reuses its own context, only while idle. list: discover this session's agents, optional cursor/limit. Explore Bash requires per-call user approval. Keep constraints explicit; verify and integrate final reports. Subagents cannot delegate.",
@@ -466,7 +616,19 @@ export function createSubagentExtension(
 				replay: "safe",
 				// Scripts cannot start subagents: a batch of them is hard to follow and to approve.
 				callers: ["model"],
-				execute: async (input, api, context) => {
+				execute: async (
+					input,
+					api,
+					context,
+				): Promise<ToolExecutionResult<SubagentToolDetails> | ToolPark<SubagentParkCheckpoint>> => {
+					if (api.wake !== undefined && api.checkpoint !== undefined) {
+						const cp = api.checkpoint;
+						const settled = await api.getTask(cp.runnerId as TaskId<RoundResult>, context);
+						if (!settled || settled.state.status !== "terminal") {
+							return { wait: { on: [cp.runnerId as TaskId], policy: "allSettled", checkpoint: cp } };
+						}
+						return formatRoundOutcome(cp, settled.state.outcome);
+					}
 					if (!isActionParameters(input))
 						throw new Error(
 							"Invalid subagent arguments. create requires type/title/task; continue requires agentId/title/task; list accepts only cursor/limit. Do not mix fields from different actions.",
@@ -584,7 +746,7 @@ export function createSubagentExtension(
 						const doc = await tx.doc(DelegationsDoc, api.conversationId);
 						if (receipt) Object.assign(doc.items.find((r) => r.taskId === receipt.taskId)!, record);
 						else doc.items.push(record);
-						return record;
+						return JSON.parse(JSON.stringify(record)) as Delegation;
 					}, context);
 					await api.details(
 						{
@@ -596,30 +758,19 @@ export function createSubagentExtension(
 						},
 						context,
 					);
-					const settled = await api.waitForTask(round.runnerId as TaskId<RoundResult>, context);
-					const outcome = settled.state.outcome;
-					const result =
-						outcome.status === "completed"
-							? outcome.result
-							: { status: outcome.status === "aborted" ? "cancelled" : "failed", report: `Subagent ${outcome.status}` };
-					return {
-						output: [
-							{
-								type: "text",
-								text: `Agent: ${round.agentId}\nStatus: ${result.status}\n${result.report || "Subagent completed without a text report."}`,
-							},
-						],
-						isError: result.status !== "completed",
-						structuredOutput: { agentId: round.agentId!, roundId: round.taskId, ...result },
-						details: {
-							conversationId: round.childId,
-							agentId: round.agentId!,
-							roundId: round.taskId,
-							role: round.role,
-							title: round.title,
-							status: result.status,
-						},
+					const cp: SubagentParkCheckpoint = {
+						runnerId: round.runnerId!,
+						childId: round.childId,
+						agentId: round.agentId!,
+						roundId: round.taskId,
+						role: round.role,
+						title: round.title,
 					};
+					const current = await api.getTask(cp.runnerId as TaskId<RoundResult>, context);
+					if (current?.state.status === "terminal") {
+						return formatRoundOutcome(cp, current.state.outcome);
+					}
+					return { wait: { on: [cp.runnerId as TaskId], policy: "allSettled", checkpoint: cp } };
 				},
 			}),
 		],
@@ -664,6 +815,12 @@ export async function installSubagentCoordinator(harness: Harness, parents: Conv
 	const known = new Set(parents);
 	let running = false;
 	let dirty = false;
+	const reconcileSlots = async () => {
+		const snap = await harness.snapshot(SlotsDoc, context);
+		if (snap?.items.length || snap?.waiters?.length) {
+			await harness.commit((tx) => releaseAndWakeSlots(tx), context);
+		}
+	};
 	const reconcile = async () => {
 		if (running) {
 			dirty = true;
@@ -674,6 +831,7 @@ export async function installSubagentCoordinator(harness: Harness, parents: Conv
 			do {
 				dirty = false;
 				for (const id of known) await listDelegations(harness, id, context);
+				await reconcileSlots();
 			} while (dirty);
 		} finally {
 			running = false;
@@ -691,6 +849,7 @@ export async function installSubagentCoordinator(harness: Harness, parents: Conv
 				}, context);
 		}
 	}
+	await reconcileSlots();
 	const stop = onCommits(harness, ({ changes }) => {
 		for (const c of changes)
 			if (c.type === "document" && c.record.kind === "app.neko.delegations" && c.conversationId !== undefined)
